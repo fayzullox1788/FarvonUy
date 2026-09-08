@@ -26,6 +26,16 @@ SRC = Path(__file__).resolve().parent
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+# Xabar matnlarida emoji bor (📅, 🍲, ...). Windows konsoli ko'pincha
+# eski kodlashda (masalan cp1251) ishlaydi va bunday belgini chop etib
+# bo'lmay, skript o'rtada yiqiladi — hech qanday xabar yuborilmay
+# qoladi. UTF-8 ga majburan o'tkazamiz.
+for _oqim in (sys.stdout, sys.stderr):
+    try:
+        _oqim.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 
 def main() -> int:
     sinov = "--sinov" in sys.argv

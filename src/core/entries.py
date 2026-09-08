@@ -95,7 +95,7 @@ def rasxod_qosh(db, sana: str, nom: str, summa: int, kim_toladi: int,
 def rasxod_tahrir(db, rasxod_id: int, *, sana=None, nom=None, summa=None,
                   kim_toladi=None, umumiymi=None, turi_id=None,
                   usul=None, parametrlar=None, izoh=None,
-                  kim_uchun=_TEGMA) -> None:
+                  kim_uchun=_TEGMA, item_id=_TEGMA) -> None:
     """Rasxodni o'zgartiradi va kerak bo'lsa ulushlarni QAYTA hisoblaydi."""
     eski = db.q1("SELECT * FROM rasxod WHERE id=?", rasxod_id)
     if not eski:
@@ -111,6 +111,7 @@ def rasxod_tahrir(db, rasxod_id: int, *, sana=None, nom=None, summa=None,
         "bolish_usul": usul if usul is not None else eski["bolish_usul"],
         "izoh": izoh if izoh is not None else eski["izoh"],
         "kim_uchun": (eski["kim_uchun"] if kim_uchun is _TEGMA else kim_uchun),
+        "item_id": (eski["item_id"] if item_id is _TEGMA else item_id),
     }
     if yangi["summa"] <= 0:
         raise ValueError("Rasxod summasi musbat bo'lishi kerak")
