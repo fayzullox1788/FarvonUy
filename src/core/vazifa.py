@@ -793,32 +793,49 @@ def bitta(db, vazifa_id: int):
                  vazifa_id)
 
 
-def hafta(db, sana, odam_id: int | None = None) -> list:
+def hafta(db, sana, odam_id: int | None = None,
+          shaxsiysiz: bool = False) -> list:
     """Bir haftalik vazifalar, kun va vaqt bo'yicha tartiblangan."""
     kunlar = hafta_kunlari(sana)
-    return oraliq(db, kunlar[0], kunlar[-1], odam_id)
+    return oraliq(db, kunlar[0], kunlar[-1], odam_id, shaxsiysiz)
 
 
-def oraliq(db, dan, gacha, odam_id: int | None = None) -> list:
+def oraliq(db, dan, gacha, odam_id: int | None = None,
+           shaxsiysiz: bool = False) -> list:
+    """`shaxsiysiz` — 🔒 shaxsiy ishlar tushib qoladi.
+
+    Umumiy kalendar (uchalasining ishi birga) shu bilan chaqiriladi:
+    shaxsiy ish guruh xabariga chiqmasa, umumiy varaqda ham turmasligi
+    kerak — aks holda «bu faqat sizga» degan va'da yarmigacha bajariladi.
+    Shaxsiy varaqda esa hammasi ko'rinadi.
+    """
     p = [_sana(dan).isoformat(), _sana(gacha).isoformat()]
     qosh_shart = ""
     if odam_id:
         qosh_shart = " AND v.odam_id=?"
         p.append(odam_id)
-    return db.q(
+    qatorlar = db.q(
         "SELECT v.*, o.nom odam, o.rang odam_rang"
         " FROM vazifa v JOIN odam o ON o.id=v.odam_id"
         " WHERE v.ochirilgan=0 AND v.sana BETWEEN ? AND ?" + qosh_shart +
         " ORDER BY v.sana, COALESCE(v.vaqt,'99:99'), v.id", *p)
+    if shaxsiysiz:
+        # Nom bo'yicha — `xabar.py` dagi filtr bilan AYNAN bir xil
+        # qoida, ikkinchi ta'rif yozilmaydi.
+        yopiq = shaxsiy_nomlari(db)
+        qatorlar = [r for r in qatorlar if r["nom"] not in yopiq]
+    return qatorlar
 
 
-def kun(db, sana, odam_id: int | None = None) -> list:
-    return oraliq(db, sana, sana, odam_id)
+def kun(db, sana, odam_id: int | None = None,
+        shaxsiysiz: bool = False) -> list:
+    return oraliq(db, sana, sana, odam_id, shaxsiysiz)
 
 
-def sanoq(db, dan, gacha, odam_id: int | None = None) -> dict:
+def sanoq(db, dan, gacha, odam_id: int | None = None,
+          shaxsiysiz: bool = False) -> dict:
     """Haftalik xulosa: nechta ochiq, nechta bajarilgan, nechta kechikkan."""
-    qatorlar = oraliq(db, dan, gacha, odam_id)
+    qatorlar = oraliq(db, dan, gacha, odam_id, shaxsiysiz)
     bugun = date.today()
     kechikkan = sum(1 for r in qatorlar
                     if r["holat"] == OCHIQ and _sana(r["sana"]) < bugun)

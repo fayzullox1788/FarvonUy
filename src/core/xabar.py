@@ -5,6 +5,10 @@ Uy guruhiga uch xil xabar ketadi, hammasi `kutilayotgan()` orqali:
     KUNLIK  — har kuni bir marta, sarlavha + har odamga alohida bo'lak.
     ESLATMA — har vazifaning vaqti tugagach, bittadan.
     RASXOD  — yangi umumiy xarajat yozilganda.
+    DARS    — dars boshlanishidan oldin, faqat egasiga (shaxsiy).
+
+`DARS` — YAGONA oldindan ketadigan xabar; qolgan hammasi ish vaqti
+tugagach so'raladi.
 
 Shaxsiy deb belgilangan ish guruhga chiqmaydi — egasining o'ziga,
 shaxsiy suhbatda ketadi (agar u botga bir marta /start bosgan bo'lsa).
@@ -24,6 +28,7 @@ from datetime import date, datetime
 
 import money
 from core import menyu as mn
+from core import dars
 from core import vazifa as vz
 
 API = "https://api.telegram.org/bot{token}/{metod}"
@@ -39,6 +44,10 @@ K_KECHIKTIRISH = "tg_kechiktirish"
 
 # ── tugma matnlari ──────────────────────────────────────────────────────
 ALBATTA_TUGMA = "Albatta! ✅"
+# Darsda qilinadigan ish — BORISH, shuning uchun tugma ham boshqacha
+# yozilgan. `callback_data` esa o'sha-o'sha (`bajar:id`): yozuv
+# o'zgarsa eski xabarlardagi tugmalar jimgina o'lik bo'lib qolardi.
+DARS_ALBATTA_TUGMA = "Qatnashdim ✅"
 YOQ_TUGMA = "Hali yo'q ⏳"
 MENYU_TUGMA = "Menyuyimizda nimalar bor 🍲"
 MENYU_SOROV = "Bugun nima pishirasiz? 🍲"
@@ -357,9 +366,31 @@ def kunlik_matn(db, sana) -> str:
 
 # ═══════════════════════════════════════════════════════════ eslatma
 
+def dars_ogoh_matn(db, v) -> str:
+    """Dars boshlanishidan oldin ketadigan xabar — SHAXSIY.
+
+    Savol emas, tugma ham yo'q: bu shunchaki «bugun qayerda bo'lishing
+    kerak» degan eslatma. Javob dars TUGAGACH so'raladi.
+    """
+    nom, tg = _odam_nom_telegram(db, v["odam_id"])
+    qatorlar = [f"⏰ {_teg(nom, tg)}, bugun soat {v['vaqt']} da darsingiz bor:",
+                f"📚 {v['nom']}"]
+    if v["izoh"]:
+        qatorlar.append(f"📍 {v['izoh']}")
+    return "\n".join(qatorlar)
+
+
 def eslatma_matn(db, v) -> str:
     nom, tg = _odam_nom_telegram(db, v["odam_id"])
     tag = _teg(nom, tg)
+    if dars.darsmi(v):
+        # Dars uchun savol «bajardingizmi?» emas: qilinadigan ish
+        # darsga BORISH edi, shuning uchun davomat so'raladi.
+        return "\n".join([
+            f"{tag}, {v['nom']} darsi tugadi.",
+            "Davomat: darsda bo'ldingizmi?",
+            f"«{DARS_ALBATTA_TUGMA}» yoki «{YOQ_TUGMA}» tugmasini bosing.",
+        ])
     rol = _rol(db, v)
     if rol == "uborka":
         satr1 = f"{tag}, general uborka — {v['nom']} bajarildimi?"
@@ -390,6 +421,11 @@ def shaxsiy_matn(db, sana, odam_id) -> str | None:
         belgi = "✅" if t["holat"] == vz.BAJARILDI else "⏳"
         qator = f"{belgi} {t['vaqt'] or ''}  {t['nom']}".strip()
         qatorlar.append(qator)
+        # Izoh — «qayerda va kim bilan». Dars uchun bu asosiy ma'lumot
+        # (o'qituvchi · xona): nomning o'zi «qaysi xonaga borishim
+        # kerak?» degan savolga javob bermaydi.
+        if t["izoh"]:
+            qatorlar.append(f"      {t['izoh']}")
     return "\n".join(qatorlar)
 
 
@@ -412,7 +448,17 @@ def shaxsiy_klaviatura(db, sana, odam_id):
              if t["nom"] in shaxsiy_nomlari and t["holat"] != vz.BAJARILDI]
     if not ochiq:
         return None
-    return [[(ALBATTA_TUGMA, f"bajar:{t['id']}")] for t in ochiq]
+    # Tugmaga VAQT yoziladi: bir kunda uchta dars bo'lsa uchta bir xil
+    # «Albatta! ✅» chiqib, qaysi biri qaysi ish ekani bilinmasdi.
+    # `callback_data` esa o'sha-o'sha qisqa (`bajar:id`) — 64 bayt
+    # chegarasi tugma YOZUVIGA emas, ma'lumotiga tegishli.
+    qatorlar = []
+    for t in ochiq:
+        yozuv = DARS_ALBATTA_TUGMA if dars.darsmi(t) else ALBATTA_TUGMA
+        if t["vaqt"]:
+            yozuv = f"{yozuv} · {t['vaqt']}"
+        qatorlar.append([(yozuv, f"bajar:{t['id']}")])
+    return qatorlar
 
 
 # ═══════════════════════════════════════════════════════════ rasxod
@@ -502,6 +548,8 @@ def kutilayotgan(db, hozir: datetime | None = None) -> list[dict]:
         if v["vaqt"] is None:
             continue
         tugadi = _daqiqa(v["vaqt"]) + v["davomiylik"]
+        if dars.darsmi(v):
+            tugadi += dars.KECHIKISH_DAQIQA
         if _daqiqa_dan(hozir) < tugadi:
             continue
         kech = v["kechiktirildi"] if "kechiktirildi" in v.keys() else None
@@ -517,9 +565,35 @@ def kutilayotgan(db, hozir: datetime | None = None) -> list[dict]:
         natija.append({
             "turi": "eslatma", "kalit": kalit, "matn": eslatma_matn(db, v),
             "chat": chat, "vazifa_id": v["id"],
-            "klaviatura": [[(ALBATTA_TUGMA, f"bajar:{v['id']}"),
+            "klaviatura": [[(DARS_ALBATTA_TUGMA if dars.darsmi(v)
+                             else ALBATTA_TUGMA, f"bajar:{v['id']}"),
                             (YOQ_TUGMA, f"haliyoq:{v['id']}")]],
         })
+
+    # ── dars ogohlantirishi: boshlanishidan `OGOH_DAQIQA` oldin
+    #
+    # Alohida blok, chunki bu YAGONA oldindan ketadigan xabar: qolgan
+    # hammasi ish vaqti tugagach so'raladi. Kaliti ham boshqa
+    # (`dars_ogoh:`), aks holda ogohlantirish yuborilgani davomat
+    # savolini bo'g'ib qo'yardi.
+    for v in vz.kun(db, bugun):
+        if not dars.darsmi(v) or v["holat"] == vz.BAJARILDI:
+            continue
+        if v["vaqt"] is None:
+            continue
+        boshlanish = _daqiqa(v["vaqt"])
+        endi = _daqiqa_dan(hozir)
+        if not boshlanish - dars.OGOH_DAQIQA <= endi < boshlanish:
+            continue
+        kalit = f"dars_ogoh:{v['id']}"
+        if kalit in yuborilgan_kalitlar:
+            continue
+        chat = odam_chati(db, v["odam_id"])
+        if chat is None:
+            continue
+        natija.append({"turi": "dars", "kalit": kalit,
+                       "matn": dars_ogoh_matn(db, v), "chat": chat,
+                       "klaviatura": None})
 
     # ── umumiy rasxod e'loni
     tg_rasxod_dan = db.sozlama(K_RASXOD_DAN, "")

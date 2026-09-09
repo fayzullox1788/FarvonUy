@@ -1625,9 +1625,198 @@ tekshir("yutuq baribir joyida", len(vz.yutuqlar(dO)) == 1)
 tekshir("odat kitob tengligiga tegmaydi", ledger.audit(dO)["toza"])
 
 
+# ══════════════════════════════════════════ dars jadvali (EduPage)
+#
+# Tarmoqqa CHIQMAYDI: `dars.darslar()` va `dars.sinxronla()` tayyor
+# JSON ustida ishlaydi, shuning uchun butun mantiq shu yerda soxta
+# jadval bilan tekshiriladi.
+
+print("\n── dars jadvali ─────────────────────────────────────────────")
+
+from core import dars  # noqa: E402
+
+
+def _tt(kartalar) -> dict:
+    """EduPage javobiga o'xshash eng kichik jadval."""
+    def jad(nom, qatorlar):
+        return {"id": nom, "data_rows": qatorlar}
+    return {"r": {"dbiAccessorRes": {"tables": [
+        jad("days", [{"id": str(i), "name": n} for i, n in enumerate(
+            ["Mo", "Tu", "We", "Th", "Fr", "Sa"])]),
+        jad("periods", [
+            {"id": "4", "period": "4", "starttime": "14:20", "endtime": "15:40"},
+            {"id": "5", "period": "5", "starttime": "15:50", "endtime": "17:10"},
+        ]),
+        jad("classes", [{"id": "c1", "name": "SE-25"},
+                        {"id": "c2", "name": "SE-24"}]),
+        jad("subjects", [{"id": "s1", "name": "Databases (lec)"},
+                         {"id": "s2", "name": "OOP (lec)"}]),
+        jad("teachers", [{"id": "t1", "name": "ABDUMANNOPOVA MA'MURA"}]),
+        jad("classrooms", [{"id": "r1", "name": "GREEN HALL"},
+                           {"id": "r2", "name": "404AB"}]),
+        jad("lessons", [
+            {"id": "l1", "subjectid": "s1", "teacherids": ["t1"],
+             "classids": ["c1"]},
+            {"id": "l2", "subjectid": "s2", "teacherids": ["t1"],
+             "classids": ["c2"]},          # boshqa guruh — tegmasligi kerak
+        ]),
+        jad("cards", kartalar),
+    ]}}}
+
+
+_BOSHI = _date(2026, 9, 7)          # dushanba
+_MON5 = {"id": "k1", "lessonid": "l1", "period": "5", "days": "100000",
+         "classroomids": ["r1"]}
+_WED4 = {"id": "k2", "lessonid": "l1", "period": "4", "days": "001000",
+         "classroomids": ["r1"]}
+_BOSHQA = {"id": "k3", "lessonid": "l2", "period": "4", "days": "010000",
+           "classroomids": ["r2"]}
+
+teng("yakshanbadan boshlangan jadval dushanbaga suriladi",
+     _BOSHI, dars.hafta_boshi("2026-09-06"))
+teng("dushanbadan boshlangani joyida qoladi",
+     _BOSHI, dars.hafta_boshi("2026-09-07"))
+
+_d = dars.darslar(_tt([_MON5, _WED4, _BOSHQA]), "SE-25", _BOSHI)
+teng("faqat o'z guruhining darslari olinadi", 2, len(_d))
+teng("kun bitmaskadan to'g'ri chiqadi", _date(2026, 9, 7), _d[0]["sana"])
+teng("ikkinchisi chorshanba", _date(2026, 9, 9), _d[1]["sana"])
+teng("davomiylik paradan hisoblanadi", 80, _d[0]["davomiylik"])
+teng("kalit sana va paradan quriladi", "dars:2026-09-07:5", _d[0]["manba"])
+teng("izohda o'qituvchi va xona",
+     "Abdumannopova Ma'mura · GREEN HALL", _d[0]["izoh"])
+tekshir("apostrofdan keyin katta harf qo'yilmaydi",
+        dars._nomlash("ABDUMANNOPOVA MA'MURA") == "Abdumannopova Ma'mura")
+tekshir("noma'lum guruh jimgina bo'sh qaytarmaydi",
+        _yiqiladimi(lambda: dars.darslar(_tt([_MON5]), "YO'Q-99", _BOSHI)))
+
+dD = dbm.Db(_TMP / "bD.db", zaxirasiz=True)
+oD = entries.odam_qosh(dD, "Fayzulloxon")
+_GACHA = _BOSHI + _td(days=6)
+
+_n = dars.sinxronla(dD, _d, oD, _BOSHI, _GACHA)
+teng("ikkita dars yozildi", 2, _n["qoshildi"])
+teng("kalendarda ikkita vazifa", 2, len(vz.hafta(dD, _BOSHI, oD)))
+tekshir("dars SHAXSIY — guruhga chiqmaydi",
+        "Databases (lec)" in vz.shaxsiy_nomlari(dD))
+teng("dars kitob tengligiga tegmaydi", True, ledger.audit(dD)["toza"])
+
+# Ikkinchi marta chaqirish hech narsa yozmaydi.
+_n2 = dars.sinxronla(dD, _d, oD, _BOSHI, _GACHA)
+teng("o'zgarmagan jadval hech narsa yozmaydi",
+     (0, 0, 0), (_n2["qoshildi"], _n2["yangilandi"], _n2["ochirildi"]))
+
+# «Bajardim» degan javob sinxrondan keyin ham qoladi.
+_dv = [v for v in vz.hafta(dD, _BOSHI, oD) if v["vaqt"] == "15:50"][0]
+vz.bajar(dD, _dv["id"])
+dars.sinxronla(dD, _d, oD, _BOSHI, _GACHA)
+teng("bajarilgan dars sinxrondan keyin ham bajarilgan",
+     vz.BAJARILDI, vz.bitta(dD, _dv["id"])["holat"])
+
+# Qo'lda yozilgan vazifaga TEGILMAYDI.
+_qol = vz.qosh(dD, "Kitob o'qish", oD, _BOSHI, "21:00", 30)
+# Xona o'zgardi, chorshanbagi dars olib tashlandi.
+_MON5B = dict(_MON5, classroomids=["r2"])
+_d3 = dars.darslar(_tt([_MON5B]), "SE-25", _BOSHI)
+_n3 = dars.sinxronla(dD, _d3, oD, _BOSHI, _GACHA)
+teng("xona o'zgargani yangilandi", 1, _n3["yangilandi"])
+teng("jadvaldan chiqqan dars o'chirildi", 1, _n3["ochirildi"])
+teng("yangi xona izohga tushdi", "Abdumannopova Ma'mura · 404AB",
+     vz.bitta(dD, _dv["id"])["izoh"])
+tekshir("qo'lda yozilgan vazifa joyida", vz.bitta(dD, _qol) is not None)
+teng("kalendarda dars + qo'lda yozilgani", 2, len(vz.hafta(dD, _BOSHI, oD)))
+
+_shx = xb.shaxsiy_matn(dD, _BOSHI, oD)
+tekshir("shaxsiy ro'yxatda dars bor", "Databases (lec)" in _shx)
+tekshir("shaxsiy ro'yxatda xona ham bor", "404AB" in _shx)
+tekshir("dars guruh xabariga tushmaydi",
+        "Databases" not in (xb.kunlik_matn(dD, _BOSHI) or ""))
+
+tekshir("umumiy kalendarda dars ko'rinmaydi",
+        not [r for r in vz.oraliq(dD, _BOSHI, _GACHA, shaxsiysiz=True)
+             if dars.darsmi(r)])
+tekshir("shaxsiy varaqda esa ko'rinadi",
+        [r for r in vz.oraliq(dD, _BOSHI, _GACHA, oD) if dars.darsmi(r)])
+teng("umumiy kalendar sanog'i ham darssiz", 1,
+     vz.sanoq(dD, _BOSHI, _GACHA, shaxsiysiz=True)["jami"])
+teng("shaxsiy sanoq hammasini sanaydi", 2,
+     vz.sanoq(dD, _BOSHI, _GACHA, oD)["jami"])
+
+tekshir("bo'sh jadval kalendarni o'chirmaydi",
+        _yiqiladimi(lambda: dars.sinxronla(dD, [], oD, _BOSHI, _GACHA)))
+teng("o'chirilmadi", 2, len(vz.hafta(dD, _BOSHI, oD)))
+
+# Butun sinxron BITTA undo qadami.
+dD.undo()
+teng("undo butun yangilanishni qaytardi", 3, len(vz.hafta(dD, _BOSHI, oD)))
+dD.redo()
+teng("redo qaytadan qo'lladi", 2, len(vz.hafta(dD, _BOSHI, oD)))
+
+# ── dars xabarlari: oldindan ogohlantirish + davomat
+dD.apply("odam", "UPDATE", {"telegram": "fsultonoov", "tg_chat": 555}, oD)
+_dars = [r for r in vz.oraliq(dD, _BOSHI, _GACHA, oD) if dars.darsmi(r)][0]
+vz.bajar(dD, _dars["id"], False)      # yuqorida bajarilgan edi — qayta ochamiz
+
+
+def _dars_xabar(soat, daqiqa, turi):
+    kutilgan = xb.kutilayotgan(dD, _datetime(2026, 9, 7, soat, daqiqa))
+    return [x for x in kutilgan if x["turi"] == turi
+            and x.get("vazifa_id", _dars["id"]) == _dars["id"]]
+
+
+teng("dars 15:50 da boshlanadi", "15:50", _dars["vaqt"])
+tekshir("6 soat oldin hali erta", not _dars_xabar(9, 30, "dars"))
+tekshir("5 soatdan kam qolganda ogohlantiradi", _dars_xabar(11, 0, "dars"))
+tekshir("dars boshlangach ogohlantirish yubormaydi",
+        not _dars_xabar(16, 0, "dars"))
+_og = _dars_xabar(11, 0, "dars")[0]
+teng("ogohlantirish SHAXSIY chatga ketadi", 555, _og["chat"])
+tekshir("ogohlantirishda xona bor", "404AB" in _og["matn"])
+tekshir("ogohlantirishda tugma yo'q", _og["klaviatura"] is None)
+
+# Dars 17:10 da tugaydi — davomat 10 daqiqadan keyin so'raladi.
+tekshir("dars tugagan zahoti so'ralmaydi", not _dars_xabar(17, 12, "eslatma"))
+_dv2 = _dars_xabar(17, 25, "eslatma")
+tekshir("10 daqiqadan keyin so'raladi", _dv2)
+tekshir("savol davomat haqida", "Davomat" in _dv2[0]["matn"])
+teng("tugma «Qatnashdim»", xb.DARS_ALBATTA_TUGMA,
+     _dv2[0]["klaviatura"][0][0][0])
+teng("tugma ma'lumoti o'zgarmagan", f"bajar:{_dars['id']}",
+     _dv2[0]["klaviatura"][0][0][1])
+tekshir("dars guruhga emas, shaxsiy chatga", _dv2[0]["chat"] == 555)
+
+# Shaxsiy ro'yxat tugmalari bir-biridan ajralib turadi.
+_kl = xb.shaxsiy_klaviatura(dD, _BOSHI, oD)
+teng("har ish uchun bitta tugma", 1, len(_kl))
+tekshir("tugmada vaqt bor", "15:50" in _kl[0][0][0])
+tekshir("dars tugmasida «Qatnashdim»", "Qatnashdim" in _kl[0][0][0])
+teng("tugma ma'lumoti qisqa qolgan", f"bajar:{_dars['id']}", _kl[0][0][1])
+tekshir("callback_data 64 baytdan oshmaydi",
+        len(_kl[0][0][1].encode("utf-8")) <= 64)
+
+# Uy ishi eskisicha: vaqti tugagan zahoti so'raladi.
+_uy = [x for x in xb.kutilayotgan(dD, _datetime(2026, 9, 7, 21, 35))
+       if x["turi"] == "eslatma" and x.get("vazifa_id") == _qol]
+tekshir("uy ishi 10 daqiqa kutmaydi", _uy)
+tekshir("uy ishida tugma eskisicha",
+        _uy[0]["klaviatura"][0][0][0] == xb.ALBATTA_TUGMA)
+
+# Sozlanmagan bo'lsa tarmoqqa umuman chiqmaydi.
+tekshir("sozlanmagan holda yangila() hech narsa qilmaydi",
+        dars.yangila(dD) is None)
+dars.sozlama_qoy(dD, yoq=True, sinf="SE-25", odam_id=oD)
+tekshir("sozlangach chiqishga tayyor", dars.sozlangami(dD))
+tekshir("birinchi marta tekshirish kerak", dars.kerakmi(dD))
+dD.sozlama_qoy(dars.K_TEKSHIRILDI,
+               _datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+tekshir("soat to'lmaguncha tarmoqqa chiqilmaydi", not dars.kerakmi(dD))
+tekshir("soat o'tgach yana chiqiladi",
+        dars.kerakmi(dD, _datetime.now() + _td(hours=2)))
+
+
 # ═════════════════════════════════════════════════════════ yakun
 
-dG.yop(); dS.yop(); dR.yop(); dK.yop(); dO.yop(); d.yop(); d2.yop(); d3.yop(); dU.yop(); d8.yop(); d9.yop(); dA.yop(); dB.yop(); dC.yop()
+dG.yop(); dS.yop(); dR.yop(); dK.yop(); dO.yop(); d.yop(); d2.yop(); d3.yop(); dU.yop(); d8.yop(); d9.yop(); dA.yop(); dB.yop(); dC.yop(); dD.yop()
 shutil.rmtree(_TMP, ignore_errors=True)
 
 print("\n" + "═" * 62)

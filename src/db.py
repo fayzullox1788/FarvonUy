@@ -98,6 +98,7 @@ class Db:
         ("odam", "tg_chat", "INTEGER"),
         ("vazifa", "menyu", "TEXT"),
         ("vazifa", "kechiktirildi", "TEXT"),
+        ("vazifa", "manba", "TEXT"),
         ("yuborilgan", "xabar_id", "INTEGER"),
     ]
 
@@ -117,7 +118,7 @@ class Db:
         self._menyuni_ek()
 
         self.con.execute(
-            "INSERT OR REPLACE INTO meta(kalit,qiymat) VALUES('sxema_versiya','11')")
+            "INSERT OR REPLACE INTO meta(kalit,qiymat) VALUES('sxema_versiya','12')")
 
     # Excel «Vazifalar» varag'idagi tayyor uy ishlari (C17:C21).
     VAZIFA_TURLARI = [

@@ -214,6 +214,49 @@ ko'rsatadi:
 Hammasini shu yerda o'zgartirsa ham bo'ladi: davomiylik, umumiy/shaxsiy,
 kunlik soat va «keyinroq» variantlari.
 
+### Dars jadvali
+
+Universitet jadvali (EduPage) bitta odamning **shaxsiy** kalendariga
+o'zi ko'chiriladi. Hozir sozlangani: **SE-25 → Fayzulloxon**.
+
+Har dars oddiy vazifa bo'lib tushadi — soati, davomiyligi (80 daqiqa)
+va izohida **o'qituvchi · xona**:
+
+```
+🔒 Shaxsiy ro'yxatingiz:
+⏳ 14:20  Fundamentals of Computer Architecture (lec)
+      Asretdinova Lobar · BLUE HALL
+⏳ 15:50  Data Structures and Algorithms (lec)
+      Mahamatov Nurilla · BLUE HALL
+```
+
+Dars **guruhga ham, umumiy kalendarga ham chiqmaydi** — u shaxsiy ish,
+uy vazifasi emas. «Kalendar» varag'ida faqat uy ishlari turadi,
+darslar «Shaxsiy» varag'ida.
+
+Bot ikki marta yozadi, ikkalasi ham **shaxsiy suhbatga**:
+
+| Qachon | Nima |
+|---|---|
+| Dars boshlanishidan **5 soat oldin** | «bugun soat 14:20 da darsingiz bor» — fan, o'qituvchi va xona. Tugma yo'q, bu shunchaki eslatma. |
+| Dars tugagach **10 daqiqadan keyin** | «Davomat: darsda bo'ldingizmi?» — **Qatnashdim ✅** yoki **Hali yo'q ⏳** |
+
+Nega 10 daqiqa: dars tugagan zahoti so'ralsa odam hali auditoriyada
+bo'ladi. Uy ishlarida esa eskisicha — vaqti tugashi bilan so'raladi.
+
+**Jadval o'zgarsa o'zi yangilanadi.** `xabarchi.py` soatiga bir marta
+EduPage'dan o'qiydi va farqni qo'yadi: yangi dars qo'shiladi, xonasi
+yoki soati o'zgargani tuzatiladi, olib tashlangani o'chadi. Hech narsa
+o'zgarmagan bo'lsa hech narsa yozilmaydi.
+
+Ikki narsaga **tegilmaydi**: qo'lda yozilgan vazifa (dars emas) va
+allaqachon «bajarildi» deb belgilangan dars. Butun yangilanish bitta
+amal — kerak bo'lsa bitta qadamda qaytariladi.
+
+Sozlash `sozlama` jadvalida: `dars_yoq`, `dars_sinf`, `dars_odam`.
+Boshqa guruh kerak bo'lsa `dars_sinf` ni o'zgartirish yetarli — kod
+tegilmaydi.
+
 ### Shaxsiy va umumiy ish
 
 Ro'yxatdagi har ishning yonida **«👥 Umumiy» / «🔒 Shaxsiy»**
@@ -228,6 +271,11 @@ so'raladi):
 Shaxsiy ish guruh xabarida **umuman ko'rinmaydi** — na ro'yxatda, na
 eslatmada. Agar kunning hamma ishi shaxsiy bo'lsa, guruhga «bugun
 vazifa yo'q» deb yoziladi.
+
+Xuddi shu qoida **«Kalendar» varag'ida** ham ishlaydi: umumiy kalendar
+uchalasining UY ishlarini ko'rsatadi, shaxsiy ish u yerga tushmaydi.
+Egasi uni «Shaxsiy» varag'ida ko'radi. Yuqoridagi sanoq (nechta
+vazifa, nechta bajarildi) ham shunga qarab hisoblanadi.
 
 **Shaxsiy xabar ishlashi uchun odam botga bir marta `/start` bosishi
 kerak** — Telegram botga o'zi boshlab yozishga ruxsat bermaydi.

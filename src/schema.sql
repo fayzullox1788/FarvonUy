@@ -286,6 +286,11 @@ CREATE TABLE IF NOT EXISTS vazifa (
   -- solishtiruvida ' ' < 'T', ya'ni ikki format aralashsa
   -- taqqoslash jimgina noto'g'ri ishlaydi.
   kechiktirildi TEXT,
+  -- Qatorni kim yozgani. Qo'lda yozilgan vazifada NULL; dars jadvalidan
+  -- kelgani `dars:<sana>:<para>` («dars:2026-09-07:5»). Sinxron FAQAT
+  -- shu belgili qatorlarga tegadi — aks holda qo'lda yozilgan vazifa
+  -- keyingi yangilanishda jimgina o'chib ketardi.
+  manba       TEXT,
   ochirilgan  INTEGER NOT NULL DEFAULT 0,
   yaratilgan  TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
 );

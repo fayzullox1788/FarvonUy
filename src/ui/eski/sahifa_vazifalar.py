@@ -1212,7 +1212,7 @@ class VazifalarSahifa(QWidget):
             oy_boshi = self.joriy.replace(day=1)
             bosh = vz.hafta_boshi(oy_boshi)
             qatorlar = vz.oraliq(self.db, bosh, bosh + timedelta(days=41),
-                                 odam_id)
+                                 odam_id, shaxsiysiz=True)
             self.oy_taqvim.qoy(oy_boshi, qatorlar)
             self.taqvim.hide()
             self.oy_taqvim.show()
@@ -1220,7 +1220,8 @@ class VazifalarSahifa(QWidget):
             dan, gacha = oy_boshi, bosh + timedelta(days=41)
         else:
             kunlar = self._kunlar()
-            qatorlar = vz.oraliq(self.db, kunlar[0], kunlar[-1], odam_id)
+            qatorlar = vz.oraliq(self.db, kunlar[0], kunlar[-1], odam_id,
+                                 shaxsiysiz=True)
             self.taqvim.qoy(kunlar, qatorlar)
             self.oy_taqvim.hide()
             self.taqvim.show()
@@ -1234,7 +1235,7 @@ class VazifalarSahifa(QWidget):
                     f"{kunlar[-1].strftime('%d.%m.%Y')}")
             dan, gacha = kunlar[0], kunlar[-1]
 
-        s = vz.sanoq(self.db, dan, gacha, odam_id)
+        s = vz.sanoq(self.db, dan, gacha, odam_id, shaxsiysiz=True)
         qismlar = [f"{s['jami']} ta vazifa",
                    f"{s['bajarildi']} bajarildi",
                    f"{s['ochiq']} qoldi"]

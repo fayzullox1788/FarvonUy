@@ -283,6 +283,69 @@ aynan shu edi.
 
 ---
 
+## Dars jadvali — `core/dars.py`
+
+EduPage'ning ochiq API'sidan bitta guruhning haftalik jadvali olinadi
+va bitta odamning shaxsiy kalendariga qo'yiladi. Ikkita chaqiruv:
+`ttviewer.js?__func=getTTViewerData` qaysi hafta e'lon qilinganini
+aytadi, `regulartt.js?__func=regularttGetData` esa o'sha haftaning
+hamma kartasini beradi.
+
+**Dars alohida jadval EMAS, oddiy `vazifa` qatori.** Aks holda
+kalendar, eslatma va hisobot ikki manbadan o'qishga majbur bo'lardi.
+Dars ekani `vazifa.manba` ustunidan bilinadi.
+
+**`manba` kaliti — `dars:<sana>:<para>`**, EduPage'ning ichki `id` si
+emas. Maktab jadvalni qayta chizsa `lessonid`/`cardid` lar butunlay
+o'zgaradi va har hafta butun kalendar o'chib-qayta yozilardi. Sana
+bilan para esa o'zgarmaydi, shuning uchun sinxron farqni ko'radi.
+
+**Sinxron faqat `manba LIKE 'dars:%'` qatorlarga tegadi.** Qo'lda
+yozilgan vazifa hech qachon o'chmaydi. `holat` va `bajarilgan` ham
+tegilmaydi: jadval qayta o'qilgani odamning «bajardim» degan javobini
+bekor qilmaydi — `tekshir.py` shuni tekshiradi.
+
+**Bo'sh jadval kalendarni o'chirmaydi** (`sinxronla()` yiqiladi).
+Tarmoq yarim javob bersa yoki guruh nomi o'zgarsa, butun hafta
+jimgina o'chib ketardi.
+
+**Fan nomi `vazifa_turi` da `shaxsiy=1` bo'lishi SHART.** Guruh/shaxsiy
+filtri NOM bo'yicha ishlaydi (`vz.shaxsiy_nomlari()`), demak tur
+bo'lmasa dars guruh xabariga chiqib ketadi. `_turni_taminla()` shuning
+uchun o'chirilgan turni ham tiriltiradi.
+
+**Tarmoqqa soatiga bir marta chiqiladi** (`ORALIQ_DAQIQA`), chegara
+`sozlama.dars_tekshirildi` da. `xabarchi.py` har daqiqada ishlaydi,
+jadval esa haftada bir marta o'zgaradi. Chegara urinishdan OLDIN
+yoziladi — aks holda tarmoq yiqilganda har daqiqada qayta urinib,
+xabarchini 20 soniyaga ushlab turardi.
+
+Dars sinxroni `xabarchi.py` da Telegram tekshiruvidan OLDIN turadi:
+kalendar bot sozlanmagan bo'lsa ham to'ldirilishi kerak. Yiqilsa
+xabarchi to'xtamaydi — eslatma kelmagani jadval kechikkanidan yomonroq.
+
+**Dars ikkita chegara bilan eslatiladi** (`OGOH_DAQIQA` = 5 soat
+oldin, `KECHIKISH_DAQIQA` = 10 daqiqa keyin). Ogohlantirish —
+`kutilayotgan()` dagi YAGONA oldindan ketadigan xabar, kaliti ham
+boshqa (`dars_ogoh:`): bitta kalit ishlatilsa ogohlantirish
+yuborilgani davomat savolini bo'g'ib qo'yardi.
+
+Davomat tugmasining YOZUVI boshqa (`DARS_ALBATTA_TUGMA`), lekin
+`callback_data` o'sha-o'sha (`bajar:id`). Ma'lumotni o'zgartirsangiz
+guruhda va shaxsiy suhbatda turgan ESKI xabarlardagi tugmalar jimgina
+o'lik bo'lib qoladi — bosiladi, hech narsa bo'lmaydi.
+
+**Shaxsiy ish umumiy kalendarga ham tushmaydi.** Filtr —
+`vz.oraliq(..., shaxsiysiz=True)`, nom bo'yicha, `xabar.py` dagi bilan
+AYNAN bir xil qoida. Umumiy varaqning sanog'i ham o'sha bayroq bilan
+chaqiriladi: qatorlar yashirinib, sanoq eskisicha qolsa «7 ta vazifa»
+deb yozib, uchtasini ko'rsatardi.
+
+`darslar()` kun raqamini `days` jadvalining tartibidan oladi, nomdan
+emas. `hafta_boshi()` esa `datefrom` ni dushanbaga suradi: TTPU'da u
+yakshanbaga tushadi, ya'ni jadval o'sha kundan emas, ERTASIDAN
+boshlanadi.
+
 ## Telegram
 
 `core/xabar.py` — sof mantiq, Qt bilmaydi; `xabarchi.py` uni Windows
@@ -508,6 +571,7 @@ bo'lgan).
 |---|---|
 | **Moliya yadrosi** | `money.py` `schema.sql` `db.py` `core/*.py` |
 | **Vazifalar yadrosi** | `core/vazifa.py` (pulga tegmaydi, `audit()` uni ko'rmaydi) |
+| **Dars jadvali** | `core/dars.py` (pulga tegmaydi; tarmoqqa chiqadigan yagona `core/` fayli — `xabar.py` dan tashqari) |
 | **Frontend** | `ui/theme.py` `ui/widgets.py` `ui/dialogs.py` `ui/sahifa_*.py` `ui/oyna.py` |
 | **Infra** | `main.py` `config.py` `crashlog.py` `xabarchi.py` `packaging/` `*.bat` |
 | **Testlar** | `tekshir.py` `ui_tekshir.py` |

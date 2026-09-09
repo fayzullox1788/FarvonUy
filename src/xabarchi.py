@@ -49,6 +49,20 @@ def main() -> int:
     # Zaxira olmaymiz: bu skript kuniga o'nlab marta ishga tushadi.
     baza = dbm.Db(zaxirasiz=True)
     try:
+        # Dars jadvali Telegramdan MUSTAQIL: kalendar bot sozlanmagan
+        # bo'lsa ham to'ldirilishi kerak, shuning uchun tekshiruvdan
+        # oldin turadi. Tarmoq yiqilsa xabarchi to'xtamaydi — jadval
+        # kechikkanidan ko'ra eslatma kelmagani yomonroq.
+        if not sinov:
+            try:
+                from core import dars
+                o = dars.yangila(baza, datetime.now())
+                if o and (o["qoshildi"] or o["yangilandi"] or o["ochirildi"]):
+                    print(f"[DARS] {o['hafta']}: +{o['qoshildi']}"
+                          f" ~{o['yangilandi']} -{o['ochirildi']}")
+            except Exception as x:
+                print(f"[DARS] o'tkazib yuborildi: {x}")
+
         if not sinov and not xabar.sozlangami(baza):
             print("Telegram sozlanmagan yoki o'chirilgan — hech narsa "
                   "yuborilmadi.")
