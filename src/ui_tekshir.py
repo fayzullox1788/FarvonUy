@@ -1336,6 +1336,8 @@ def main() -> int:
                                   boz, 5_000)
         s.yangila()
         _tasdiq(not s.oxirgi_karta.isVisibleTo(s), "«Oxirgi yozuvlar» ko'rinyapti")
+        _tasdiq(s.tana.indexOf(s.bugun_reja) < s.tana.indexOf(s.bugungi),
+                "«Bugunga rejalangan» «Bugun yozilganlar» dan pastda")
         idlar = [s.reja_jadval.item(r, 0).data(0x0100)
                  for r in range(s.reja_jadval.rowCount())]
         _tasdiq(qid in idlar, "bugungi reja «Bugunga rejalangan» da yo'q")

@@ -215,7 +215,9 @@ class BugunSahifa(Sahifa):
         reja_qosh.clicked.connect(self._reja_qosh)
         self.reja_jami = izoh("")
         self.bugun_reja.qosh(qator(self.reja_jami, None, reja_qosh, reja_och))
-        self.tana.addWidget(self.bugun_reja)
+        # Foydalanuvchi so'rovi: reja «Bugun yozilganlar» dan TEPADA.
+        self.tana.insertWidget(self.tana.indexOf(self.bugungi),
+                               self.bugun_reja)
 
         # ── oxirgi rasxodlar ─────────────────────────────────────────
         # Foydalanuvchi so'rovi bilan YASHIRILGAN (2026-10-01) — «Bugun»
