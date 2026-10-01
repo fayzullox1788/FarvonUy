@@ -196,26 +196,31 @@ class BugunSahifa(Sahifa):
         self.bugungi.qosh(self.bugun_jami)
         self.tana.addWidget(self.bugungi)
 
-        # ── bugunga rejalangan ro'yxatlar ────────────────────────────
-        # (2026-10-01) «Oxirgi yozuvlar» o'rniga: bugungi sanadagi reja
-        # ro'yxatlari; ikki marta bosilsa ro'yxat ochiladi — «aslida
-        # to'landi» shu yerdan yoziladi (`RejaRoyxatOyna`).
+        # ── bugunga rejalangan kategoriyalar ─────────────────────────
+        # (2026-10-01) Reja — kategoriyaga ajratilgan pul: shu
+        # kategoriyadan bugun qilingan HAR QANDAY rasxod ayiriladi,
+        # mahsulotma-mahsulot mos kelishi shart emas
+        # (`plan.kun_kategoriyalari`). Ikki marta bosilsa — toifa oynasi.
         self.bugun_reja = Karta("Bugunga rejalangan")
         self.reja_jadval = Jadval(
-            ["Ro'yxat", "Kategoriya", "Kimniki", "Mahsulotlar", "Reja",
-             "Aslida to'landi", "Holat"], pul_ustunlar={4, 5},
-            bosh_matn="Bugunga reja yo'q")
-        self.reja_jadval.kengliklar(0, 150, 120, 100, 110, 130, 120)
+            ["Kategoriya", "Kimniki", "Ro'yxatlar", "Bugungi reja",
+             "Bugun sarflandi", "Holat", "Oyda qoldi"],
+            pul_ustunlar={3, 4, 6}, bosh_matn="Bugunga reja yo'q")
+        self.reja_jadval.kengliklar(150, 110, 0, 120, 130, 130, 120)
+        self.kun_kat: list[dict] = []
         self.reja_jadval.setMinimumHeight(170)
         self.reja_jadval.doubleClicked.connect(self._reja_och)
         self.bugun_reja.qosh(self.reja_jadval)
-        reja_och = tugma("Ro'yxatni ochish", asosiy=True)
+        reja_och = tugma("Ochish", asosiy=True)
         reja_och.clicked.connect(self._reja_och)
         reja_qosh = tugma("+ Bugunga reja")
         reja_qosh.clicked.connect(self._reja_qosh)
         self.reja_jami = izoh("")
         self.bugun_reja.qosh(qator(self.reja_jami, None, reja_qosh, reja_och))
         # Foydalanuvchi so'rovi: reja «Bugun yozilganlar» dan TEPADA.
+        # Keyin (2026-10-01) butunlay YASHIRILDI — foydalanuvchi so'rovi;
+        # reja va fakt Analitika → «Reja va fakt» da qoladi.
+        self.bugun_reja.setVisible(False)
         self.tana.insertWidget(self.tana.indexOf(self.bugungi),
                                self.bugun_reja)
 
@@ -304,13 +309,15 @@ class BugunSahifa(Sahifa):
             self.oyna.yangila()
 
     def _reja_och(self, *_):
-        from ui.eski.sahifa_reja_fakt import RejaRoyxatOyna
-        qid = self.reja_jadval.tanlangan_id()
-        if qid is None and self.reja_jadval.rowCount() == 1:
-            qid = self.reja_jadval.item(0, 0).data(Qt.UserRole)
-        if qid is None:
+        from ui.eski.sahifa_reja_fakt import RejaKategoriyaOyna
+        i = self.reja_jadval.tanlangan_id()
+        if i is None and self.reja_jadval.rowCount() == 1:
+            i = self.reja_jadval.item(0, 0).data(Qt.UserRole)
+        if i is None or i >= len(self.kun_kat):
             return
-        d = RejaRoyxatOyna(self.db, qid, self)
+        g = self.kun_kat[i]
+        d = RejaKategoriyaOyna(self.db, plan.oy_kaliti(), g["turi_id"],
+                               g["nom"], g["odam_id"], self)
         d.exec()
         if d.ozgardi:
             self.oyna.yangila()
@@ -389,24 +396,22 @@ class BugunSahifa(Sahifa):
             f"Bugun jami: {money.fmt_som(jami)}" if jami
             else "Bugun hali rasxod yozilmagan.")
 
-        # bugunga rejalangan
-        satrlar, idlar, reja_j, tol_j = [], [], 0, 0
-        for y in plan.kun_reja_yozuvlari(self.db, bugun.isoformat()):
-            tolandi = y["rasxod"]["summa"] if y["rasxod"] else 0
-            soni = len(y["mahsulotlar"])
+        # bugunga rejalangan — kategoriya bo'yicha
+        self.kun_kat = plan.kun_kategoriyalari(self.db, bugun.isoformat())
+        satrlar, reja_j, fakt_j = [], 0, 0
+        for g in self.kun_kat:
             satrlar.append([
-                y["nom"],
-                f"{y['turi_belgi'] or ''} {y['turi_nom'] or ''}".strip() or "—",
-                "Umumiy" if y["umumiymi"] else (y["odam_nom"] or "—"),
-                f"{soni} ta" if soni else "—", y["summa"], tolandi,
-                plan.royxat_holati(y["summa"], tolandi)])
-            idlar.append(y["id"])
-            reja_j += y["summa"]
-            tol_j += tolandi
-        self.reja_jadval.tuldir(satrlar, idlar)
+                f"{g['belgi']} {g['nom']}".strip(),
+                g["odam_nom"] or "Umumiy", ", ".join(g["royxatlar"]),
+                g["reja"], g["fakt"], plan.kun_holati(g["reja"], g["fakt"]),
+                g["oy_qolgan"]])
+            reja_j += g["reja"]
+            fakt_j += g["fakt"]
+        self.reja_jadval.tuldir(satrlar, list(range(len(satrlar))))
         self.reja_jami.setText(
-            f"Bugunga reja {money.fmt_som(reja_j)} · aslida to'landi "
-            f"{money.fmt_som(tol_j)}" if satrlar else
+            f"Bugunga reja {money.fmt_som(reja_j)} · shu kategoriyalardan "
+            f"sarflandi {money.fmt_som(fakt_j)} · qoldi "
+            f"{money.fmt_som(reja_j - fakt_j)}" if satrlar else
             "Bugunga reja yo'q.")
 
         # oxirgi yozuvlar

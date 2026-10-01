@@ -557,6 +557,112 @@ def kun_reja_yozuvlari(db, sana: str | None = None) -> list[dict]:
         " ORDER BY q.umumiymi DESC, q.id", sana)]
 
 
+# Reja — kategoriyaga ajratilgan pul (2026-10-01, foydalanuvchi so'ragan):
+# ro'yxatdagi mahsulotlar faqat TAFSILOT. Shu kategoriyadan qilingan HAR
+# QANDAY rasxod (ro'yxatga bog'langan-bog'lanmaganidan qat'i nazar) o'sha
+# kategoriya rejasidan ayiriladi — kun bo'yicha ham, oy bo'yicha ham.
+# Fakt `reja_va_fakt` dagi bilan BITTA manbadan (`ledger._manba`) o'qiladi.
+
+def _ildiz(db, turi_id: int | None) -> int | None:
+    while turi_id is not None:
+        r = db.q1("SELECT ota_id FROM turi WHERE id=?", turi_id)
+        if not r or r["ota_id"] is None:
+            return turi_id
+        turi_id = r["ota_id"]
+    return None
+
+
+def _kun_fakt(db, turi_id: int | None, boshi: str, oxiri: str,
+              odam_id: int | None) -> dict[str, int]:
+    """{sana: summa} — asosiy kategoriyaning (ichkilari bilan) rasxodi,
+    `reja_va_fakt` doirasida: umumiy yoki o'sha odamning shaxsiysi."""
+    kunlar: dict[str, int] = {}
+    for r in ledger.kategoriya_rasxodlari(
+            db, [turi_id], boshi, oxiri, odam_id,
+            "shaxsiy" if odam_id else "umumiy"):
+        kunlar[r["sana"][:10]] = kunlar.get(r["sana"][:10], 0) + r["summa"]
+    return kunlar
+
+
+def kategoriya_kunlari(db, oy: str, turi_id: int | None,
+                       odam_id: int | None = None) -> dict:
+    """Toifa ichi, KUN bo'yicha: har kunning rejasi (o'sha kungi
+    ro'yxatlar), shu kategoriyadan o'sha kuni qilingan HAMMA rasxod va
+    qolgani. Limit (sanasiz) faqat oy jamiga qo'shiladi.
+
+    Qaytadi: {reja, fakt, qolgan, limit,
+              kunlar: [{sana, reja, fakt, qolgan, royxatlar: [nom]}]}
+    `reja`/`fakt` — `reja_va_fakt` dagi shu toifa qatori bilan AYNAN teng.
+    """
+    boshi, oxiri = oy + "-01", oy_oxiri(oy + "-01")
+    kunlar: dict[str, dict] = {}
+
+    def _k(sana):
+        return kunlar.setdefault(sana, {"sana": sana, "reja": 0, "fakt": 0,
+                                        "royxatlar": []})
+    for y in kategoriya_reja_yozuvlari(db, oy, turi_id, odam_id):
+        k = _k((y["sana"] or boshi)[:10])
+        k["reja"] += y["summa"]
+        k["royxatlar"].append(y["nom"] or "—")
+    for sana, summa in _kun_fakt(db, turi_id, boshi, oxiri, odam_id).items():
+        _k(sana)["fakt"] += summa
+    qatorlar = sorted(kunlar.values(), key=lambda k: k["sana"])
+    for k in qatorlar:
+        k["qolgan"] = k["reja"] - k["fakt"]
+    limit = (limit_reja(db, oy).get(turi_id, 0)
+             if odam_id is None and turi_id is not None else 0)
+    reja = sum(k["reja"] for k in qatorlar) + limit
+    fakt = sum(k["fakt"] for k in qatorlar)
+    return {"reja": reja, "fakt": fakt, "qolgan": reja - fakt,
+            "limit": limit, "kunlar": qatorlar}
+
+
+def kun_kategoriyalari(db, sana: str | None = None) -> list[dict]:
+    """«Bugun» kartasi: shu kunga reja qo'yilgan har bir kategoriya
+    (doirasi bilan — umumiy yoki kimningdir shaxsiysi): bugungi reja,
+    shu kategoriyadan bugun qilingan HAMMA rasxod, qolgani va oy
+    bo'yicha qolgani. Ro'yxat nomlari — tafsilot."""
+    sana = _kun(sana).isoformat()
+    oy = oy_kaliti(sana)
+    guruh: dict[tuple, dict] = {}
+    for y in kun_reja_yozuvlari(db, sana):
+        odam = None if y["umumiymi"] else y["odam_id"]
+        ildiz = _ildiz(db, y["turi_id"])
+        g = guruh.get((odam, ildiz))
+        if g is None:
+            t = (db.q1("SELECT nom, belgi FROM turi WHERE id=?", ildiz)
+                 if ildiz is not None else None)
+            g = guruh[(odam, ildiz)] = {
+                "turi_id": ildiz, "odam_id": odam,
+                "odam_nom": y["odam_nom"] if odam else None,
+                "nom": t["nom"] if t else "Kategoriyasiz",
+                "belgi": (t["belgi"] or "") if t else "",
+                "reja": 0, "royxatlar": []}
+        g["reja"] += y["summa"]
+        g["royxatlar"].append(y["nom"] or "—")
+    natija = []
+    for g in guruh.values():
+        g["fakt"] = _kun_fakt(db, g["turi_id"], sana, sana,
+                              g["odam_id"]).get(sana, 0)
+        g["qolgan"] = g["reja"] - g["fakt"]
+        g["oy_qolgan"] = kategoriya_kunlari(db, oy, g["turi_id"],
+                                            g["odam_id"])["qolgan"]
+        natija.append(g)
+    return natija
+
+
+def kun_holati(reja: int, fakt: int) -> str:
+    """Kun/kategoriya qatoridagi «Holat»: reja − fakt."""
+    if not fakt:
+        return "sarflanmagan" if reja else "—"
+    if not reja:
+        return "rejasiz"
+    farq = reja - fakt
+    return ("rejadagidek" if not farq else
+            f"{money.fmt(farq)} qoldi" if farq > 0 else
+            f"{money.fmt(-farq)} oshdi")
+
+
 def royxat_holati(reja: int, tolandi: int) -> str:
     """Ro'yxat qatoridagi «Holat» — toifa oynasi va «Bugun» da bir xil."""
     if not tolandi:

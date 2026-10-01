@@ -2713,6 +2713,38 @@ teng("ro'yxat holati", ["olinmagan", "rejadagidek", "+500 ortiq"],
 for _ in range(3):
     dM.undo()
 
+# Reja — kategoriyaga ajratilgan pul: shu kategoriyadan qilingan HAR
+# QANDAY rasxod ayiriladi, ro'yxatga bog'lanishi shart emas
+_kr1 = plan.reja_yozuv_saqla(dM, "2026-12-09", "Bozor", _mev, 10_000,
+                             [{"item_id": _ni, "summa": 10_000}])
+plan.reja_yozuv_saqla(dM, "2026-12-11", "Bozor 2", _boz, 4_000)
+_ka = _rk.saqla(dM, _rk.Qoralama(sana="2026-12-09", kim_toladi=mF,
+                                  turi_id=_mev, nom="Olma", summa=3_000,
+                                  tur=_rk.UMUMIY))
+_rk.saqla(dM, _rk.Qoralama(sana="2026-12-10", kim_toladi=mF, turi_id=_boz,
+                           nom="Rejasiz kun", summa=2_000, tur=_rk.UMUMIY))
+_kk = plan.kategoriya_kunlari(dM, "2026-12", _boz)
+teng("kunlar: bog'lanmagan rasxod ham ayirildi (ichki kategoriya otasida)",
+     [("2026-12-09", 10_000, 3_000, 7_000), ("2026-12-10", 0, 2_000, -2_000),
+      ("2026-12-11", 4_000, 0, 4_000)],
+     [(k["sana"], k["reja"], k["fakt"], k["qolgan"]) for k in _kk["kunlar"]])
+_kq = next(q for q in plan.reja_va_fakt(dM, "2026-12")["qatorlar"]
+           if q["turi_id"] == _boz)
+teng("kunlar jami = «Reja va fakt» qatori", (_kq["reja"], _kq["fakt"]),
+     (_kk["reja"], _kk["fakt"]))
+_kb = plan.kun_kategoriyalari(dM, "2026-12-09")
+teng("bugun: kategoriya bo'yicha — reja, bugungi rasxod, oyda qolgan",
+     [(_boz, None, 10_000, 3_000, 7_000, _kk["qolgan"])],
+     [(g["turi_id"], g["odam_id"], g["reja"], g["fakt"], g["qolgan"],
+       g["oy_qolgan"]) for g in _kb])
+teng("kun holati", ["sarflanmagan", "7\xa0000 qoldi", "rejadagidek", "500 oshdi",
+                    "rejasiz"],
+     [plan.kun_holati(*x) for x in ((1, 0), (10_000, 3_000), (5, 5),
+                                    (1_000, 1_500), (0, 9))])
+for _ in range(4):
+    dM.undo()
+tekshir("audit toza (kategoriya kunlari)", ledger.audit(dM).toza)
+
 # Limit (ro'yxatsiz kategoriya rejasi) → oddiy ro'yxat
 plan.budjet_qoy(dM, _boz, "2026-12", 70_000)
 _rj0 = plan.turi_reja(dM, "2026-12")

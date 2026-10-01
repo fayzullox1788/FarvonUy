@@ -1262,8 +1262,9 @@ def main() -> int:
                                   rid) == 17_000 and ro.ozgardi,
                 "«aslida to'landi» rasxod yozmadi")
         ko._qur()
-        _tasdiq(ko.royxat.item(0, 5).text() == "rejadagidek",
-                "ro'yxat holati yangilanmadi")
+        _kun = [ko.kunlar.item(r, 3).text() for r in range(ko.kunlar.rowCount())]
+        _tasdiq(ko.kunlar.item(0, 4).text() == "rejadagidek",
+                f"kun holati yangilanmadi: {_kun}")
         import ui.eski.sahifa_reja_fakt as srf
         asl, srf.tasdiq = srf.tasdiq, lambda *a: True
         try:
@@ -1336,11 +1337,11 @@ def main() -> int:
                                   boz, 5_000)
         s.yangila()
         _tasdiq(not s.oxirgi_karta.isVisibleTo(s), "«Oxirgi yozuvlar» ko'rinyapti")
-        _tasdiq(s.tana.indexOf(s.bugun_reja) < s.tana.indexOf(s.bugungi),
-                "«Bugunga rejalangan» «Bugun yozilganlar» dan pastda")
-        idlar = [s.reja_jadval.item(r, 0).data(0x0100)
-                 for r in range(s.reja_jadval.rowCount())]
-        _tasdiq(qid in idlar, "bugungi reja «Bugunga rejalangan» da yo'q")
+        _tasdiq(not s.bugun_reja.isVisibleTo(s),
+                "«Bugunga rejalangan» ko'rinyapti")
+        _tasdiq(any(g["turi_id"] == boz for g in s.kun_kat)
+                and s.reja_jadval.rowCount() == len(s.kun_kat),
+                "bugungi reja kategoriyasi «Bugunga rejalangan» da yo'q")
         d.undo()
         s.yangila()
 

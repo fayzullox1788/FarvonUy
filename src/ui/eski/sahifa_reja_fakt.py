@@ -312,7 +312,7 @@ class RejaKategoriyaOyna(QDialog):
         self.nom, self.odam_id = nom, odam_id
         self.ozgardi = False
         self.setWindowTitle(f"{nom} — {oy_nomi(oy)}")
-        self.setMinimumSize(760, 460)
+        self.setMinimumSize(760, 620)
 
         v = QVBoxLayout(self)
         v.setContentsMargins(22, 20, 22, 18)
@@ -320,11 +320,20 @@ class RejaKategoriyaOyna(QDialog):
         v.addWidget(sarlavha(nom))
         self.xulosa = izoh("")
         v.addWidget(self.xulosa)
-        self.royxat = Jadval(["Sana", "Ro'yxat", "Mahsulotlar", "Reja",
-                              "Aslida to'landi", "Holat"],
-                             pul_ustunlar={3, 4},
+        # Kun bo'yicha: reja — kategoriyaga ajratilgan pul; shu
+        # kategoriyadan qilingan HAR QANDAY rasxod ayiriladi, ro'yxatdagi
+        # mahsulotlar bilan mos kelishi shart emas (`plan.kategoriya_kunlari`).
+        v.addWidget(bolim("Kunlar bo'yicha"))
+        self.kunlar = Jadval(["Sana", "Ro'yxatlar", "Reja", "Sarflandi",
+                              "Holat"], pul_ustunlar={2, 3},
+                             bosh_matn="Bu oy bu toifada reja ham, rasxod ham yo'q")
+        self.kunlar.kengliklar(90, 0, 110, 110, 140)
+        v.addWidget(self.kunlar, 1)
+        v.addWidget(bolim("Reja ro'yxatlari (tafsilot)"))
+        self.royxat = Jadval(["Sana", "Ro'yxat", "Mahsulotlar", "Reja"],
+                             pul_ustunlar={3},
                              bosh_matn="Bu toifada hali reja ro'yxati yo'q")
-        self.royxat.kengliklar(90, 0, 100, 110, 130, 120)
+        self.royxat.kengliklar(90, 0, 100, 110)
         self.royxat.doubleClicked.connect(self._och)
         v.addWidget(self.royxat, 1)
 
@@ -349,30 +358,30 @@ class RejaKategoriyaOyna(QDialog):
             self.db, self.oy, self.turi_id, self.odam_id)
         # Eski «limit» (ro'yxatsiz kategoriya rejasi) ham qator bo'lib
         # chiqadi; ochilsa oddiy ro'yxatga aylanadi (`limitni_royxatga`).
-        self.limit = (plan.limit_reja(self.db, self.oy).get(self.turi_id, 0)
-                      if self.odam_id is None else 0)
-        reja = sum(y["summa"] for y in self.yozuvlar) + self.limit
-        tolangan = sum(y["rasxod"]["summa"] for y in self.yozuvlar
-                       if y["rasxod"])
-        soni = len(self.yozuvlar) + (1 if self.limit else 0)
+        kk = plan.kategoriya_kunlari(self.db, self.oy, self.turi_id,
+                                     self.odam_id)
+        self.limit = kk["limit"]
+        qolgan = kk["qolgan"]
         self.xulosa.setText(
-            f"{soni} ta ro'yxat · reja {money.fmt_som(reja)} · "
-            f"aslida to'landi {money.fmt_som(tolangan)} — ochish uchun "
-            f"ikki marta bosing" if soni else
-            "Bu toifada hali reja ro'yxati yo'q — «+ Yangi ro'yxat».")
+            f"Reja {money.fmt_som(kk['reja'])} · shu kategoriyadan "
+            f"sarflandi {money.fmt_som(kk['fakt'])} · "
+            + (f"qoldi {money.fmt_som(qolgan)}" if qolgan >= 0 else
+               f"rejadan {money.fmt_som(-qolgan)} oshdi"))
+        self.kunlar.tuldir(
+            [[f"{k['sana'][8:10]}.{k['sana'][5:7]}",
+              ", ".join(k["royxatlar"]) or "— (rejasiz rasxod)",
+              k["reja"], k["fakt"], plan.kun_holati(k["reja"], k["fakt"])]
+             for k in kk["kunlar"]])
         satrlar = []
         for y in self.yozuvlar:
             iso = (y["sana"] or self.oy + "-01")[:10]
             soni = len(y["mahsulotlar"])
-            tolandi = y["rasxod"]["summa"] if y["rasxod"] else 0
-            holat = plan.royxat_holati(y["summa"], tolandi)
             satrlar.append([f"{iso[8:10]}.{iso[5:7]}", y["nom"],
-                            f"{soni} ta" if soni else "—", y["summa"],
-                            tolandi, holat])
+                            f"{soni} ta" if soni else "—", y["summa"]])
         idlar = [y["id"] for y in self.yozuvlar]
         if self.limit:
-            satrlar.append(["—", "Limit (mahsulotsiz)", "—", self.limit, 0,
-                            "ochsangiz ro'yxat bo'ladi"])
+            satrlar.append(["—", "Limit (mahsulotsiz, butun oyga)", "—",
+                            self.limit])
             idlar.append(self.LIMIT)
         self.royxat.tuldir(satrlar, idlar)
 
