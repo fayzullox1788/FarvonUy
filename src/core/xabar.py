@@ -21,8 +21,10 @@ Token manbada emas — `sozlama` jadvalida, foydalanuvchi bazasida.
 """
 from __future__ import annotations
 
+import http.client
 import json
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import date, datetime
 
@@ -736,20 +738,58 @@ def eski_izlarni_tozala(db) -> None:
 
 # ═══════════════════════════════════════════════════════════ tarmoq
 
+# Ochiq HTTPS ulanishlar (keep-alive). Har so'rovga yangi TCP + TLS ochish
+# ~0,3 s olardi, ochiq ulanishda ~0,1 s (2026-10-01 da o'lchangan) — bitta
+# tugma bir necha so'rov yuboradi, demak javob sezilarli tezlashadi.
+# Uzun so'rov (getUpdates) o'z ulanishida: u 50 s gacha band turadi.
+_ULANISHLAR: dict = {}
+
+
+def _ulanish(kalit: str, vaqt: float):
+    import http.client
+    h = _ULANISHLAR.get(kalit)
+    if h is None:
+        h = http.client.HTTPSConnection("api.telegram.org", timeout=vaqt)
+        _ULANISHLAR[kalit] = h
+    h.timeout = vaqt
+    if h.sock is not None:
+        h.sock.settimeout(vaqt)
+    return h
+
+
+def _ulanishni_yop(kalit: str) -> None:
+    h = _ULANISHLAR.pop(kalit, None)
+    if h is not None:
+        try:
+            h.close()
+        except Exception:
+            pass
+
+
 def _sorov(token: str, metod: str, **maydonlar):
     """Yagona tarmoq chaqiruvi — testlarda almashtiriladi."""
     # `_vaqt` — Telegramga ketmaydi: uzun so'rovda (getUpdates timeout=N)
     # ulanish N soniyadan ko'proq kutishi kerak, aks holda o'zimiz uzamiz.
     vaqt = maydonlar.pop("_vaqt", 15)
-    url = API.format(token=token, metod=metod)
+    yol = urllib.parse.urlsplit(API.format(token=token, metod=metod)).path
     data = json.dumps(maydonlar).encode("utf-8")
-    req = urllib.request.Request(
-        url, data=data, headers={"Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=vaqt) as resp:
-            javob = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.URLError as e:
-        raise RuntimeError(f"Telegramga ulanib bo'lmadi: {e}") from e
+    kalit = "tinglash" if metod == "getUpdates" else "asosiy"
+    # Ochiq ulanishni server yopib qo'ygan bo'lishi mumkin — bir marta
+    # yangisini ochib qayta urinamiz (so'rov hali bajarilmagan bo'ladi).
+    for urinish in (1, 2):
+        h = _ulanish(kalit, vaqt)
+        try:
+            h.request("POST", yol, body=data,
+                      headers={"Content-Type": "application/json"})
+            javob = json.loads(h.getresponse().read().decode("utf-8"))
+            break
+        except (OSError, http.client.HTTPException) as e:
+            _ulanishni_yop(kalit)
+            uzildi = isinstance(e, (http.client.RemoteDisconnected,
+                                    ConnectionResetError, BrokenPipeError,
+                                    http.client.CannotSendRequest))
+            if urinish == 2 or not uzildi:
+                raise RuntimeError(f"Telegramga ulanib bo'lmadi: {e}") from e
     if not javob.get("ok"):
         raise RuntimeError(javob.get("description", "Noma'lum xato"))
     return javob.get("result")

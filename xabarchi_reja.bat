@@ -35,8 +35,13 @@ if errorlevel 1 (
   exit /b 1
 )
 
+REM Doimiy bot (2026-10-01): batareyada ham ishlasin, vaqt chegarasi yo'q,
+REM ikkinchi nusxa ochilmasin. Har daqiqalik ishga tushish — nazoratchi:
+REM bot tirik bo'lsa yangi nusxa qulfni ko'rib darhol chiqadi.
+powershell -NoProfile -Command "$s=(Get-ScheduledTask -TaskName '%REJA%').Settings; $s.DisallowStartIfOnBatteries=$false; $s.StopIfGoingOnBatteries=$false; $s.ExecutionTimeLimit='PT0S'; $s.MultipleInstances='IgnoreNew'; $s.StartWhenAvailable=$true; Set-ScheduledTask -TaskName '%REJA%' -Settings $s | Out-Null"
+
 echo.
-echo Reja o'rnatildi: har daqiqada tekshiriladi.
+echo Reja o'rnatildi: bot doimiy ishlaydi, har daqiqada nazorat qilinadi.
 echo Tekshirish:  schtasks /Query /TN "%REJA%"
 echo O'chirish:   xabarchi_reja.bat /o
 echo.

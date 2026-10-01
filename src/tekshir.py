@@ -3291,7 +3291,8 @@ try:
         _xch.time.monotonic = _asl_mono
     tekshir("tinglash reja oralig'idan (300 s) oldin tugaydi",
             _soat[0] <= _xch.ISH_VAQTI < 300)
-    tekshir("har so'rov 25 s dan oshmaydi", max(_kutishlar) <= _xch.SOROV_VAQTI)
+    tekshir("har so'rov Telegram chegarasidan (50 s) oshmaydi",
+            max(_kutishlar) <= _xch.SOROV_VAQTI <= 50)
     tekshir("tinglash paytida eslatma har daqiqada tekshiriladi",
             len(_eslatmalar) >= 3)
 
@@ -3312,6 +3313,38 @@ try:
     tekshir("tarmoq xatosidan keyin chiqib ketmaydi — qayta urinadi",
             len(_kutishlar) > 10)
     tekshir("xato bo'lsa ham oyna vaqtida tugaydi", _soat[0] <= _xch.ISH_VAQTI)
+
+    # Doimiy rejim: vaqt bilan tugamaydi, faqat `toxta()` (kod o'zgardi)
+    _kutishlar.clear()
+    _eslatmalar.clear()
+    _davr = []
+    _soat[0] = 0.0
+    _xch.time.monotonic = lambda: _soat[0]
+    try:
+        sabab = _xch._tingla(_SoxtaXabar, None, 0.0, ish_vaqti=None,
+                             toxta=lambda: _soat[0] > 3_600,
+                             davriy=lambda b: _davr.append(_soat[0]))
+    finally:
+        _xch.time.monotonic = _asl_mono
+    teng("doimiy rejim: faqat kod o'zgarganda to'xtaydi", "toxta", sabab)
+    tekshir("doimiy rejim: soat davomida eslatma har daqiqada",
+            len(_eslatmalar) >= 55)
+    tekshir("doimiy rejim: davriy ishlar ~10 daqiqada bir",
+            5 <= len(_davr) <= 7)
+    tekshir("doimiy rejim: so'rov eslatmani kechiktirmaydi",
+            all(k <= _xch.ESLATMA_ORALIQ for k in _kutishlar))
+
+    # Bitta nusxa: qulf band bo'lsa ikkinchisi ololmaydi
+    _ql = _TMP / "sinov.lock"
+    _q1 = _xch._qulfla(_ql)
+    _q2 = _xch._qulfla(_ql)
+    tekshir("bitta nusxa: ikkinchi qulf olinmaydi", _q1 is not None and _q2 is None)
+    if _q1:
+        _q1.close()
+    _q3 = _xch._qulfla(_ql)
+    tekshir("qulf bo'shagach — yana olinadi", _q3 is not None)
+    if _q3:
+        _q3.close()
 finally:
     xb._sorov = _asl_sorov2
     if _asl_rasm2:

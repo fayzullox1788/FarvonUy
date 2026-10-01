@@ -296,15 +296,21 @@ olinadi, LEKIN foydalanuvchi kimlarni o'zi tanlagan bo'lsa (`qolda`)
 tegilmaydi — aks holda olib tashlangan odam jimgina qaytardi.
 Botda bo'lish faqat «teng»; foiz/og'irlik/aniq — oynada.
 
-**Xabarchi uzun so'rov qiladi**: reja amalda har 5 daqiqada
-(`schtasks` da PT5M, «IgnoreNew»), skript JARAYON BOSHIDAN
-`ISH_VAQTI` (292 s) davomida `getUpdates(timeout=25)` bilan tinglaydi
-va har daqiqada eslatmalarni tekshiradi. `ISH_VAQTI` reja oralig'idan
-kichik bo'lishi SHART (oshsa keyingi ishga tushish o'tkazib yuboriladi
-— 5 daqiqalik bo'shliq), lekin unga yaqin: 270 bo'lganda har davrda
-~30 s hech kim tinglamas edi va bot «ishlamay qoldi» deb ko'rindi. Dastur ichidagi «guruhni topish» (`guruhlarni_top`) ham
-`getUpdates` chaqiradi — tinglash paytida bosilsa Telegram 409 berishi
-mumkin, bir necha soniyadan keyin qayta bosish kifoya.
+**Xabarchi — DOIMIY jarayon** (2026-10-01, «bot juda sekin»): avval reja
+har 5 daqiqada ishga tushirib, skript ~292 s tinglab chiqardi — oraliqda
+va noutbuk BATAREYADA (reja batareyada ishga tushmasdi) bot daqiqalab
+jim edi. Endi `xabarchi.py` chiqmaydi: `getUpdates(timeout=50)` ni
+tinimsiz tinglaydi, eslatmalar har daqiqada, takroriy vazifa + dars
+`DAVRIY_ORALIQ` (10 daq) da. BITTA nusxa — `DATA/xabarchi.lock` fayl
+qulfi; Windows rejasi har DAQIQADA chaqiradi (nazoratchi), qulf band
+bo'lsa yangi nusxa og'ir importdan oldin chiqadi. Reja sozlamalari:
+batareyada ham, vaqt chegarasiz, «IgnoreNew» (`xabarchi_reja.bat`).
+`src/**/*.py` o'zgarsa jarayon o'zi chiqadi — nazoratchi ≤1 daqiqada
+yangi kod bilan ko'taradi. Tarmoq: `xabar._sorov` keep-alive HTTPS
+ulanishda (`_ULANISHLAR`: «tinglash» va «asosiy»), so'rov ~0,3 s dan
+~0,1 s ga tushdi; uzilgan ulanish bir marta qayta ochiladi. Dastur
+ichidagi «guruhni topish» (`guruhlarni_top`) ham `getUpdates` chaqiradi —
+doimiy tinglash paytida Telegram 409 berishi mumkin, qayta bosish kifoya.
 
 **Xabarchi TO'G'RIDAN-TO'G'RI shu `src/` dan ishlaydi.** `xabar.py`,
 `tg_rasxod.py` yoki `xabarchi.py` ni tahrirlayotganda yarim yozilgan
