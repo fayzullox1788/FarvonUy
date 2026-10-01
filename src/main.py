@@ -48,6 +48,17 @@ def main() -> int:
             f"Ma'lumotlar bazasini ochib bo'lmadi:\n\n{e}\n\n{config.DB_YOL}")
         return 1
 
+    # Takroriy vazifalar («har kuni namoz») kalendarga shu yerda
+    # to'ldiriladi — oyna qurilishidan OLDIN, aks holda birinchi
+    # ko'rinish yangi kunlarsiz chizilardi. Yiqilsa dastur to'xtamaydi:
+    # bitta qoida buzuq bo'lgani uchun butun dastur ochilmay qolishi
+    # mumkin emas.
+    try:
+        from core import vazifa as vz
+        vz.takror_toldir(baza)
+    except Exception as e:
+        crashlog.yoz(f"Takroriy vazifalarni to'ldirib bo'lmadi: {e}")
+
     # Foydalanuvchi tanlagan rang rejimi oyna qurilishidan OLDIN
     # qo'yilishi kerak — aks holda widgetlar eski rang bilan quriladi.
     theme.rejim_qoy(baza.sozlama("rejim", theme.REJIM))

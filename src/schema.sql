@@ -52,7 +52,15 @@ CREATE TABLE IF NOT EXISTS turi (
   nom    TEXT    NOT NULL UNIQUE,
   belgi  TEXT    NOT NULL DEFAULT '',
   tartib INTEGER NOT NULL DEFAULT 0,
-  faol   INTEGER NOT NULL DEFAULT 1
+  faol   INTEGER NOT NULL DEFAULT 1,
+  -- Ikonka fayli (`src/belgilar/` ichidagi nom, masalan `food_03.png`).
+  -- Nomini foydalanuvchi «Yangi rasxod kategoriyalari» varag'ida beradi.
+  -- Fayl nomi foydalanuvchiga ko'rsatilmaydi — u faqat kalit.
+  rasm   TEXT,
+  -- Ichki kategoriya bo'lsa — otasi («Mevalar» → «Bozorlik»). NULL —
+  -- asosiy kategoriya. Rasxod ichki kategoriyaga yozilsa, doira va
+  -- budjetda otasiga qo'shib hisoblanadi (`ledger.ildizlar`).
+  ota_id INTEGER REFERENCES turi(id)
 );
 
 -- ────────────────────────────────────────────────────────────────── kirim
@@ -143,6 +151,59 @@ CREATE TABLE IF NOT EXISTS hisob_kitob (
   CHECK (kim_toladi <> kimga)
 );
 
+-- ──────────────────────────────────────────────────────────── tashqi qarz
+-- Uydan TASHQARIDAGI odamdan olingan qarz («Fayzulloxon Aziz akadan
+-- 500 000 oldi»). Qarz beruvchi `odam` jadvalida EMAS — u hisobning
+-- a'zosi emas, shuning uchun `kimdan` oddiy matn.
+--
+-- Pul olganning qo'liga haqiqatan tushadi: `naqd` oshadi, qaytarilganda
+-- kamayadi. `sof` ga TEGMAYDI — bu uydagilar orasidagi qarz emas, ya'ni
+-- SUM(sof)=0 shartiga aralashmaydi. Qoldiq alohida ko'rsatiladi
+-- (`v_balans.tashqi_qoldiq`).
+--
+-- Qaytarishni har doim qarzni OLGAN odamning o'zi qiladi.
+
+CREATE TABLE IF NOT EXISTS tashqi_qarz (
+  id         INTEGER PRIMARY KEY,
+  sana       TEXT    NOT NULL,
+  odam_id    INTEGER NOT NULL REFERENCES odam(id),
+  kimdan     TEXT    NOT NULL,
+  summa      INTEGER NOT NULL CHECK (summa > 0),
+  sabab      TEXT,
+  ochirilgan INTEGER NOT NULL DEFAULT 0,
+  yaratilgan TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+  -- 1 — UMUMIY qarz: pul ham, qarz ham hammaniki — `tashqi_ulush`
+  -- bo'yicha bo'linadi (2026-10-01). Pastdagi v_balans izohiga qarang.
+  umumiy     INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS tashqi_tolov (
+  id             INTEGER PRIMARY KEY,
+  tashqi_qarz_id INTEGER NOT NULL REFERENCES tashqi_qarz(id),
+  sana           TEXT    NOT NULL,
+  summa          INTEGER NOT NULL CHECK (summa > 0),
+  izoh           TEXT,
+  ochirilgan     INTEGER NOT NULL DEFAULT 0,
+  yaratilgan     TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS ix_tashqi_tolov ON tashqi_tolov(tashqi_qarz_id);
+
+-- Umumiy tashqi qarzning har kimga tushadigan ulushi.
+--   tolov_id IS NULL — olingan qarzdan ulush  (yig'indisi = qarz summasi)
+--   tolov_id bor     — qaytarilgan to'lovdan ulush (yig'indisi = to'lov)
+-- Qarz to'liq qaytarilganda har kimning ikki ulushi tenglashadi va
+-- uydagilar orasidagi qarz nolga tushadi — har kim aynan o'z ulushini
+-- to'lagan bo'ladi.
+CREATE TABLE IF NOT EXISTS tashqi_ulush (
+  id         INTEGER PRIMARY KEY,
+  qarz_id    INTEGER NOT NULL REFERENCES tashqi_qarz(id),
+  tolov_id   INTEGER REFERENCES tashqi_tolov(id),
+  odam_id    INTEGER NOT NULL REFERENCES odam(id),
+  summa      INTEGER NOT NULL,
+  ochirilgan INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS ix_tashqi_ulush ON tashqi_ulush(qarz_id, tolov_id);
+
 -- ───────────────────────────────────────────────────────── yo'qlik kunlari
 
 CREATE TABLE IF NOT EXISTS yoq_kun (
@@ -200,7 +261,19 @@ CREATE TABLE IF NOT EXISTS item (
   narx     INTEGER NOT NULL DEFAULT 0,
   cikl_kun INTEGER,
   faol     INTEGER NOT NULL DEFAULT 1,
-  izoh     TEXT
+  izoh     TEXT,
+  -- «Mahsulotlar» varag'i (core/mahsulot.py). Hammasi ixtiyoriy:
+  -- bo'sh qolsa NULL, xato emas. Miqdor/og'irlik/litr — pul EMAS,
+  -- shuning uchun REAL (reja_qator.miqdor kabi).
+  rasm       TEXT,            -- config.MAHSULOT_RASM ichidagi fayl nomi
+  miqdor     REAL,
+  ogirlik    REAL,
+  litr       REAL,
+  olchov     TEXT,            -- dona, kg, gramm, litr, millilitr …
+  -- `faol=0` — vaqtincha ishlatilmaydi (ro'yxatda ko'rinadi, rasxodda
+  -- tanlanmaydi). `ochirilgan=1` — o'chirilgan: hech qayerda ko'rinmaydi,
+  -- lekin unga bog'langan eski rasxodlar joyida qoladi.
+  ochirilgan INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS reja (
@@ -227,6 +300,36 @@ CREATE TABLE IF NOT EXISTS reja_qator (
   ochirilgan INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS ix_reja_qator ON reja_qator(reja_id);
+
+-- Bitta rasxod / reja yozuvi ichidagi mahsulotlar (2026-10-01). Kategoriya
+-- tanlangach bir nechta mahsulot kiritiladi; yozuvning `summa` si — shu
+-- qatorlar yig'indisi (`core/rasxod_kirit.py` va `plan.reja_yozuv_saqla`
+-- tekshiradi). Balans faqat `rasxod.summa` dan o'qiydi — bu jadvallar
+-- `v_balans` ga TEGMAYDI. Qatorlari yo'q yozuv ham to'g'ri (eski rasxodlar,
+-- bot). Miqdor — dona (butun son, pul hisobida float bo'lmasin).
+CREATE TABLE IF NOT EXISTS rasxod_mahsulot (
+  id         INTEGER PRIMARY KEY,
+  rasxod_id  INTEGER NOT NULL REFERENCES rasxod(id),
+  item_id    INTEGER REFERENCES item(id),
+  nom        TEXT    NOT NULL,
+  miqdor     INTEGER NOT NULL DEFAULT 1,
+  summa      INTEGER NOT NULL CHECK (summa > 0),
+  tartib     INTEGER NOT NULL DEFAULT 0,
+  ochirilgan INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS ix_rasxod_mahsulot ON rasxod_mahsulot(rasxod_id);
+
+CREATE TABLE IF NOT EXISTS reja_mahsulot (
+  id         INTEGER PRIMARY KEY,
+  qator_id   INTEGER NOT NULL REFERENCES reja_qator(id),
+  item_id    INTEGER REFERENCES item(id),
+  nom        TEXT    NOT NULL,
+  miqdor     INTEGER NOT NULL DEFAULT 1,
+  summa      INTEGER NOT NULL CHECK (summa > 0),
+  tartib     INTEGER NOT NULL DEFAULT 0,
+  ochirilgan INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS ix_reja_mahsulot ON reja_mahsulot(qator_id);
 
 CREATE TABLE IF NOT EXISTS budjet (
   id      INTEGER PRIMARY KEY,
@@ -368,6 +471,53 @@ CREATE TABLE IF NOT EXISTS ish_qadam (
 );
 CREATE INDEX IF NOT EXISTS ix_ish_qadam_turi ON ish_qadam(turi_id);
 
+-- ────────────────────────────────────────────── takroriy vazifa
+--
+-- «Namoz o'qish har kuni» — bitta QOIDA, ming dona qator emas.
+--
+-- Qoida shu jadvalda turadi, kalendardagi kunlar esa undan
+-- CHIQARILADI: `takror_toldir()` bugundan boshlab TAKROR_UFQ kunga
+-- yetguncha yetishmagan `vazifa` qatorlarini yozadi. Dastur ochilganda
+-- va `xabarchi.py` har chaqirilganda ishlaydi, ya'ni ro'yxat hech
+-- qachon tugamaydi.
+--
+-- Nega N ta qator oldindan yozilmaydi: kalendar, eslatma, hisobot va
+-- streak — hammasi `vazifa` jadvalidan o'qiydi. Qoidani alohida
+-- «virtual vazifa» qilib ko'rsatish o'sha to'rttasini ikki manbadan
+-- o'qishga majbur qilardi (`dars` bilan aynan bir xil sabab).
+--
+-- Bog'lanish `vazifa.manba` orqali: `takror:<id>:<sana>`. Sana
+-- kalitning ichida — shuning uchun to'ldirish takroriy bo'lsa ham
+-- ikkinchi nusxa yozilmaydi.
+--
+-- O'CHIRILGAN kun qayta tirilmaydi: to'ldirish `ochirilgan` ni
+-- filtrlamaydi, ya'ni foydalanuvchi bitta kunni bekor qilsa u
+-- keyingi to'ldirishda qaytib kelmaydi.
+--
+-- naqsh:
+--   'kunlik'  — har kuni
+--   'kunlar'  — faqat tanlangan hafta kunlari, `kunlar` = "0,2,4"
+--               (0=dushanba … 6=yakshanba)
+--   'oraliq'  — har `oraliq` kunda, `boshlanish` dan sanaladi
+CREATE TABLE IF NOT EXISTS vazifa_takror (
+  id          INTEGER PRIMARY KEY,
+  nom         TEXT    NOT NULL,
+  odam_id     INTEGER NOT NULL REFERENCES odam(id),
+  vaqt        TEXT,
+  davomiylik  INTEGER NOT NULL DEFAULT 60,
+  izoh        TEXT,
+  naqsh       TEXT    NOT NULL DEFAULT 'kunlik',
+  kunlar      TEXT,
+  oraliq      INTEGER NOT NULL DEFAULT 1,
+  boshlanish  TEXT    NOT NULL,
+  tugash      TEXT,
+  faol        INTEGER NOT NULL DEFAULT 1,
+  ochirilgan  INTEGER NOT NULL DEFAULT 0,
+  yaratilgan  TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS ix_vazifa_takror_faol
+  ON vazifa_takror(faol, ochirilgan);
+
 -- ──────────────────────────────────────────────────────────── streak
 --
 -- «Har kuni kitob o'qish» kabi ODAT: bitta odam + bitta ish turi +
@@ -434,7 +584,30 @@ ub AS (SELECT u.odam_id  id, SUM(u.summa) s FROM ulush u
 qb AS (SELECT kim_berdi  id, SUM(summa) s FROM qarz        WHERE ochirilgan=0 GROUP BY kim_berdi),
 qo AS (SELECT kimga      id, SUM(summa) s FROM qarz        WHERE ochirilgan=0 GROUP BY kimga),
 ht AS (SELECT kim_toladi id, SUM(summa) s FROM hisob_kitob WHERE ochirilgan=0 GROUP BY kim_toladi),
-ho AS (SELECT kimga      id, SUM(summa) s FROM hisob_kitob WHERE ochirilgan=0 GROUP BY kimga)
+ho AS (SELECT kimga      id, SUM(summa) s FROM hisob_kitob WHERE ochirilgan=0 GROUP BY kimga),
+-- SHAXSIY tashqi qarz va uning qaytarilgani — faqat olgan odamniki.
+-- O'chirilgan qarzning to'lovi ham hisobga kirmaydi.
+ta AS (SELECT odam_id    id, SUM(summa) s FROM tashqi_qarz
+       WHERE ochirilgan=0 AND umumiy=0 GROUP BY odam_id),
+tq AS (SELECT q.odam_id  id, SUM(t.summa) s FROM tashqi_tolov t
+       JOIN tashqi_qarz q ON q.id=t.tashqi_qarz_id
+       WHERE t.ochirilgan=0 AND q.ochirilgan=0 AND q.umumiy=0
+       GROUP BY q.odam_id),
+-- UMUMIY tashqi qarz (2026-10-01, foydalanuvchi qoidasi): olingan pul
+-- hammaga ULUSHI bo'yicha beriladi (tsq — har kimning qo'liga o'z
+-- ulushi), qaytarilganda ham har kimdan o'z to'lov ulushi ayiriladi
+-- (ttq; teng yoki rasxoddagidek sozlanadi). Uy ichida qarz YARATMAYDI —
+-- `sof` ga tegmaydi, `v_juft_qarz` da yo'q. naqd va adolat ikkalasiga
+-- bir xil qo'shiladi, demak adolat = naqd + sof o'z-o'zidan saqlanadi.
+tsq AS (SELECT u.odam_id id, SUM(u.summa) s FROM tashqi_ulush u
+        JOIN tashqi_qarz q ON q.id=u.qarz_id
+        WHERE u.tolov_id IS NULL AND u.ochirilgan=0 AND q.ochirilgan=0
+          AND q.umumiy=1 GROUP BY u.odam_id),
+ttq AS (SELECT u.odam_id id, SUM(u.summa) s FROM tashqi_ulush u
+        JOIN tashqi_tolov t ON t.id=u.tolov_id
+        JOIN tashqi_qarz q ON q.id=t.tashqi_qarz_id
+        WHERE u.ochirilgan=0 AND t.ochirilgan=0 AND q.ochirilgan=0
+          AND q.umumiy=1 GROUP BY u.odam_id)
 -- DIQQAT: bu view faol bo'lmagan odamni ham qaytaradi. Agar `faol=1` filtri
 -- shu yerda bo'lsa, odam nofaol qilinganda uning qarzi hisobdan tushib
 -- qoladi va SUM(sof) noldan chiqib ketadi — ya'ni audit yolg'on gapiradi.
@@ -450,20 +623,33 @@ SELECT
   COALESCE(qo.s,0) AS qarz_olgan,
   COALESCE(ht.s,0) AS hk_tolagan,
   COALESCE(ho.s,0) AS hk_olgan,
+  COALESCE(ta.s,0) + COALESCE(tsq.s,0)                 AS tashqi_olgan,
+  COALESCE(tq.s,0) + COALESCE(ttq.s,0)                 AS tashqi_qaytargan,
+  COALESCE(ta.s,0) - COALESCE(tq.s,0)
+    + COALESCE(tsq.s,0) - COALESCE(ttq.s,0)            AS tashqi_qoldiq,
   COALESCE(k.s,0) - COALESCE(sh.s,0) - COALESCE(ut.s,0)
     - COALESCE(qb.s,0) + COALESCE(qo.s,0)
-    - COALESCE(ht.s,0) + COALESCE(ho.s,0)               AS naqd,
+    - COALESCE(ht.s,0) + COALESCE(ho.s,0)
+    + COALESCE(ta.s,0) - COALESCE(tq.s,0)
+    + COALESCE(tsq.s,0) - COALESCE(ttq.s,0)            AS naqd,
   (COALESCE(ut.s,0) - COALESCE(uu.s,0) - COALESCE(ub.s,0))
     + COALESCE(qb.s,0) - COALESCE(qo.s,0)
-    + COALESCE(ht.s,0) - COALESCE(ho.s,0)               AS sof,
+    + COALESCE(ht.s,0) - COALESCE(ho.s,0)              AS sof,
+  -- Tashqi qarz `adolat` ga ham qo'shiladi: u `sof` ga tegmaydi, demak
+  -- adolat = naqd + sof ayniyati saqlanishi uchun ikkalasida bir xil
+  -- bo'lishi SHART.
   COALESCE(k.s,0) - COALESCE(sh.s,0)
-    - COALESCE(uu.s,0) - COALESCE(ub.s,0)               AS adolat
+    - COALESCE(uu.s,0) - COALESCE(ub.s,0)
+    + COALESCE(ta.s,0) - COALESCE(tq.s,0)
+    + COALESCE(tsq.s,0) - COALESCE(ttq.s,0)            AS adolat
 FROM odam o
 LEFT JOIN k  ON k.id=o.id   LEFT JOIN sh ON sh.id=o.id
 LEFT JOIN ut ON ut.id=o.id  LEFT JOIN uu ON uu.id=o.id
 LEFT JOIN ub ON ub.id=o.id
 LEFT JOIN qb ON qb.id=o.id  LEFT JOIN qo ON qo.id=o.id
-LEFT JOIN ht ON ht.id=o.id  LEFT JOIN ho ON ho.id=o.id;
+LEFT JOIN ht ON ht.id=o.id  LEFT JOIN ho ON ho.id=o.id
+LEFT JOIN ta ON ta.id=o.id  LEFT JOIN tq ON tq.id=o.id
+LEFT JOIN tsq ON tsq.id=o.id LEFT JOIN ttq ON ttq.id=o.id;
 
 -- Juftlik bo'yicha xom qarz (netlanmagan)
 DROP VIEW IF EXISTS v_juft_qarz;
@@ -479,6 +665,8 @@ UNION ALL
   -- To'lov qarzni KAMAYTIRADI: to'lovchi qarzdor, oluvchi kreditor, minus bilan.
   SELECT kim_toladi, kimga, -SUM(summa) FROM hisob_kitob
   WHERE ochirilgan=0 GROUP BY kim_toladi, kimga;
+-- Umumiy tashqi qarz bu yerda YO'Q (2026-10-01): pul ham, qaytarish ham
+-- har kimning o'z ulushida — uydagilar orasida qarz paydo bo'lmaydi.
 
 -- To'lanmagan bloklar: har bir ulush alohida qator.
 -- To'lovchining o'z ulushi bu yerga TUSHMAYDI — u pulni o'zi chiqargan.

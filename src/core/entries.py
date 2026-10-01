@@ -41,6 +41,21 @@ def kirim_ochir(db, kirim_id: int) -> None:
 
 # ───────────────────────────────────────────────────────────── rasxod
 
+def rasxod_majburiy(db, nom: str | None, turi_id: int | None) -> None:
+    """Qo'lda yoziladigan har rasxodda sabab VA kategoriya bo'lishi shart.
+
+    `rasxod_qosh()` ning o'zida tekshirilmaydi: Excel importi va takroriy
+    rasxodlar eski ma'lumotdan keladi, ularda kategoriya bo'lmasligi
+    mumkin. Shuning uchun uni rasxod yozadigan har bir OYNA chaqiradi.
+    """
+    if not (nom or "").strip():
+        raise ValueError("Sabab yozilmagan — rasxod nima uchun?")
+    if turi_id is None:
+        raise ValueError("Kategoriya tanlanmagan.")
+    if not db.q1("SELECT 1 FROM turi WHERE id=? AND faol=1", turi_id):
+        raise ValueError("Bu kategoriya endi yo'q — boshqasini tanlang.")
+
+
 def rasxod_qosh(db, sana: str, nom: str, summa: int, kim_toladi: int,
                 umumiymi: bool = True, turi_id: int | None = None,
                 usul: str = money.USUL_TENG,
@@ -151,6 +166,39 @@ def rasxod_ochir(db, rasxod_id: int) -> None:
         db.apply("rasxod", "DELETE", qator_id=rasxod_id)
 
 
+def rasxod_turi_qoy(db, rasxod_idlar: list[int], turi_id: int) -> int:
+    """Bir yoki bir nechta rasxodning kategoriyasini almashtiradi —
+    BITTA undo qadami. Pulga tegmaydi (summa, ulush o'zgarmaydi).
+
+    Bog'langan mahsulot boshqa kategoriyaniki bo'lib qolsa `item_id`
+    bo'shatiladi — `RasxodDialog` da kategoriya almashganda ham mahsulot
+    tanlovi yangi kategoriyadan qayta olinadi. Qaytaradi: nechta rasxod
+    o'zgardi (allaqachon shu kategoriyada bo'lgani sanalmaydi).
+    """
+    if turi_id is None or not db.q1(
+            "SELECT 1 FROM turi WHERE id=? AND faol=1", turi_id):
+        raise ValueError("Kategoriya tanlanmagan yoki endi yo'q.")
+    nomi = db.skalyar("SELECT nom FROM turi WHERE id=?", turi_id,
+                      birlamchi="")
+    ozgarish = []
+    for rid in dict.fromkeys(rasxod_idlar):
+        r = db.q1("SELECT r.turi_id, r.item_id, i.turi_id item_turi"
+                  " FROM rasxod r LEFT JOIN item i ON i.id=r.item_id"
+                  " WHERE r.id=? AND r.ochirilgan=0", rid)
+        if r is None or r["turi_id"] == turi_id:
+            continue
+        yangi = {"turi_id": turi_id}
+        if r["item_id"] is not None and r["item_turi"] != turi_id:
+            yangi["item_id"] = None
+        ozgarish.append((rid, yangi))
+    # Hech narsa o'zgarmasa amal OCHILMAYDI: bo'sh guruh redo yo'lini yopadi.
+    if ozgarish:
+        with db.amal(f"Kategoriya almashtirildi: {nomi}"):
+            for rid, yangi in ozgarish:
+                db.apply("rasxod", "UPDATE", yangi, rid)
+    return len(ozgarish)
+
+
 # ─────────────────────────────────────────────────────────────── qarz
 
 def qarz_qosh(db, sana: str, kim_berdi: int, kimga: int, summa: int,
@@ -170,6 +218,181 @@ def qarz_qosh(db, sana: str, kim_berdi: int, kimga: int, summa: int,
 def qarz_ochir(db, qarz_id: int) -> None:
     with db.amal("Qarz o'chirildi"):
         db.apply("qarz", "DELETE", qator_id=qarz_id)
+
+
+# ────────────────────────────────────────────────────────── tashqi qarz
+# Uydan tashqaridagi odamdan olingan qarz. SHAXSIY — pul olganning
+# qo'liga tushadi va qarz uniki. UMUMIY (2026-10-01) — pul ham, qarz ham
+# hammaga ulushi bo'yicha (teng yoki rasxoddagidek sozlanadi); qaytarish
+# ham har kimning o'z ulushidan. Uydagilar orasidagi qarzga (`sof`)
+# ikkalasi ham tegmaydi.
+
+def tashqi_qarz_qosh(db, sana: str, odam_id: int, kimdan: str, summa: int,
+                     sabab: str | None = None, umumiy: bool = False,
+                     qatnashchilar: list[int] | None = None,
+                     usul: str = money.USUL_TENG,
+                     parametrlar: dict[int, float] | None = None) -> int:
+    """`umumiy=True` — pul va qarz hammaniki: `parametrlar`/`usul` bo'yicha
+    (rasxoddagidek), berilmasa `qatnashchilar` ga (yoki shu kuni
+    uydagilarga) teng bo'linadi."""
+    summa = int(summa)
+    kimdan = (kimdan or "").strip()
+    if summa <= 0:
+        raise ValueError("Qarz summasi musbat bo'lishi kerak")
+    if not kimdan:
+        raise ValueError("Kimdan olingani yozilmagan")
+    nom = _odam_nom(db, odam_id)
+    tur = "Umumiy tashqi qarz" if umumiy else "Tashqi qarz"
+    with db.amal(f"{tur}: {nom} ← {kimdan} {money.fmt(summa)}"):
+        qid = db.apply("tashqi_qarz", "INSERT", {
+            "sana": sana, "odam_id": odam_id, "kimdan": kimdan,
+            "summa": summa, "sabab": sabab or None})
+        if umumiy:
+            tashqi_umumiy_qoy(db, qid, qatnashchilar or
+                              splitting.qatnashchilar(db, sana),
+                              usul=usul, parametrlar=parametrlar)
+        return qid
+
+
+def _tashqi_ulushlar(db, qarz_id: int, tolov_id: int | None) -> list:
+    shart = "tolov_id IS NULL" if tolov_id is None else "tolov_id=?"
+    args = (qarz_id,) if tolov_id is None else (qarz_id, tolov_id)
+    return db.q(f"SELECT id, odam_id, summa FROM tashqi_ulush"
+                f" WHERE ochirilgan=0 AND qarz_id=? AND {shart}", *args)
+
+
+def _tolov_ulushini_yoz(db, qarz_id: int, tolov_id: int, summa: int,
+                        usul: str | None = None,
+                        parametrlar: dict[int, float] | None = None) -> None:
+    """To'lov kimdan qanchadan ayirilishi — yig'indisi aynan `summa`.
+    Birlamchi: qarz ulushlari NISBATIDA (teng olingan bo'lsa — teng);
+    `usul`/`parametrlar` berilsa — rasxoddagidek (`money.bol`)."""
+    if parametrlar:
+        bolinish = money.bol(int(summa), usul or money.USUL_TENG,
+                             {int(k): float(v) for k, v in parametrlar.items()})
+    else:
+        vazn = {r["odam_id"]: float(r["summa"])
+                for r in _tashqi_ulushlar(db, qarz_id, None)}
+        if not vazn:
+            return
+        bolinish = money.bol(int(summa), money.USUL_OGIRLIK, vazn)
+    for u in bolinish:
+        db.apply("tashqi_ulush", "INSERT", {
+            "qarz_id": qarz_id, "tolov_id": tolov_id,
+            "odam_id": u.odam_id, "summa": u.summa})
+
+
+def tashqi_umumiy_qoy(db, qarz_id: int, qatnashchilar: list[int] | None,
+                      usul: str = money.USUL_TENG,
+                      parametrlar: dict[int, float] | None = None) -> None:
+    """Qarzni UMUMIY qiladi (`qatnashchilar` ga teng, yoki `parametrlar`/
+    `usul` bo'yicha — rasxoddagidek) yoki `None` — shaxsiy.
+
+    Oldingi ulushlar (qaytarilgan to'lovlarniki ham) o'chiriladi va
+    qaytadan quriladi — bitta undo qadami. Allaqachon qaytarilgan
+    to'lovlar ham yangi nisbatda bo'linadi.
+    """
+    q = db.q1("SELECT * FROM tashqi_qarz WHERE id=? AND ochirilgan=0", qarz_id)
+    if not q:
+        raise ValueError("Qarz topilmadi")
+    if qatnashchilar is not None:
+        qatnashchilar = [int(i) for i in dict.fromkeys(qatnashchilar)]
+        if not qatnashchilar:
+            raise ValueError("Kamida bitta odam tanlangan bo'lishi kerak.")
+    tavsif = (f"Tashqi qarz umumiy qilindi: {q['kimdan']}" if qatnashchilar
+              else f"Tashqi qarz shaxsiy qilindi: {q['kimdan']}")
+    with db.amal(tavsif):
+        for r in db.q("SELECT id FROM tashqi_ulush WHERE qarz_id=? AND ochirilgan=0",
+                      qarz_id):
+            db.apply("tashqi_ulush", "DELETE", qator_id=r["id"])
+        db.apply("tashqi_qarz", "UPDATE", {"umumiy": 1 if qatnashchilar else 0},
+                 qarz_id)
+        if not qatnashchilar:
+            return
+        p = ({int(k): float(v) for k, v in parametrlar.items() if v}
+             if parametrlar else {i: 1.0 for i in qatnashchilar})
+        for u in money.bol(int(q["summa"]),
+                           usul if parametrlar else money.USUL_TENG, p):
+            db.apply("tashqi_ulush", "INSERT", {
+                "qarz_id": qarz_id, "tolov_id": None,
+                "odam_id": u.odam_id, "summa": u.summa})
+        for t in db.q("SELECT id, summa FROM tashqi_tolov"
+                      " WHERE tashqi_qarz_id=? AND ochirilgan=0 ORDER BY id",
+                      qarz_id):
+            _tolov_ulushini_yoz(db, qarz_id, t["id"], t["summa"])
+
+
+def tashqi_qarz_ochir(db, qarz_id: int) -> None:
+    """Qarz va uning HAMMA to'lovi — bitta undo qadami.
+
+    To'lovlar qarzsiz osilib qolmasin: `v_balans` ularni baribir
+    hisobga olmaydi, lekin ro'yxatda «nimaning to'lovi?» bo'lib turardi.
+    """
+    q = db.q1("SELECT kimdan FROM tashqi_qarz WHERE id=?", qarz_id)
+    with db.amal(f"Tashqi qarz o'chirildi: {q['kimdan'] if q else '?'}"):
+        for r in db.q("SELECT id FROM tashqi_ulush WHERE qarz_id=? AND ochirilgan=0",
+                      qarz_id):
+            db.apply("tashqi_ulush", "DELETE", qator_id=r["id"])
+        for t in db.q("SELECT id FROM tashqi_tolov"
+                      " WHERE tashqi_qarz_id=? AND ochirilgan=0", qarz_id):
+            db.apply("tashqi_tolov", "DELETE", qator_id=t["id"])
+        db.apply("tashqi_qarz", "DELETE", qator_id=qarz_id)
+
+
+def tashqi_qoldiq(db, qarz_id: int) -> int:
+    return db.skalyar(
+        "SELECT q.summa - COALESCE((SELECT SUM(t.summa) FROM tashqi_tolov t"
+        "  WHERE t.tashqi_qarz_id=q.id AND t.ochirilgan=0),0)"
+        " FROM tashqi_qarz q WHERE q.id=? AND q.ochirilgan=0", qarz_id)
+
+
+def tashqi_tolov_qosh(db, qarz_id: int, sana: str, summa: int,
+                      izoh: str | None = None, usul: str | None = None,
+                      parametrlar: dict[int, float] | None = None) -> int:
+    """Tashqi qarzni qaytarish (to'liq yoki qisman). Shaxsiy qarzni olgan
+    odam to'laydi; umumiysida har kimdan o'z ulushi ayiriladi — birlamchi
+    qarz ulushlari nisbatida, `usul`/`parametrlar` bilan sozlanadi."""
+    summa = int(summa)
+    q = db.q1("SELECT kimdan, umumiy FROM tashqi_qarz WHERE id=? AND ochirilgan=0",
+              qarz_id)
+    if not q:
+        raise ValueError("Qarz topilmadi")
+    if summa <= 0:
+        raise ValueError("To'lov summasi musbat bo'lishi kerak")
+    qoldiq = tashqi_qoldiq(db, qarz_id)
+    if summa > qoldiq:
+        raise ValueError(
+            f"Qarzning qoldig'i {money.fmt(qoldiq)} — undan ko'p "
+            f"qaytarib bo'lmaydi")
+    with db.amal(f"Tashqi qarz qaytarildi: {q['kimdan']} {money.fmt(summa)}"):
+        tid = db.apply("tashqi_tolov", "INSERT", {
+            "tashqi_qarz_id": qarz_id, "sana": sana, "summa": summa,
+            "izoh": izoh or None})
+        if q["umumiy"]:
+            # Umumiy qarz: har kimning qo'lidagi puldan o'z ulushi.
+            _tolov_ulushini_yoz(db, qarz_id, tid, summa, usul, parametrlar)
+        return tid
+
+
+def tashqi_qarz_yop(db, qarz_id: int, sana: str, izoh: str | None = None,
+                    usul: str | None = None,
+                    parametrlar: dict[int, float] | None = None) -> int:
+    """Qarzni to'liq yopish — butun qoldiq bitta to'lov bo'lib yoziladi."""
+    if not db.q1("SELECT 1 FROM tashqi_qarz WHERE id=? AND ochirilgan=0", qarz_id):
+        raise ValueError("Qarz topilmadi")
+    qoldiq = tashqi_qoldiq(db, qarz_id)
+    if qoldiq <= 0:
+        raise ValueError("Bu qarz allaqachon yopilgan")
+    return tashqi_tolov_qosh(db, qarz_id, sana, qoldiq, izoh or "Qarz yopildi",
+                             usul, parametrlar)
+
+
+def tashqi_tolov_ochir(db, tolov_id: int) -> None:
+    with db.amal("Tashqi qarz to'lovi o'chirildi"):
+        for r in db.q("SELECT id FROM tashqi_ulush WHERE tolov_id=? AND ochirilgan=0",
+                      tolov_id):
+            db.apply("tashqi_ulush", "DELETE", qator_id=r["id"])
+        db.apply("tashqi_tolov", "DELETE", qator_id=tolov_id)
 
 
 # ────────────────────────────────────────────────────────── hisob-kitob
@@ -232,6 +455,11 @@ def odam_ochir(db, odam_id: int) -> None:
             f"{o['nom']} hali {money.fmt(abs(b['sof']))} so'mga {yon}.\n\n"
             f"Avval hisob-kitob qiling — qarz ochiq turganda odamni "
             f"ro'yxatdan olib tashlash hisobni chalkashtiradi.")
+    b = db.q1("SELECT tashqi_qoldiq FROM v_balans WHERE id=?", odam_id)
+    if b and b["tashqi_qoldiq"]:
+        raise ValueError(
+            f"{o['nom']} tashqaridan olgan {money.fmt(b['tashqi_qoldiq'])} "
+            f"so'm qarzni hali qaytarmagan.")
 
     with db.amal(f"Odam ro'yxatdan olindi: {o['nom']}"):
         db.apply("odam", "UPDATE", {"faol": 0}, odam_id)

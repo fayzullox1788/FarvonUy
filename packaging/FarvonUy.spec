@@ -37,9 +37,13 @@ a = Analysis(
     binaries=[],
     datas=[
         (str(SRC / "schema.sql"), "."),
+        (str(SRC / "belgilar"), "belgilar"),
         (str(ILDIZ / "assets" / "farvonuy.ico"), "assets"),
     ],
-    hiddenimports=["openpyxl"],
+    # QtSvg — kategoriya ikonkalari SVG dan chiziladi (widgets.belgi_ikon);
+    # kodda import yo'q, shuning uchun aniq aytiladi, aks holda qsvgicon
+    # plagini tushib qolib, ikonkalar PNG zaxirasiga qaytardi.
+    hiddenimports=["openpyxl", "PySide6.QtSvg"],
     hookspath=[],
     runtime_hooks=[],
     excludes=CHIQARIB_TASHLA,

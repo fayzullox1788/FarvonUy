@@ -96,10 +96,11 @@ DATA = _malumot_papkasi()
 DB_YOL = DATA / "farvonuy.db"
 ZAXIRA = DATA / "zaxira"          # avtomatik backuplar
 CHEKLAR = DATA / "cheklar"        # chek rasmlari
+MAHSULOT_RASM = DATA / "mahsulot_rasm"   # mahsulot rasmlari
 EKSPORT = DATA / "eksport"        # hisobotlar
 LOG_YOL = DATA / "farvonuy.log"
 
-for _p in (ZAXIRA, CHEKLAR, EKSPORT):
+for _p in (ZAXIRA, CHEKLAR, MAHSULOT_RASM, EKSPORT):
     _p.mkdir(parents=True, exist_ok=True)
 
 # Nechta zaxira nusxa saqlanadi

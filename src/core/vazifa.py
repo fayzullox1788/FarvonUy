@@ -12,6 +12,9 @@ from datetime import date, datetime, timedelta
 
 OCHIQ = "ochiq"
 BAJARILDI = "bajarildi"
+# Namoz o'z vaqtida o'qilmadi. Bajarilmagan, lekin «ochiq» ham emas:
+# eslatma endi so'ramaydi, o'rniga alohida «qazosini o'qish» ishi turadi.
+QAZO = "qazo"
 
 KUNLAR = ["Dushanba", "Seshanba", "Chorshanba", "Payshanba",
           "Juma", "Shanba", "Yakshanba"]
@@ -413,12 +416,14 @@ def biriktir(db, tur_id: int, odam_id: int, sana, vaqt: str | None = None,
 #
 #   1. Pishirish navbat bilan yuradi — `odam.tartib` bo'yicha, har kuni
 #      keyingi odam. Bittasi tanlansa qolgani o'zi joylashadi.
-#   2. Idishni O'SHA KUNI AVVALGI navbatchi yuvadi. Ya'ni:
-#         Fayzulloxon pishirsa  → Abbosxon yuvadi
-#         Otabek pishirsa       → Fayzulloxon yuvadi
-#         Abbosxon pishirsa     → Otabek yuvadi
-#      Boshqacha aytganda: kecha pishirgan odam bugun idish yuvadi.
-#      Shuning uchun yuvuvchi — navbatdagi OLDINGI odam (`-1`).
+#   2. Idishni PISHIRGAN ODAMNING O'ZI yuvadi. Ya'ni:
+#         Fayzulloxon pishirsa  → Fayzulloxon yuvadi
+#         Otabek pishirsa       → Otabek yuvadi
+#         Abbosxon pishirsa     → Abbosxon yuvadi
+#      2026-09-17 gacha idishni navbatdagi OLDINGI odam yuvardi (`-1`);
+#      foydalanuvchi o'zi o'zgartirdi. Idish baribir ALOHIDA vazifa
+#      bo'lib qoladi: eslatma, «Albatta!» tugmasi va hisobot uni
+#      ovqatdan ajratib ko'radi.
 
 def navbat_odamlari(db) -> list:
     return db.q("SELECT id, nom FROM odam WHERE faol=1 ORDER BY tartib, id")
@@ -456,7 +461,7 @@ def navbat_rejasi(db, tur_id: int, odam_id: int, sana,
                      "davomiylik": t["davomiylik"]})
         if ergash is None:
             continue
-        yuvuvchi = idlar[(boshi + i - 1) % n]
+        yuvuvchi = oshpaz
         y_vaqt = None
         if vaqt:
             # Idish ovqatdan keyin: yarim tunni oshib ketmasin.
@@ -491,7 +496,7 @@ def navbat_biriktir(db, tur_id: int, odam_id: int, sana,
 #                  Adolatni qo'lda tekislash uchun.
 #
 # Ikkalasida ham o'sha kunning idish yuvuvchisi qayta hisoblanadi —
-# «kim pishirsa, undan oldingi yuvadi» qoidasi buzilmasin.
+# «kim pishirsa, o'sha yuvadi» qoidasi buzilmasin.
 
 
 def navbat_turi(db):
@@ -501,11 +506,11 @@ def navbat_turi(db):
 
 
 def yuvuvchi_id(db, oshpaz_id: int):
-    """Shu oshpazning idishini kim yuvadi — navbatdagi OLDINGI odam."""
+    """Shu oshpazning idishini kim yuvadi — oshpazning O'ZI."""
     idlar = [r["id"] for r in navbat_odamlari(db)]
-    if oshpaz_id not in idlar or len(idlar) < 2:
+    if oshpaz_id not in idlar:
         return None
-    return idlar[(idlar.index(oshpaz_id) - 1) % len(idlar)]
+    return oshpaz_id
 
 
 def navbatlimi(db, vazifa_id: int) -> bool:
@@ -678,6 +683,81 @@ def bajar(db, vazifa_id: int, bajarildi: bool = True) -> None:
         # Aks holda vazifa qaytarilganda yutuq osilib qolardi.
         if bajarildi:
             yutuqlarni_tekshir(db)
+        # Qazo deb belgilangan namoz qayta ochilsa yoki o'qildi deyilsa,
+        # uning hali o'qilmagan qazo ishi ham shu amalda olib tashlanadi.
+        if v["holat"] == QAZO:
+            for q in qazo_ishlari(db, vazifa_id, faqat_ochiq=True):
+                db.apply("vazifa", "DELETE", qator_id=q["id"])
+
+
+def yopiqmi(v) -> bool:
+    """Endi eslatish shart emasmi — bajarilgan yoki qazo bo'lgan."""
+    return v["holat"] in (BAJARILDI, QAZO)
+
+
+# ─────────────────────────────────────────────────────────────── qazo
+#
+# Namoz o'qilmay qolsa: «Qazo bo'ldi» bosiladi. Namoz `QAZO` holatiga
+# o'tadi va o'sha odamga «<namoz> — qazosini o'qish» degan yangi ish
+# yoziladi (vaqtsiz, bugun). Ikkalasi BITTA amal — bitta Ctrl+Z.
+#
+# Namoz NOMIDAN taniladi: takror qoidalari («Asr namozi», «Peshin»)
+# foydalanuvchi o'zi yozgan nomlar, alohida belgi yo'q.
+
+NAMOZ_SOZLAR = ("namoz", "nomoz", "namaz", "bomdod", "peshin", "asr",
+                "shom", "xufton")
+QAZO_QOSHIMCHA = "qazosini o'qish"
+QAZO_BELGI = "qazo"
+
+
+def qazo_ishimi(v) -> bool:
+    return str(v["manba"] or "").startswith(f"{QAZO_BELGI}:") if v else False
+
+
+def namozmi(v) -> bool:
+    """Bu vazifa namozmi (qazo ishining o'zi emas)."""
+    if not v or qazo_ishimi(v):
+        return False
+    sozlar = str(v["nom"] or "").lower().replace("'", " ").split()
+    return any(s.startswith(n) for s in sozlar for n in NAMOZ_SOZLAR)
+
+
+def qazo_nomi(nom: str) -> str:
+    return f"{nom} — {QAZO_QOSHIMCHA}"
+
+
+def qazo_ishlari(db, vazifa_id: int, faqat_ochiq: bool = False) -> list:
+    shart = " AND holat=?" if faqat_ochiq else ""
+    p = [f"{QAZO_BELGI}:{int(vazifa_id)}"] + ([OCHIQ] if faqat_ochiq else [])
+    return db.q("SELECT * FROM vazifa WHERE ochirilgan=0 AND manba=?"
+                + shart, *p)
+
+
+def qazo_qil(db, vazifa_id: int, bugun=None) -> int:
+    """Namozni qazo deb belgilaydi va qazosini o'qish ishini yozadi.
+
+    Qazo ishi bugunga (yoki namoz kelajakda bo'lsa — o'sha kunga)
+    tushadi. Yangi ishning id sini qaytaradi.
+    """
+    v = bitta(db, vazifa_id)
+    if not v:
+        raise ValueError("Vazifa topilmadi")
+    if not namozmi(v):
+        raise ValueError(f"«{v['nom']}» namoz emas")
+    if v["holat"] != OCHIQ:
+        raise ValueError("Faqat hali o'qilmagan namoz qazo bo'ladi")
+    kun = max(_sana(v["sana"]), _sana(bugun or date.today()))
+    asl = _sana(v["sana"])
+    with db.amal(f"Qazo: {v['nom']} ({asl.strftime('%d.%m')})"):
+        db.apply("vazifa", "UPDATE", {
+            "holat": QAZO, "bajarilgan": None, "kechiktirildi": None},
+            vazifa_id)
+        return db.apply("vazifa", "INSERT", {
+            "nom": qazo_nomi(v["nom"]), "odam_id": v["odam_id"],
+            "sana": kun.isoformat(), "vaqt": None,
+            "davomiylik": v["davomiylik"], "holat": OCHIQ,
+            "izoh": f"{asl.strftime('%d.%m.%Y')} kungi {v['nom']}",
+            "manba": f"{QAZO_BELGI}:{int(vazifa_id)}"})
 
 
 # ─────────────────────────────────────────────────────── kechiktirish
@@ -840,8 +920,283 @@ def sanoq(db, dan, gacha, odam_id: int | None = None,
     kechikkan = sum(1 for r in qatorlar
                     if r["holat"] == OCHIQ and _sana(r["sana"]) < bugun)
     bajarildi = sum(1 for r in qatorlar if r["holat"] == BAJARILDI)
+    qazo = sum(1 for r in qatorlar if r["holat"] == QAZO)
     return {"jami": len(qatorlar), "bajarildi": bajarildi,
-            "ochiq": len(qatorlar) - bajarildi, "kechikkan": kechikkan}
+            "ochiq": len(qatorlar) - bajarildi, "kechikkan": kechikkan,
+            "qazo": qazo}
+
+
+# ═════════════════════════════ takroriy vazifa
+#
+# "Namoz o'qish har kuni" - bitta QOIDA, ming dona qator emas.
+#
+# Qoida `vazifa_takror` da turadi, kalendardagi kunlar esa undan
+# chiqariladi: `takror_toldir()` bugundan boshlab `TAKROR_UFQ` kunga
+# yetguncha yetishmagan `vazifa` qatorlarini yozadi. U dastur
+# ochilganda va `xabarchi.py` har chaqirilganda ishlaydi - ya'ni
+# ro'yxat hech qachon tugamaydi va foydalanuvchi "yana 30 kunga
+# yozib qo'y" deb esga olishi shart emas.
+#
+# Nega haqiqiy qator yoziladi, "virtual vazifa" ko'rsatilmaydi:
+# kalendar, eslatma, hisobot va streak - hammasi `vazifa` jadvalidan
+# o'qiydi. Ikkinchi manba qo'shilsa o'sha to'rttasi ham ikki joydan
+# o'qishga majbur bo'lardi. `dars` bilan aynan bir xil sabab.
+#
+# Bog'lanish `vazifa.manba` orqali: `takror:<id>:<sana>` - sana
+# kalitning ICHIDA, shuning uchun to'ldirish necha marta chaqirilsa
+# ham ikkinchi nusxa yozilmaydi.
+
+TAKROR_UFQ = 30          # necha kun oldinga to'ldiriladi
+TAKROR_BELGI = "takror"
+
+NAQSH_KUNLIK = "kunlik"
+NAQSH_KUNLAR = "kunlar"
+NAQSH_ORALIQ = "oraliq"
+NAQSHLAR = {
+    NAQSH_KUNLIK: "Har kuni",
+    NAQSH_KUNLAR: "Tanlangan kunlar",
+    NAQSH_ORALIQ: "Har N kunda",
+}
+
+
+def takror_kaliti(takror_id: int, sana) -> str:
+    return f"{TAKROR_BELGI}:{int(takror_id)}:{_sana(sana).isoformat()}"
+
+
+def _kunlar_matn(kunlar) -> str:
+    """[0, 2, 4] -> "0,2,4". Tartiblangan va takrorsiz."""
+    if isinstance(kunlar, str):
+        kunlar = [x for x in kunlar.replace(" ", "").split(",") if x]
+    toza = sorted({int(x) for x in (kunlar or [])})
+    if any(not 0 <= k <= 6 for k in toza):
+        raise ValueError("Hafta kuni 0 (dushanba) va 6 (yakshanba) orasida")
+    return ",".join(str(k) for k in toza)
+
+
+def takror_kunlari(t) -> list[int]:
+    """Qatordagi "0,2,4" -> [0, 2, 4]."""
+    return [int(x) for x in str(t["kunlar"] or "").split(",") if x != ""]
+
+
+def _takrorni_tekshir(db, nom, odam_id, vaqt, davomiylik, naqsh,
+                      kunlar, oraliq, boshlanish, tugash) -> dict:
+    nom, iso, vaqt, davomiylik = _tekshir(db, nom, odam_id, boshlanish,
+                                          vaqt, davomiylik)
+    if naqsh not in NAQSHLAR:
+        raise ValueError(f"Noma'lum takror naqshi: {naqsh}")
+    kunlar_m = ""
+    # `oraliq or 1` EMAS: 0 ham bo'sh deb hisoblanib jimgina 1 ga
+    # aylanardi, ya'ni «har 0 kunda» degan xato har kunlik qoidaga
+    # o'girilib ketardi.
+    oraliq = 1 if oraliq is None else int(oraliq)
+    if naqsh == NAQSH_KUNLAR:
+        kunlar_m = _kunlar_matn(kunlar)
+        if not kunlar_m:
+            raise ValueError("Kamida bitta hafta kuni tanlanishi kerak")
+        oraliq = 1
+    elif naqsh == NAQSH_ORALIQ:
+        if not 1 <= oraliq <= 90:
+            raise ValueError("Oraliq 1 va 90 kun orasida bo'lishi kerak")
+    else:
+        oraliq = 1
+    tugash_iso = None
+    if tugash:
+        tugash_iso = _sana(tugash).isoformat()
+        if tugash_iso < iso:
+            raise ValueError("Tugash sanasi boshlanishdan oldin bo'lmaydi")
+    return {"nom": nom, "odam_id": odam_id, "vaqt": vaqt,
+            "davomiylik": davomiylik, "naqsh": naqsh,
+            "kunlar": kunlar_m or None, "oraliq": oraliq,
+            "boshlanish": iso, "tugash": tugash_iso}
+
+
+def takrorlar(db, faqat_faol: bool = False) -> list:
+    shart = " AND tk.faol=1" if faqat_faol else ""
+    return db.q(
+        "SELECT tk.*, o.nom odam FROM vazifa_takror tk"
+        " JOIN odam o ON o.id = tk.odam_id"
+        f" WHERE tk.ochirilgan=0{shart}"
+        " ORDER BY tk.nom, tk.id")
+
+
+def takror_bitta(db, takror_id: int):
+    return db.q1("SELECT * FROM vazifa_takror WHERE id=? AND ochirilgan=0",
+                 takror_id)
+
+
+def takror_tavsif(t) -> str:
+    """"Har kuni 06:00" - kartada va tasdiq oynasida ko'rinadigan qator."""
+    if t["naqsh"] == NAQSH_KUNLAR:
+        kunlar = takror_kunlari(t)
+        qachon = ", ".join(KUN_QISQA[k] for k in kunlar) or "—"
+    elif t["naqsh"] == NAQSH_ORALIQ:
+        qachon = ("Har kuni" if t["oraliq"] == 1
+                  else f"Har {t['oraliq']} kunda")
+    else:
+        qachon = NAQSHLAR[NAQSH_KUNLIK]
+    return f"{qachon} {t['vaqt'] or 'vaqtsiz'}"
+
+
+def takror_sanalari(t, dan, gacha) -> list:
+    """Qoida shu oraliqda qaysi kunlarga tushadi. Bazaga tegmaydi."""
+    b = _sana(t["boshlanish"])
+    d0 = max(_sana(dan), b)
+    d1 = _sana(gacha)
+    if t["tugash"]:
+        d1 = min(d1, _sana(t["tugash"]))
+    naqsh = t["naqsh"]
+    kunlar = set(takror_kunlari(t)) if naqsh == NAQSH_KUNLAR else set()
+    oraliq = max(1, int(t["oraliq"] or 1))
+    natija = []
+    kun = d0
+    while kun <= d1:
+        if naqsh == NAQSH_KUNLAR:
+            mos = kun.weekday() in kunlar
+        elif naqsh == NAQSH_ORALIQ:
+            # Sanoq HAR DOIM `boshlanish` dan yuradi, "oxirgi yozilgan
+            # kun" dan emas: bitta kun qo'lda o'chirilsa yoki dastur bir
+            # hafta ochilmasa ham naqsh joyidan siljimasin.
+            mos = (kun - b).days % oraliq == 0
+        else:
+            mos = True
+        if mos:
+            natija.append(kun)
+        kun += timedelta(days=1)
+    return natija
+
+
+def takror_toldir(db, bugun=None, ufq: int = TAKROR_UFQ) -> int:
+    """Har bir faol qoidani `ufq` kunga yetguncha to'ldiradi.
+
+    O'TMISHGA YOZMAYDI: sanoq bugundan boshlanadi. Aks holda dastur
+    bir hafta ochilmasa, o'tib ketgan kunlar "bajarilmagan" bo'lib
+    kalendarga to'kilardi.
+
+    O'CHIRILGAN kun QAYTA TIRILMAYDI: mavjudlik `ochirilgan` ni
+    filtrlamasdan tekshiriladi, ya'ni foydalanuvchi bitta kunni bekor
+    qilsa u keyingi to'ldirishda qaytib kelmaydi.
+    """
+    d0 = _sana(bugun or date.today())
+    d1 = d0 + timedelta(days=max(0, int(ufq)))
+    yoziladi = []
+    for t in takrorlar(db, faqat_faol=True):
+        sanalar = takror_sanalari(t, d0, d1)
+        if not sanalar:
+            continue
+        bor = {r["manba"] for r in db.q(
+            "SELECT manba FROM vazifa WHERE manba LIKE ?"
+            " AND sana BETWEEN ? AND ?",
+            f"{TAKROR_BELGI}:{t['id']}:%",
+            sanalar[0].isoformat(), sanalar[-1].isoformat())}
+        for kun in sanalar:
+            kalit = takror_kaliti(t["id"], kun)
+            if kalit not in bor:
+                yoziladi.append((t, kun, kalit))
+    if not yoziladi:
+        # Hech narsa yozilmasa `amal()` ham ochilmaydi: bu funksiya har
+        # daqiqada chaqiriladi, bo'sh guruh esa undo stekini ma'nosiz
+        # qadamlar bilan to'ldirardi (va redo yo'lini yopardi).
+        return 0
+    with db.amal(f"Takroriy vazifalar: {len(yoziladi)} ta kun qo'shildi"):
+        for t, kun, kalit in yoziladi:
+            db.apply("vazifa", "INSERT", {
+                "nom": t["nom"], "odam_id": t["odam_id"],
+                "sana": kun.isoformat(), "vaqt": t["vaqt"],
+                "davomiylik": t["davomiylik"], "holat": OCHIQ,
+                "izoh": t["izoh"], "manba": kalit})
+    return len(yoziladi)
+
+
+def takror_qosh(db, nom: str, odam_id: int, vaqt: str | None = None,
+                davomiylik: int = 60, naqsh: str = NAQSH_KUNLIK,
+                kunlar=None, oraliq: int = 1, izoh: str | None = None,
+                boshlanish=None, tugash=None, bugun=None) -> int:
+    """Yangi takror qoidasi - va o'sha zahoti birinchi kunlar.
+
+    Qoida va undan chiqqan kunlar BITTA amal: foydalanuvchi
+    "takrorlansin" deb bosgan narsa bitta qadamda qaytishi kerak.
+    """
+    d = _takrorni_tekshir(db, nom, odam_id, vaqt, davomiylik, naqsh,
+                          kunlar, oraliq,
+                          boshlanish or (bugun or date.today()), tugash)
+    d["izoh"] = (izoh or "").strip() or None
+    with db.amal(f"Takroriy vazifa: {d['nom']}"):
+        tid = db.apply("vazifa_takror", "INSERT", d)
+        takror_toldir(db, bugun)
+    return tid
+
+
+def _takror_kelajagini_ochir(db, takror_id: int, bugun=None) -> int:
+    """Bugundan boshlab hali OCHIQ kunlarni o'chiradi.
+
+    Bajarilgani ham, o'tgan kunlar ham tegilmaydi - tarix qoidaning
+    keyingi taqdiriga bog'liq emas.
+    """
+    d0 = _sana(bugun or date.today()).isoformat()
+    qatorlar = db.q(
+        "SELECT id FROM vazifa WHERE ochirilgan=0 AND holat=?"
+        " AND sana>=? AND manba LIKE ?",
+        OCHIQ, d0, f"{TAKROR_BELGI}:{int(takror_id)}:%")
+    for r in qatorlar:
+        db.apply("vazifa", "DELETE", qator_id=r["id"])
+    return len(qatorlar)
+
+
+def takror_tahrir(db, takror_id: int, bugun=None, **maydonlar) -> None:
+    """Qoidani o'zgartiradi. O'TGAN kunlarga tegmaydi.
+
+    Bugundan boshlab hali BAJARILMAGAN kunlar o'chiriladi va qoida
+    qaytadan to'ldiriladi. Bajarilgani joyida qoladi: "men buni
+    qildim" degan yozuvni qoida tahriri bekor qilmaydi.
+    """
+    t = takror_bitta(db, takror_id)
+    if not t:
+        raise ValueError("Takroriy vazifa topilmadi")
+    b = dict(t) | {k: v for k, v in maydonlar.items() if k in
+                   ("nom", "odam_id", "vaqt", "davomiylik", "naqsh",
+                    "kunlar", "oraliq", "izoh", "boshlanish", "tugash",
+                    "faol")}
+    d = _takrorni_tekshir(db, b["nom"], b["odam_id"], b["vaqt"],
+                          b["davomiylik"], b["naqsh"], b["kunlar"],
+                          b["oraliq"], b["boshlanish"], b["tugash"])
+    d["izoh"] = (b["izoh"] or "").strip() or None
+    d["faol"] = 1 if b["faol"] else 0
+    with db.amal(f"Takroriy vazifa tahrirlandi: {d['nom']}"):
+        db.apply("vazifa_takror", "UPDATE", d, takror_id)
+        _takror_kelajagini_ochir(db, takror_id, bugun)
+        takror_toldir(db, bugun)
+
+
+def takror_ochir(db, takror_id: int, bugun=None) -> int:
+    """Qoidani to'xtatadi va kelajakdagi kunlarini olib tashlaydi."""
+    t = takror_bitta(db, takror_id)
+    if not t:
+        raise ValueError("Takroriy vazifa topilmadi")
+    with db.amal(f"Takroriy vazifa to'xtatildi: {t['nom']}"):
+        db.apply("vazifa_takror", "DELETE", qator_id=takror_id)
+        return _takror_kelajagini_ochir(db, takror_id, bugun)
+
+
+def takrorlimi(v) -> bool:
+    """Bu vazifa qatori takror qoidasidan chiqqanmi?"""
+    if not v:
+        return False
+    try:
+        manba = v["manba"]
+    except (IndexError, KeyError):
+        return False
+    return str(manba or "").startswith(f"{TAKROR_BELGI}:")
+
+
+def takror_egasi(db, v):
+    """Vazifa qaysi qoidadan chiqqan. Qoida o'chirilgan bo'lsa None."""
+    if not takrorlimi(v):
+        return None
+    try:
+        tid = int(str(v["manba"]).split(":")[1])
+    except (IndexError, ValueError):
+        return None
+    return takror_bitta(db, tid)
 
 
 # ═══════════════════════════════════════════════════════════ streak

@@ -17,10 +17,11 @@ Ikkalasini `qayta_boya(oyna)` yuradi::
 """
 from __future__ import annotations
 
-from PySide6.QtCore import (QDate, QEvent, QObject, QRectF, Qt, QTimer,
+from PySide6.QtCore import (QDate, QEvent, QObject, QRectF, QSignalBlocker,
+                            QSize, Qt, QTimer,
                             Signal)
-from PySide6.QtGui import (QBrush, QColor, QPainter, QPalette, QPen,
-                           QTextCharFormat)
+from PySide6.QtGui import (QBrush, QColor, QIcon, QPainter, QPalette, QPen,
+                           QPixmap, QTextCharFormat)
 from PySide6.QtWidgets import (QAbstractItemView, QAbstractScrollArea,
                                QAbstractSpinBox, QApplication,
                                QCalendarWidget, QComboBox, QDateEdit,
@@ -397,6 +398,10 @@ class _Chizgi(QWidget):
         p.end()
 
 
+# Ommaviy nom — «Reja va fakt» dagi foiz chiziqlari ham shu chizg'ichdan.
+Chizgi = _Chizgi
+
+
 class OdamDaraja(QWidget):
     """Bitta odam: ism, puli, holat nishoni va daraja chizig'i.
 
@@ -733,20 +738,77 @@ class OdamTanla(QComboBox):
             self.setCurrentIndex(i)
 
 
+# ─────────────────────────────────────────────── kategoriya ikonkasi
+#
+# Ekran masshtabi 125–150% bo'lsa, mantiqiy o'lchamda (26 px) tayyorlangan
+# rasmni Windows cho'zadi — ikonka XIRA chiqadi. Shuning uchun kategoriya
+# ikonkasi hech qachon `QPixmap(...).scaled(n)` bilan olinmaydi: yonida
+# SVG bo'lsa (`packaging/belgi_chiz.py` qo'yadi) Qt uni SO'RALGAN o'lcham
+# × ekran masshtabida vektordan chizadi; bo'lmasa PNG silliq
+# kichraytiriladi — baribir ekran pikselida.
+
+_BELGI_KESH: dict[str, QIcon] = {}
+
+
+def belgi_ikon(yol) -> QIcon:
+    """Kategoriya ikonkasi (`kategoriya.rasm_yoli()` yo'li) — SVG afzal."""
+    kalit = str(yol)
+    ikon = _BELGI_KESH.get(kalit)
+    if ikon is None:
+        from pathlib import Path
+        svg = Path(kalit).with_suffix(".svg")
+        ikon = QIcon(str(svg)) if svg.exists() else QIcon()
+        if ikon.isNull():                  # SVG dvigateli yo'q / fayl buzuq
+            ikon = QIcon(kalit)
+        _BELGI_KESH[kalit] = ikon
+    return ikon
+
+
+def belgi_rasm(yol, olcham: int, widget: QWidget | None = None) -> QPixmap:
+    """Aniq ekran pikselida tayyor rasm (`QLabel.setPixmap` uchun)."""
+    if widget is not None:
+        dpr = widget.devicePixelRatioF()
+    else:
+        ekran = QApplication.primaryScreen()
+        dpr = ekran.devicePixelRatio() if ekran else 1.0
+    return belgi_ikon(yol).pixmap(QSize(olcham, olcham), dpr)
+
+
 class TuriTanla(QComboBox):
-    def __init__(self, db, hammasi: bool = False, parent=None):
+    """Kategoriya tanlagich.
+
+    `majburiy=True` — rasxod oynalari uchun: bo'sh variant «kategoriyasiz»
+    deb emas, «tanlang» deb yoziladi, chunki u yerda kategoriyasiz
+    saqlab bo'lmaydi (`entries.rasxod_majburiy`).
+    """
+
+    def __init__(self, db, hammasi: bool = False, parent=None,
+                 majburiy: bool = False):
         super().__init__(parent)
         self.db = db
+        self.majburiy = majburiy
         _stil(self, "ICHKI_STIL")
         self.setMinimumWidth(150)
+        self.setIconSize(QSize(20, 20))
         self.yangila(hammasi)
 
     def yangila(self, hammasi: bool = False):
+        from core import kategoriya, mahsulot
         joriy = self.currentData()
         self.clear()
-        self.addItem("Hammasi" if hammasi else "— kategoriyasiz —", None)
-        for r in self.db.q("SELECT id, nom, belgi FROM turi WHERE faol=1 ORDER BY tartib"):
-            self.addItem(f"{r['belgi']} {r['nom']}".strip(), r["id"])
+        bosh = ("Hammasi" if hammasi else
+                "— kategoriya tanlang —" if self.majburiy else
+                "— kategoriyasiz —")
+        self.addItem(bosh, None)
+        # Daraxt tartibida: ichki kategoriya otasining ostida, surilgan.
+        for r, chuq in mahsulot.tekis(self.db):
+            surish = "      " * chuq + ("↳ " if chuq else "")
+            yol = kategoriya.rasm_yoli(r["rasm"])
+            if yol:
+                self.addItem(belgi_ikon(yol), surish + r["nom"], r["id"])
+            else:
+                self.addItem(surish + f"{r['belgi']} {r['nom']}".strip(),
+                             r["id"])
         if joriy is not None:
             i = self.findData(joriy)
             if i >= 0:
@@ -754,6 +816,126 @@ class TuriTanla(QComboBox):
 
     def turi_id(self):
         return self.currentData()
+
+
+class KategoriyaTanla(QWidget):
+    """Rasxod uchun IKKI BOSQICHLI kategoriya: katta + uning ichkisi.
+
+    Chapda faqat katta (asosiy) kategoriyalar, o'ngda — tanlangan
+    kattaning ichki kategoriyalari (har chuqurlikda, surilgan). Ichkisi
+    yo'q bo'lsa o'ng maydon o'chiq turadi. Botdagi «📂 → ichidan
+    tanlang» bilan bir xil g'oya.
+
+    `turi_id()` — ichki tanlangan bo'lsa o'sha, aks holda katta.
+    `ozgardi` — ikkala maydondan biri o'zgarganda (bitta signal):
+    tashqaridan `QSignalBlocker(self)` bilan to'sish kifoya.
+    """
+
+    ozgardi = Signal()
+    ICHKISIZ = "— ichki kategoriyasiz —"
+
+    def __init__(self, db, parent=None):
+        super().__init__(parent)
+        self.db = db
+        _shaffof(self, "Qator")
+        h = QHBoxLayout(self)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(8)
+        self.asosiy = QComboBox()
+        self.ichki = QComboBox()
+        for c in (self.asosiy, self.ichki):
+            _stil(c, "ICHKI_STIL")
+            c.setMinimumWidth(150)
+            c.setIconSize(QSize(20, 20))
+            h.addWidget(c)
+        self.asosiy.setToolTip("Katta kategoriya")
+        self.ichki.setToolTip("Tanlangan kategoriyaning ichki kategoriyasi")
+        self.asosiy.currentIndexChanged.connect(self._asosiy_ozgardi)
+        self.ichki.currentIndexChanged.connect(lambda _i: self.ozgardi.emit())
+        self.yangila()
+
+    def _yorliq(self, t, surish: str = "") -> tuple:
+        from core import kategoriya
+        yol = kategoriya.rasm_yoli(t["rasm"])
+        if yol:
+            return belgi_ikon(yol), surish + t["nom"]
+        return None, surish + f"{t['belgi']} {t['nom']}".strip()
+
+    def _qosh(self, combo: QComboBox, belgi, matn: str, turi_id) -> None:
+        if belgi is not None:
+            combo.addItem(belgi, matn, turi_id)
+        else:
+            combo.addItem(matn, turi_id)
+
+    def yangila(self, *_):
+        """Kategoriyalar qayta o'qiladi, tanlov joyida qoladi."""
+        from core import mahsulot
+        joriy = self.turi_id()
+        with QSignalBlocker(self.asosiy), QSignalBlocker(self.ichki):
+            self.asosiy.clear()
+            self.asosiy.addItem("— kategoriya tanlang —", None)
+            for t in mahsulot.daraxt(self.db):
+                self._qosh(self.asosiy, *self._yorliq(t), t["id"])
+            self._ichkilarni_toldir()
+        if joriy is not None:
+            with QSignalBlocker(self):
+                self.tanla(joriy)
+
+    def _ichkilarni_toldir(self) -> None:
+        from core import mahsulot
+        self.ichki.clear()
+        self.ichki.addItem(self.ICHKISIZ, None)
+        ota = self.asosiy.currentData()
+        if ota is not None:
+            def yur(tugunlar, chuq):
+                for t in tugunlar:
+                    surish = "      " * chuq + ("↳ " if chuq else "")
+                    self._qosh(self.ichki, *self._yorliq(t, surish), t["id"])
+                    yur(t["bolalar"], chuq + 1)
+            tugun = next((t for t in mahsulot.daraxt(self.db)
+                          if t["id"] == ota), None)
+            if tugun is not None:
+                yur(tugun["bolalar"], 0)
+        self.ichki.setEnabled(self.ichki.count() > 1)
+
+    def _asosiy_ozgardi(self, _i=None):
+        with QSignalBlocker(self.ichki):
+            self._ichkilarni_toldir()
+        self.ozgardi.emit()
+
+    def tanla(self, turi_id) -> bool:
+        """Istalgan chuqurlikdagi kategoriyani tanlaydi: katta maydonga
+        uning eng yuqori otasi, ichkisiga o'zi. Topilmasa (nofaol) —
+        False, tanlov o'zgarmaydi."""
+        if turi_id is None:
+            return False
+        yol, joriy, korilgan = [], turi_id, set()
+        while joriy is not None and joriy not in korilgan:
+            korilgan.add(joriy)
+            yol.append(joriy)
+            r = self.db.q1("SELECT ota_id FROM turi WHERE id=?", joriy)
+            joriy = r["ota_id"] if r else None
+        # Otasi nofaol bo'lsa `daraxt` bolani ildiz qiladi — shuning
+        # uchun katta maydonda BOR bo'lgan eng yuqori ajdod olinadi.
+        ildiz = next((x for x in reversed(yol)
+                      if self.asosiy.findData(x) >= 0), None)
+        if ildiz is None:
+            return False
+        with QSignalBlocker(self.asosiy), QSignalBlocker(self.ichki):
+            self.asosiy.setCurrentIndex(self.asosiy.findData(ildiz))
+            self._ichkilarni_toldir()
+            i = self.ichki.findData(turi_id) if turi_id != ildiz else 0
+            self.ichki.setCurrentIndex(max(0, i))
+        self.ozgardi.emit()
+        return turi_id == ildiz or i >= 0
+
+    def turi_id(self):
+        return self.ichki.currentData() or self.asosiy.currentData()
+
+    def currentText(self) -> str:
+        """Tanlangan kategoriyaning to'liq nomi («Bozorlik › Mevalar»)."""
+        from core import mahsulot
+        return mahsulot.yol_nomi(self.db, self.turi_id())
 
 
 # ──────────────────────────────────────────────────────────── jadval

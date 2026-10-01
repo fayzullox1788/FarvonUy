@@ -79,6 +79,43 @@ ui/  →  core/  →  db.py  →  SQLite
 
 ---
 
+## Qarz tafsiloti — faqat to'lanmagani
+
+«Kim kimga qarzdor» qatoriga bosilganda `ledger.juft_tolanmagan()`
+chiqadi, `juft_tarkibi()` EMAS. Amalda deyarli hamma to'lov «erkin»
+(`hisob_kitob.ulush_id` bo'sh) — ya'ni «to'landi» bayrog'iga qarab
+filtrlash hech narsani yashirmaydi. Shuning uchun:
+
+1. belgilangan ulush + unga bog'langan to'lov birga chiqariladi
+   (`ulush_id` bo'yicha yig'indisi 0 bo'lsa);
+2. qolgan manfiy qatorlar ENG ESKI musbat qatordan boshlab ayiriladi.
+
+Natija yig'indisi juftlik summasiga teng qoladi. Qatorlarni «to'landi
+emas» deb oddiy filtrlasangiz bu tenglik buziladi va oyna yuqoridagi
+sondan boshqa raqam ko'rsatadi.
+
+## Analitika — doira ranglari
+
+`ui/eski/sahifa_analitika.py` dagi doira ranglari bo'lakning O'RNI
+bo'yicha beriladi, kategoriya `id` si bo'yicha EMAS. Doirada qo'shni
+bo'laklar — o'lchami bo'yicha qo'shni, `theme.TUR_RANG` tartibi esa
+aynan qo'shni juftliklar (oxirgi→birinchi bilan) rang ajrata olmaydigan
+ko'zga ham farqlanadigan qilib tekshirilgan. `id` bo'yicha bo'yasangiz
+istalgan ikki rang yonma-yon tushadi, kategoriya esa 8 tadan ko'p.
+
+Birlamchi holatda eng katta `ledger.DOIRA_QADAM` (6) ta kategoriya
+o'z bo'lagi bilan, ortig'i «Qolganlari» da. «Yana 6 ta» tugmasi (yoki
+«Qolganlari» ni bosish) `AnalitikaSahifa._korsat` ni 6 taga oshiradi —
+kategoriya qolmaguncha; «Yig'ish» 6 taga qaytaradi (2026-09-30,
+foydalanuvchi so'ragan). Shuning uchun bo'lak palitradan (8) ko'p
+bo'lishi mumkin: ranglar `bolak_ranglari()` da AYLANADI, doira
+halqasida oxirgi va birinchi rang bir xil tushsa, oxirgisi almashadi.
+`ui_tekshir.py` 1–40 bo'lakda qo'shni ranglar farqini tekshiradi.
+Doira balandligi ro'yxat uzunligidan (`_balandlik`).
+
+«Hamma kategoriyalar» jadvali foydalanuvchi so'rovi bilan YASHIRILGAN
+(`hamma_karta`), lekin hisoblanib turadi.
+
 ## `kim_uchun` — "boshqa uchun olingan"
 
 `rasxod.kim_uchun` to'ldirilgan bo'lsa: pulni `kim_toladi` chiqargan, lekin
@@ -95,7 +132,332 @@ Buni **kirim + shaxsiy rasxod** deb yozish xato: unda odamning kirimi ham,
 rasxodi ham soxta bo'lib ketadi va "qancha pul oldim" degan savolga
 dastur yolg'on javob beradi.
 
+## Tashqi qarz — uydan tashqaridagi odamdan
+
+`tashqi_qarz` (kim oldi = `odam_id`, kimdan = oddiy MATN) va
+`tashqi_tolov` (qaytarish). Qarz beruvchi `odam` jadvaliga YOZILMAYDI —
+u hisob a'zosi emas, `odam` ga qo'shilsa balans, ulush va navbatga
+tushib qolardi.
+
+Pul olganning qo'liga haqiqatan tushadi: `naqd` VA `adolat` ikkalasi
+ham `+ olingan − qaytarilgan`. `sof` ga TEGMAYDI — shuning uchun
+`SUM(sof)=0` va `adolat = naqd + sof` o'z-o'zidan saqlanadi. Audit
+2-sharti `kirim − rasxod + tashqi_qoldiq` ga o'zgargan; 6-shart —
+qarz ortig'i bilan qaytarilmagan. Qaytarishni har doim qarzni olgan
+odamning o'zi qiladi. Qarz o'chirilsa to'lovlari ham o'sha amalda
+o'chadi (bitta undo).
+
+**UI — alohida oyna, `dialogs.TashqiQarzOyna`** (2026-09-25). Qarz
+varag'ida faqat qisqa xulosa va «Tashqaridan qarz · <qoldiq>» tugmasi
+qoladi; yozish, «kimga qancha qaytarish kerak»
+(`ledger.tashqi_kimga_qaytarish()` — `tashqi_qarzlar()` dan yig'iladi,
+qoldiq qoidasini qayta yozmang), qisman qaytarish va «Qarzni yopish»
+(`entries.tashqi_qarz_yop()` — butun qoldiq bitta to'lov) shu oynada.
+Forma `_TashqiForma` — oyna ham, kichik `TashqiQarzDialog` ham shundan.
+Oyna o'zini `_yangila()` qiladi; yopilganda `ozgardi` bo'lsa chaqiruvchi
+dasturni yangilaydi.
+
+## Ikonkali kategoriya va majburiy maydonlar
+
+`src/belgilar/*.png` — 200 ta ikonka, foydalanuvchining telefon
+skrinshotlaridan `packaging/belgi_kes.py` bilan kesilgan (qayta kesish
+kerak bo'lsa o'sha skript; PIL/numpy faqat unga kerak, build'ga
+kirmaydi). Foydalanuvchi olib tashlatgan ikonkalar (robot, xoch)
+fayl sifatida qoladi, lekin `kategoriya.YASHIRIN` orqali ro'yxatga
+chiqmaydi — qayta kesilsa ham qaytmasin. Ikonkalar NOMSIZ — foydalanuvchi o'zi talab qilgan: nomni
+«Iconlar» varag'ida (`sahifa_kategoriya.py`) o'zi beradi. Fayl
+nomi (`food_03.png`) faqat kalit, ekranga chiqmasin. Guruh sarlavhalari
+(«Shaxsiy», «Oziq-ovqat»…) skrinshotlardagi bo'lim nomlari —
+`kategoriya.GURUH_NOMI`, foydalanuvchi so'rab qo'shdirgan. Ular ikonka
+nomi EMAS va kategoriya yaratmaydi.
+
+**Ikonkalar asl kategoriyalar uslubida — `packaging/belgi_chiz.py`**
+(2026-09-30). Dizayn naqshi — birinchi kategoriyalar (🍲🛒🏠…), ya'ni
+Windows 11 dagi Microsoft **Fluent Emoji (Color)**: rangli gradient,
+shaffof fon, konturi yo'q. Kesilgan 115 px ikonkalar (to'q doira +
+kulrang chiziq) bu uslubga mos emas edi. Hamma 198 ta (yashirin 2 tadan
+tashqari) `packaging/belgi_xarita.json` bo'yicha (eski belgining
+MA'NOSIGA qarab, takrorsiz) `belgi_svg/fluent/` dagi SVG dan (MIT)
+chiziladi. `src/belgilar/` da har kalit uchun `.svg` (dastur shuni
+ishlatadi) va 256 px `.png` (zaxira, `turi.rasm` kaliti — NOMI
+o'zgarmaydi). Asli `packaging/belgilar_asl/` da.
+
+**Xiralik — ekran masshtabi.** Noutbuk 125%: mantiqiy 26 px rasm
+Windows'da cho'zilib xira chiqardi. Kategoriya ikonkasi FAQAT
+`widgets.belgi_ikon(yol)` (QIcon, SVG afzal) yoki
+`widgets.belgi_rasm(yol, olcham, widget)` (aniq ekran pikselida) orqali
+olinadi — `QPixmap(...).scaled(n)` va `QIcon(str(png))` YOZMANG.
+QPainter'da `ikon.paint(p, rect)` (doira ro'yxati shunday). SVG uchun
+Qt'ning `qsvgicon` plagini kerak — spec'da `PySide6.QtSvg` hiddenimport.
+
+Nom berilgan ikonka — oddiy `turi` qatori, `turi.rasm` = fayl nomi.
+Nomi olib tashlansa `faol=0` (o'chmaydi), shu nom qayta berilsa o'sha
+qator tiriladi — eski rasxodlar kategoriyasini yo'qotmaydi.
+
+**Qo'lda yoziladigan har rasxodda sabab (`nom`) va faol kategoriya
+majburiy** — `entries.rasxod_majburiy()`. U `rasxod_qosh()` ICHIDA
+EMAS: import va takroriy rasxod eski ma'lumotdan keladi. Rasxod
+yozadigan yangi oyna qo'shsangiz — uni o'zingiz chaqiring
+(`RasxodDialog._saqla`, Bugun'dagi tezkor qo'shish).
+
 ---
+
+## Mahsulotlar va kategoriya daraxti — `core/mahsulot.py`
+
+Mahsulot — eski `item` jadvali (yangi jadval EMAS): reja, rasxod
+oynasi va Sozlamalardagi katalog ham shundan o'qiydi. Qo'shilgan
+ustunlar: `rasm`, `miqdor`, `ogirlik`, `litr` (REAL — pul emas),
+`olchov`, `ochirilgan`. `faol=0` — vaqtincha ishlatilmaydi (varaqda
+ko'rinadi, rasxodda tanlanmaydi); `ochirilgan=1` — o'chirilgan. Ikkalasi
+BOSHQA narsa, aralashtirmang.
+
+Ichki kategoriya — `turi.ota_id`. Uch joyda otasiga qo'shiladi:
+`ledger.turi_boyicha()` (doira, hisobot), `kategoriya_jadvali()`
+(faqat asosiylar) va `plan.turi_budjet()`. Yangi hisob qo'shsangiz
+shu qoidaga amal qiling, aks holda bitta bozorlik ikki bo'lakka
+bo'linib ko'rinadi. Kategoriya ichida faol ichki kategoriya yoki
+mahsulot bo'lsa o'chirilmaydi.
+
+**Ichki kategoriyaga rasm MAJBURIY** (2026-09-30, foydalanuvchi
+so'ragan): `mh.kategoriya_qosh(..., ota_id, rasm=...)` rasmsiz rad
+etadi. Rasm — `belgilar/` dagi ikonka va faqat BO'SHI
+(`mh.bosh_belgilar()`): bitta ikonka — bitta faol kategoriya, chunki
+«Iconlar» varag'i (`kategoriya.nomlanganlar`) ikonkadan
+kategoriyani topadi. UI — `sahifa_mahsulot.IchkiKategoriyaDialog`.
+Shu sabab rasmli ichki kategoriya «Iconlar» varag'ida ham nomi
+bilan ko'rinadi. Katta kategoriya uchun rasm ixtiyoriy qoladi.
+
+Mavjud kategoriyani boshqasining ichiga ko'chirish —
+`mh.kategoriya_kochir()` (faqat `ota_id` o'zgaradi, bitta undo;
+ichki kategoriya va mahsulotlari birga ko'chadi). O'zi yoki avlodi
+ichiga ko'chirish rad etiladi — halqa bo'lsa daraxt va `yol_nomi()`
+buziladi. Tanlagich `mh.kochish_joylari()` dan (o'zi va avlodlarisiz).
+Eski rasxodning `turi_id` si o'zgarmaydi — doira/budjetda yangi
+otasiga qo'shiladi.
+
+**Rasxodda kategoriya — ikki bosqich: `widgets.KategoriyaTanla`**
+(2026-09-30). Chapda faqat katta kategoriyalar, o'ngda tanlangan
+kattaning ichkilari («— ichki kategoriyasiz —» = kattaning o'zi).
+`RasxodDialog` (kiritish va tahrirlash), «Bugun» dagi tezkor kiritish
+va `KategoriyaRasxodlari` shuni ishlatadi; bot o'zi ikki bosqichli
+(`rx:k:` → 📂). Signal — `ozgardi`, `currentIndexChanged` EMAS;
+tahrirlashda `tanla(turi_id)` (ichkisini ham joyiga qo'yadi).
+Filtr/budjet tanlagichlari (`TuriTanla`) o'zgarmagan.
+
+Rasxod oynalaridagi «Mahsulot» tanlagichi BITTA funksiyadan —
+`dialogs.mahsulotlarni_toldir()`. Tahrirlashda bog'langan mahsulot
+qayta tanlanadi (nofaol/o'chirilgan bo'lsa ham qo'shiladi) — 2026-09-25
+gacha bu qilinmagan va tahrirlash `item_id` ni jimgina bo'shatardi;
+yangi rasxodda esa `item_id` umuman yozilmasdi.
+
+Rasm `config.MAHSULOT_RASM` ga nusxalanadi (nomi — mazmun xeshi),
+kompyuterdan yuklansa 1280px gacha kichraytiriladi. Olib tashlansa fayl
+diskda qoladi — undo qaytara olsin. **Telefondan yo'l — Telegram:**
+uy a'zosi botga SHAXSIY rasm yuboradi, izohida mahsulot nomi
+(`xabar._rasmni_ishla`, har daqiqada). Begona odam va guruh rasmlari
+e'tiborsiz — bot ochiq.
+
+### Umumiy tashqi qarz (`tashqi_qarz.umumiy=1`, `tashqi_ulush`)
+
+**Qoida 2026-10-01 da o'zgardi (foydalanuvchi so'ragan).** Olingan pul
+HAMMAGA ulushi bo'yicha beriladi (har kimning `naqd` iga o'z ulushi),
+qarz ham hammaniki; qaytarilganda har kimning qo'lidan o'z to'lov
+ulushi ayiriladi. Bo'lish rasxoddagidek: Teng / Foiz / Og'irlik / Aniq
+(`dialogs._Qatnashchilar`, `money.bol`); qaytarishda birlamchi — qarz
+qanday bo'lingan bo'lsa shu nisbatda. Uy ichida qarz YARATMAYDI:
+`v_balans` da `tsq`/`ttq` naqd VA adolatga bir xil qo'shiladi, `sof` ga
+tegmaydi; `v_juft_qarz` va `ledger.juft_tarkibi()` da umumiy tashqi qarz
+YO'Q. (Eskisi: pul olganning qo'lida, u boshqalarga ichki qarzdor edi —
+adolat ikkalasida bir xil, farq faqat naqd/sof.) `tashqi_qoldiq` —
+har kimning o'z ulushi; «Qarzim» da umumiy qarzdan faqat o'z ulushi
+(`jami_qoldiq` — butun qoldiq). Ulushlar yig'indisi = qarz/to'lov —
+audit 7-sharti. Umumiy/shaxsiy almashtirish (`tashqi_umumiy_qoy`) eski
+ulushlarni o'chirib qaytadan quradi — bitta undo.
+
+## Rasxod kiritish — BITTA mantiq: `core/rasxod_kirit.py`
+
+Rasxod uch joydan yoziladi: `RasxodDialog`, «Bugun» dagi tezkor
+qo'shish va Telegram bot (`core/tg_rasxod.py`). Uchalasi ham
+`Qoralama` ni to'ldiradi va `rk.saqla()` / `rk.tekshir()` ni chaqiradi.
+Mahsulotdan nom/narx olish (`rk.mahsulot_tanla`), kim qatnashishi va
+ulush ko'rinishi (`rk.qatnashchilar`, `rk.ulushlar`) ham shu yerda.
+**Yangi qoida faqat shu faylga yoziladi** — oynaga yoki botga
+yozilsa platformalar ajralib ketadi. `tekshir.py` bot va oyna BIR XIL
+rasxod va ulush yozishini solishtiradi.
+
+`parametrlar`: `None` — «tanlanmagan, uydagilar»; `{}` — «hech kim
+tanlanmagan» (saqlanmaydi). Ikkalasini aralashtirmang.
+
+Bot faqat SHAXSIY chatda va faqat uy a'zosiga (`odam.telegram`)
+ishlaydi; callback `rx:` bilan boshlanadi (`xabar._bittasini_ishla`
+ajratadi). Suhbat holati `sozlama.tg_rx:<chat>` da — `tg_offset` kabi
+texnik holat, undo ga tushmaydi. Sana almashganda uydagilar qayta
+olinadi, LEKIN foydalanuvchi kimlarni o'zi tanlagan bo'lsa (`qolda`)
+tegilmaydi — aks holda olib tashlangan odam jimgina qaytardi.
+Botda bo'lish faqat «teng»; foiz/og'irlik/aniq — oynada.
+
+**Xabarchi uzun so'rov qiladi**: reja amalda har 5 daqiqada
+(`schtasks` da PT5M, «IgnoreNew»), skript JARAYON BOSHIDAN
+`ISH_VAQTI` (292 s) davomida `getUpdates(timeout=25)` bilan tinglaydi
+va har daqiqada eslatmalarni tekshiradi. `ISH_VAQTI` reja oralig'idan
+kichik bo'lishi SHART (oshsa keyingi ishga tushish o'tkazib yuboriladi
+— 5 daqiqalik bo'shliq), lekin unga yaqin: 270 bo'lganda har davrda
+~30 s hech kim tinglamas edi va bot «ishlamay qoldi» deb ko'rindi. Dastur ichidagi «guruhni topish» (`guruhlarni_top`) ham
+`getUpdates` chaqiradi — tinglash paytida bosilsa Telegram 409 berishi
+mumkin, bir necha soniyadan keyin qayta bosish kifoya.
+
+**Xabarchi TO'G'RIDAN-TO'G'RI shu `src/` dan ishlaydi.** `xabar.py`,
+`tg_rasxod.py` yoki `xabarchi.py` ni tahrirlayotganda yarim yozilgan
+fayl jonli botni yiqitadi (2026-09-25 da bir marta bo'lgan). Tahrirdan
+keyin darhol `py_compile` qiling.
+
+## Analitika — birlamchi oraliq
+
+Birlamchi oraliq — joriy oyning 1-kunidan BUGUNGACHA
+(`plan.oy_bugungacha()`), oy oxirigacha EMAS: 1-noyabrda faqat
+1-noyabr ko'rinadi. Foydalanuvchi sanani qo'lda o'zgartirmaguncha
+(`_qolda`) har `yangila()` da qayta hisoblanadi — dastur oy almashganda
+ochiq tursa ham eski oy qolib ketmasin. «Shu oy» `_qolda` ni qaytaradi.
+
+«Hamma kategoriyalar» jadvali (`ledger.kategoriya_jadvali()`) HAR faol
+kategoriyani chiqaradi, rasxodi 0 bo'lganini ham — hozir yashirin.
+
+## Analitika — odam filtri va kategoriya ichi
+
+«Kim:» tanlagichi (`OdamTanla(hammasi=True)`). Odam tanlansa — uning
+rasxodi `v_balans` bilan AYNAN bir xil qoidada (`ledger._odam_manba`):
+**shaxsiy** = o'z shaxsiy rasxodi + boshqa odam UNING UCHUN olgani
+(`kim_uchun`), **umumiy** = umumiy rasxoddagi ULUSHI, butun summasi
+EMAS (aks holda uch odamning analitikasi yig'ilsa uyning rasxodi uch
+barobar chiqardi). `turi_boyicha`, `doira_bolaklari`,
+`kategoriya_jadvali` `odam_id`/`qism` oladi; xulosa kartalari —
+`odam_rasxod_xulosa()`.
+
+Bo'lak yoki jadval qatori bosilsa `dialogs.KategoriyaRasxodlari` —
+har bir rasxod (`ledger.kategoriya_rasxodlari()`, doira bilan BITTA
+manba `_manba()` dan: qatorlar yig'indisi bo'lakka teng). «Qolganlari»
+bo'lagi `idlar` orqali ichidagi hamma kategoriyani ochadi. Rasxod shu
+oynadan tahrirlanadi (`RasxodDialog`) yoki tafsiloti ochiladi;
+o'zgarsa oyna o'zini, yopilganda sahifa `oyna.yangila()` ni chaqiradi.
+
+Shu oynada bir nechta rasxodni tanlab (Ctrl/Shift) kategoriyasini
+almashtirish — `entries.rasxod_turi_qoy()`: bitta undo, pulga/ulushga
+tegmaydi. Bog'langan mahsulot yangi kategoriyaniki bo'lmasa `item_id`
+bo'shatiladi (undo qaytaradi). O'zgarish bo'lmasa `amal()` OCHILMAYDI.
+
+## Analitika → «Reja va fakt»
+
+Alohida varaq EMAS: `AnalitikaSahifa` sarlavhasidagi «Kategoriyalar |
+Reja va fakt» tugmalari (`sahifa_reja_fakt.RejaFaktPanel`). Yangi jadval
+yo'q — umumiy oylik reja `reja` qatorida (`tur='oylik'`, `budjet`
+ustuni), kategoriya rejasi eski `budjet` jadvalida (oy yoki `'*'`).
+Hisob bitta joyda — `plan.reja_va_fakt()`; fakt = oyning HAMMA
+rasxodi, ichki kategoriya otasiga qo'shiladi. Umumiy qo'yilmagan
+bo'lsa reja = kategoriyalar yig'indisi. Foiz `money.foiz()` (butun son,
+100 dan oshadi — oshib ketgan reja CHEKLANMAYDI). «Limitga yaqin» —
+`plan.YAQIN_FOIZ` (80). `reja_saqla()` va `reja_kochir()` — bitta undo.
+
+### Rejaga band pul — `plan.band_pul()` (2026-10-01)
+
+Reja tuzilgach pul BAND: joriy oyning sarflanmagan rejasi
+(`reja − fakt`, manfiy bo'lsa 0) faol odamlarga `money.bol_teng` bilan
+TENG bo'linadi va «Shaxsiy» varag'idagi Real/Adolatli balans, Hisobot
+balans jadvali, pul darajasi chiziqlari (`ledger.darajalar(db, band)`)
+va yon paneldagi «Qo'ldagi jami pul» dan ayirib ko'rsatiladi. Bu FAQAT
+ko'rsatish: `v_balans`, audit va qarzga TEGMAYDI — `naqd`/`adolat` ni
+bazada o'zgartirsangiz `adolat = naqd + sof` buziladi. Sarf
+oshgani sari band kamayadi (aks holda bir pul ikki marta ayiriladi).
+
+## Bir nechta mahsulot va reja yozuvlari (2026-10-01)
+
+**Rasxodda kategoriya ichidan bir nechta mahsulot** — `dialogs.MahsulotRoyxat`
+(qator: mahsulot, miqdor (dona, butun son), summa). Qatorlar
+`rasxod_mahsulot` da; `rasxod.summa` = qatorlar yig'indisi
+(`rk.tekshir` rad etadi), balans faqat `rasxod.summa` ni o'qiydi —
+`v_balans`/audit o'zgarmagan. Bitta qator bo'lsa `rasxod.item_id` unga
+bog'lanadi (avvalgidek), bir nechta bo'lsa NULL. Qoida
+`rk.mahsulot_qatorlari()` / `rk.qatorlarni_yoz()` da — reja ham shuni
+ishlatadi. Tahrirlash `rk.tahrirla()` (rasxod + qatorlar, bitta undo).
+Eski qatorsiz rasxod tahrirda `item_id` dan bitta qator bo'lib ochiladi.
+Mahsulot katalogda bo'lishi SHART EMAS (2026-10-01, foydalanuvchi
+so'ragan): tanlagich yoziladigan, yangi nom yozilsa saqlashda
+`rk.yangi_mahsulotlarni_qosh()` uni shu kategoriyaga katalogga qo'shadi
+(narx = bir dona, `money.bol_teng` bilan; shu nom bo'lsa — o'sha,
+katta-kichik harfga qaramay). Rasxod va reja bilan BITTA amalda.
+Bot va «Bugun» dagi tezkor qo'shish hali bitta mahsulotli (qatorsiz).
+
+**Reja rasxod kabi qo'shiladi** — `sahifa_reja_fakt.RejaYozuvDialog`:
+sana, kategoriya, mahsulotlar, sabab, summa (kim to'ladi/bo'lish YO'Q —
+pul chiqmaydi). Yozuv — oylik `reja` ning `reja_qator` qatori
+(`sana` ustuni qo'shilgan), mahsulotlari `reja_mahsulot` da;
+`plan.reja_yozuv_saqla/ochir/yozuvlari`. Kategoriya rejasi
+`plan.turi_reja()` = yozuvlar (`yozuv_reja`, ichkisi otasiga) + eski
+limit (`limit_reja`, `budjet` jadvali). «Umumiy reja va limitlar»
+oynasi (`RejaDialog`) FAQAT limitni tahrirlaydi — `reja_saqla` ga
+`turi_reja` bersangiz yozuvlar limitga aylanib ikki marta sanaladi.
+`reja_kochir` yozuvlarni ham (mahsulotlari bilan) ko'chiradi.
+
+### Umumiy va shaxsiy reja; «aslida to'landi» (2026-10-01)
+
+Reja ikki DOIRADA: umumiy (`reja_qator.umumiymi=1`) va bitta odamning
+shaxsiysi (`umumiymi=0, odam_id`). `plan.turi_reja/yozuv_reja/
+reja_va_fakt/reja_yozuvlari(…, odam_id)`: `None` — umumiy (+ umumiy
+summa va limitlar), `<id>` — o'sha odamniki. Fakt ham doirada:
+umumiy — umumiy rasxodning BUTUN summasi (`ledger._manba` da
+`odam_id=None, qism='umumiy'`), shaxsiy — odamning shaxsiy rasxodi va
+unga olingani. Panelda «Umumiy | Shaxsiy» (birlamchi — umumiy).
+`reja_bormi(db, oy)` birlamchi HAR QANDAY doirani so'raydi (`HAMMASI`).
+`band_pul`: umumiy qolgani hammaga teng, shaxsiy qolgani — o'sha odamga.
+
+Toifa qatori bosilsa `RejaKategoriyaOyna` — shu toifaning reja
+RO'YXATLARI (har reja yozuvi bitta ro'yxat; yangi va o'chirish shu
+yerda). Ro'yxat ochilsa `RejaRoyxatOyna` — mahsulotlari, har biriga
+«aslida to'landi» va «Tahrirlash» (FAQAT shu yerda: umumiy/shaxsiy,
+mahsulot qo'shish/olib tashlash; oyna `_qur()` bilan qayta quriladi,
+saqlanmagan summalar nom bo'yicha saqlanadi). Reja o'chirilsa unga yozilgan rasxod QOLADI.
+Eski kategoriya LIMITI ham shu oynada «Limit (mahsulotsiz)» qatori bo'lib
+chiqadi; ochilsa `plan.limitni_royxatga()` uni oddiy ro'yxatga aylantiradi
+(reja summasi o'zgarmaydi, bitta undo).
+Panelning «Reja yozuvlari» kartasi YASHIRIN (`yozuvlar_karta`). `plan.reja_bajar()`
+HAQIQIY rasxod yozadi/yangilaydi (`reja_qator.rasxod_id`), hammasi 0
+bo'lsa uni o'chiradi; summalar `reja_mahsulot.tolangan` (mahsulotsiz
+yozuvda `reja_qator.tolangan`). Fakt baribir rasxoddan — alohida fakt
+saqlanmaydi. Shaxsiy rejani boshqa odam to'lasa — «uning uchun».
+
+## «Shaxsiy» varag'i va yon panel (2026-10-01)
+
+Qarz uchun YAGONA karta — «Qarzim» (ichki + tashqi,
+`ledger.odam_qarzlari`), bosilsa `dialogs.QarzlarimOyna` (to'lash,
+qisman qaytarish, yopish — mavjud oynalar orqali). «Sof pozitsiya»,
+«Men uchun olingan», «Tashqi qarz» kartalari olib tashlangan;
+«Kunlik harakat» YASHIRIN (`kunlik_karta`), «Jami kirim» kartasi olib tashlangan. Yon paneldagi pul — faqat
+asosiy odamniki (`plan.qoldagi_pul`, `asosiy_odam` = `sozlama.asosiy_odam`
+yoki birinchi faol odam): boshqalarning band ulushidan ularning
+qo'lidagi pul yetmagani ham undan ayiriladi. Faqat ko'rsatish.
+
+**Band pul hisobda bo'lmasa — qarz** (`plan.band_hisob`): hech kimdan
+qo'lidagi puldan (naqd, manfiy bo'lsa 0) ortiq ayirilmaydi, real
+balans rejadan minusga TUSHMAYDI. Yetmagani asosiy odam qoplaydi
+(puli yetganicha); qolgani «Qarzim» ga «rejadan» bo'lib qo'shiladi
+(`plan.odam_qarzlari` = `ledger.odam_qarzlari` + band qarzi). Ko'rsatish
+joylari `plan.band_ayirma()` oladi, `band_pul()` EMAS.
+
+«Bugun» sahifasi: «Oxirgi yozuvlar» YASHIRIN (`oxirgi_karta`), o'rniga
+«Bugunga rejalangan» — `plan.kun_reja_yozuvlari()` (umumiy + hammaning
+shaxsiysi), ikki marta bosilsa `RejaRoyxatOyna`. «Holat» matni —
+`plan.royxat_holati()` (toifa oynasi bilan bitta). «Rejaga band» kartasi
+bosilsa `dialogs.RejagaBandOyna` (`plan.band_tafsilot`).
+
+Reja ro'yxatidan nusxa — `plan.reja_yozuv_nusxa` (keyingi kunga, oydan
+chiqmaydi; to'langani va rasxodi ko'chmaydi).
+
+## Varaqlar nomi (2026-09-30)
+
+Menyuda `MahsulotSahifa` — **«Kategoriyalar»** (kategoriya daraxti +
+mahsulotlar), `KategoriyaSahifa` — **«Iconlar»** (ikonkaga nom berish).
+Sinf va fayl nomlari ESKICHA qoldi — shuning uchun testlar varaqni
+nomi bo'yicha emas, sinfi bo'yicha qidiradi. «Reja» va «Hisobot» varaqlari menyudan
+olingan (`oyna.py` da izohga olingan qatorlar; sinflar joyida).
 
 ## Ikkita bo'lim va bekor qilish
 
@@ -118,21 +480,24 @@ UI dan chiqarilgan.
 ### Ovqat navbati
 
 `vazifa_turi.navbat=1` — ish odamlar bo'ylab aylanadi;
-`ergash_turi_id` — o'sha kuni AVVALGI navbatchiga tushadigan ish.
+`ergash_turi_id` — o'sha kuni OSHPAZNING O'ZIGA tushadigan ish.
 Ikkalasi ham ustun, nom EMAS: foydalanuvchi ish nomini o'zgartirsa yoki
 o'chirib qaytadan yaratsa (aynan shunday bo'lgan) nomga qarab
 taxmin qiladigan kod jimgina ishlamay qo'yadi.
 
-Yuvuvchi — `idlar[(boshi + i - 1) % n]`, ya'ni navbatdagi OLDINGI odam.
-Buni `+1` ga o'zgartirsangiz Fayzulloxon pishirganda Otabek yuvadigan
-bo'ladi — `tekshir.py` uchala juftlikni ham nomma-nom tekshiradi.
+Yuvuvchi — oshpazning O'ZI (`yuvuvchi = oshpaz`). 2026-09-17 gacha
+navbatdagi OLDINGI odam edi (`idlar[(boshi + i - 1) % n]`) —
+foydalanuvchi o'zi o'zgartirdi, eskisiga qaytarmang. Idish baribir
+alohida vazifa bo'lib qoladi: eslatma, «Albatta!» va hisobot uni
+ovqatdan ajratib ko'radi. `tekshir.py` uchala odamni ham nomma-nom
+tekshiradi.
 
 Navbat tuzilgandan keyin `almashtir()` va `bersin()` bilan
 o'zgartiriladi. `almashtir()` — ikki kunni o'rin almashtiradi
 (keyingi kunlarga TEGMAYDI, navbat soni saqlanadi); `bersin()` — faqat
 bitta kunni ko'chiradi. Ikkalasi ham oxirida `_yuvuvchini_tugrila()`
 chaqiradi: oshpaz o'zgargach yuvuvchi eskisicha qolsa, «kim pishirsa
-undan oldingi yuvadi» qoidasi jimgina buziladi. `tekshir.py` almashuvdan
+o'sha yuvadi» qoidasi jimgina buziladi. `tekshir.py` almashuvdan
 keyin ikkala kunning yuvuvchisini ham tekshiradi.
 
 `ergash_turi_id` o'chirilgan turga ishora qilishi mumkin. `tur_ergash()`
@@ -181,6 +546,68 @@ Vazifa qatorida faqat NOM turadi, shuning uchun `xabar._uborka_qadamlari()`
 nom → qadamlar xaritasini quradi. Xaritaning O'ZI ustundan (`haftalik=1`)
 quriladi — ya'ni nomga qarab taxmin qilinmaydi, `_rollar()` bilan
 aynan bir xil qoida.
+
+### Takroriy vazifa — qoida, nusxa emas
+
+`vazifa_takror` — «har kuni namoz» degan QOIDA. Kalendardagi kunlar
+undan chiqariladi: `takror_toldir()` bugundan boshlab `TAKROR_UFQ`
+(30) kunga yetguncha yetishmagan `vazifa` qatorlarini yozadi. U
+`main.py` da (oyna qurilishidan oldin) va `xabarchi.py` da chaqiriladi.
+
+**Nega haqiqiy qator yoziladi, «virtual vazifa» emas.** Kalendar,
+eslatma, hisobot va streak — hammasi `vazifa` jadvalidan o'qiydi.
+Ikkinchi manba qo'shilsa o'sha to'rttasi ham ikki joydan o'qishga
+majbur bo'lardi. `dars` bilan aynan bir xil sabab, va bog'lanish ham
+o'shanaqa: `vazifa.manba` = `takror:<id>:<sana>`.
+
+**Kalit ichida SANA turadi** — shuning uchun to'ldirish necha marta
+chaqirilsa ham ikkinchi nusxa yozilmaydi. `xabarchi.py` har daqiqada
+ishlaydi, ya'ni bu idempotentlik shart, tozalik emas.
+
+**O'tmishga yozilmaydi.** Sanoq bugundan boshlanadi: dastur bir hafta
+ochilmasa, o'tib ketgan kunlar «bajarilmagan» bo'lib kalendarga
+to'kilardi.
+
+**O'chirilgan kun qayta tirilmaydi.** Mavjudlik `ochirilgan` ni
+filtrlamasdan tekshiriladi — foydalanuvchi bitta kunni bekor qilsa u
+keyingi to'ldirishda qaytib kelmaydi. Bu shartni «faqat o'chirilmagani
+bor» deb tuzatsangiz bekor qilingan kun bir daqiqadan keyin
+qaytadi.
+
+**`oraliq` naqshida sanoq har doim `boshlanish` dan yuradi**, «oxirgi
+yozilgan kun» dan emas: bitta kun o'chirilsa yoki dastur bir hafta
+ochilmasa ham «har 3 kunda» joyidan siljimasin.
+
+**`oraliq or 1` YOZMANG.** 0 ham bo'sh deb hisoblanib jimgina 1 ga
+aylanardi — «har 0 kunda» degan xato har kunlik qoidaga o'girilib
+ketardi. `tekshir.py` buni tekshiradi.
+
+**Hech narsa yetishmasa `db.amal()` ham ochilmaydi.** Bo'sh guruh undo
+stekini ma'nosiz qadam bilan to'ldiradi VA `_redo_yolini_yop()` ni
+chaqiradi — har daqiqada bir marta.
+
+**To'xtatish tarixga tegmaydi.** `takror_ochir()` bugundan boshlab
+faqat `holat='ochiq'` kunlarni oladi: bajarilgani ham, o'tgan kunlar
+ham joyida qoladi.
+
+Qoida FAQAT bitta joyda tuziladi — `VazifaDialog` dagi «Takrorlansin».
+`VazifaTurlariSahifa` dagi karta faqat ro'yxat va ✕ ko'rsatadi:
+ikkinchi yaratish shakli qo'yilsa ikkalasi jimgina bir-biridan
+ajralib ketardi. Navbatli (ovqat) turda karta umuman chiqmaydi —
+u allaqachon aylanma jadval.
+
+### Namoz qazosi — `vz.qazo_qil()`
+
+Uchinchi holat: `vazifa.holat='qazo'` (`vz.QAZO`). «Qazo bo'ldi»
+(tafsilot oynasi yoki eslatma ostidagi `qazo:<id>` tugmasi) namozni
+QAZO qiladi va o'sha odamga «<namoz> — qazosini o'qish» ishini
+yozadi: vaqtsiz, bugunga, `manba='qazo:<namoz_id>'`. Ikkalasi bitta
+undo. Namoz qayta ochilsa hali o'qilmagan qazo ishi ham o'chadi.
+
+«Eslatish kerakmi» tekshiruvi `holat == BAJARILDI` EMAS, `vz.yopiqmi()`
+— aks holda qazo bo'lgan namoz haqida bot so'rashda davom etadi.
+Namoz NOMIDAN taniladi (`vz.namozmi()`, `NAMOZ_SOZLAR`) — takror
+qoidalarida tur ustuni yo'q; qazo ishining o'zi namoz hisoblanmaydi.
 
 ### Shaxsiy va umumiy ish
 
@@ -271,6 +698,15 @@ vazifalar), ostida aylanadigan `HaftaTor` (soat to'ri + vaqtli bloklar).
 Bosh ham aylanganida sarlavhalar ekrandan chiqib ketardi va qaysi ustun
 qaysi kun ekani bilinmasdi. Vaqtsiz vazifalar ham boshda: aks holda
 surilgandan keyin ular ko'rinmay qolardi.
+
+**To'r — 24 soatlik HALQA** (2026-09-26). Sutka `NUSXA` (3) marta
+ketma-ket chiziladi, har vazifa har nusxada bittadan blok
+(`_bloklar` = `(blok, nusxa)`), `y_vaqtdan(daqiqa, nusxa=1)`.
+`HaftaTaqvim._halqa()` aylantirgichni doim o'rtadagi sutkada ushlab
+turadi — chegaradan chiqsa bir sutka balandligiga sakraydi, nusxalar
+bir xil bo'lgani uchun ko'zga ko'rinmaydi: 23:59 dan keyin o'sha
+kunning 00:00 i keladi. Diapazon `2 * sutka` dan kichik bo'lsa
+sakramaydi (aks holda qisilgan qiymat halqani qayta chaqiradi).
 
 Ikkala bo'lakning ustun kengligi bitta funksiyadan (`_ustun_kengligi`)
 keladi — aks holda bosh va to'r bir-biriga to'g'ri kelmaydi.

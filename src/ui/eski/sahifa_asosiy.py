@@ -10,13 +10,15 @@ from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QGridLayout,
 
 import money
 from core import entries, ledger, plan, recurring, settle
+from core import rasxod_kirit as rk
 from ui.eski import theme
 from ui.eski.dialogs import (JuftTafsilot, KirimDialog, QarzDialog,
-                        RasxodDialog, RasxodTafsilot, TolovDialog,
-                        tasdiq, xato_koraset)
-from ui.eski.widgets import (Holat, Jadval, Karta, OdamTanla, PulEdit, RaqamKarta,
-                        SanaEdit, TuriTanla, Xabar, izoh, qator, sarlavha,
-                        tugma, yorliq)
+                        RasxodDialog, RasxodTafsilot, TashqiQarzOyna,
+                        mahsulotlarni_toldir, TolovDialog, tasdiq,
+                        xato_koraset)
+from ui.eski.widgets import (Holat, Jadval, Karta, KategoriyaTanla, OdamTanla,
+                        PulEdit, RaqamKarta, SanaEdit, TuriTanla, Xabar, izoh,
+                        qator, sarlavha, tugma, yorliq)
 
 
 OYLAR = ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul",
@@ -140,10 +142,10 @@ class BugunSahifa(Sahifa):
         quti.qosh(qator(self.t_sana, self.t_nom, self.t_summa))
 
         self.t_kim = OdamTanla(self.db)
-        self.t_turi = TuriTanla(self.db)
+        self.t_turi = KategoriyaTanla(self.db)
         self.t_item = QComboBox()
         self.t_item.setMinimumWidth(180)
-        self.t_turi.currentIndexChanged.connect(self._itemlarni_yukla)
+        self.t_turi.ozgardi.connect(self._itemlarni_yukla)
         self.t_item.currentIndexChanged.connect(self._item_tanlandi)
         quti.qosh(qator("Kim to'ladi:", self.t_kim,
                         "Kategoriya:", self.t_turi,
@@ -194,8 +196,33 @@ class BugunSahifa(Sahifa):
         self.bugungi.qosh(self.bugun_jami)
         self.tana.addWidget(self.bugungi)
 
+        # ── bugunga rejalangan ro'yxatlar ────────────────────────────
+        # (2026-10-01) «Oxirgi yozuvlar» o'rniga: bugungi sanadagi reja
+        # ro'yxatlari; ikki marta bosilsa ro'yxat ochiladi — «aslida
+        # to'landi» shu yerdan yoziladi (`RejaRoyxatOyna`).
+        self.bugun_reja = Karta("Bugunga rejalangan")
+        self.reja_jadval = Jadval(
+            ["Ro'yxat", "Kategoriya", "Kimniki", "Mahsulotlar", "Reja",
+             "Aslida to'landi", "Holat"], pul_ustunlar={4, 5},
+            bosh_matn="Bugunga reja yo'q")
+        self.reja_jadval.kengliklar(0, 150, 120, 100, 110, 130, 120)
+        self.reja_jadval.setMinimumHeight(170)
+        self.reja_jadval.doubleClicked.connect(self._reja_och)
+        self.bugun_reja.qosh(self.reja_jadval)
+        reja_och = tugma("Ro'yxatni ochish", asosiy=True)
+        reja_och.clicked.connect(self._reja_och)
+        reja_qosh = tugma("+ Bugunga reja")
+        reja_qosh.clicked.connect(self._reja_qosh)
+        self.reja_jami = izoh("")
+        self.bugun_reja.qosh(qator(self.reja_jami, None, reja_qosh, reja_och))
+        self.tana.addWidget(self.bugun_reja)
+
         # ── oxirgi rasxodlar ─────────────────────────────────────────
+        # Foydalanuvchi so'rovi bilan YASHIRILGAN (2026-10-01) — «Bugun»
+        # da faqat bugun yozilganlar qoladi.
         oxirgi = Karta("Oxirgi yozuvlar")
+        self.oxirgi_karta = oxirgi
+        oxirgi.setVisible(False)
         self.oxirgi_jadval = Jadval(
             ["Sana", "Nomi", "Kategoriya", "Kim to'ladi", "Turi", "Summa"],
             pul_ustunlar={5})
@@ -213,14 +240,7 @@ class BugunSahifa(Sahifa):
 
     def _itemlarni_yukla(self):
         """Kategoriya tanlangach o'sha kategoriyaning mahsulotlari chiqadi."""
-        with QSignalBlocker(self.t_item):
-            self.t_item.clear()
-            self.t_item.addItem("— mahsulot tanlanmagan —", None)
-            for it in plan.turi_itemlari(self.db, self.t_turi.turi_id()):
-                yorliqcha = it["nom"]
-                if it["narx"]:
-                    yorliqcha += f"  ·  {money.fmt(it['narx'])}"
-                self.t_item.addItem(yorliqcha, it["id"])
+        mahsulotlarni_toldir(self.t_item, self.db, self.t_turi.turi_id())
 
     def _item_tanlandi(self):
         """Mahsulot tanlansa nomi va narxi o'zi to'ldiriladi.
@@ -232,13 +252,13 @@ class BugunSahifa(Sahifa):
         iid = self.t_item.currentData()
         if not iid:
             return
-        it = self.db.q1("SELECT nom, narx FROM item WHERE id=?", iid)
-        if not it:
-            return
-        if not self.t_nom.text().strip():
-            self.t_nom.setText(it["nom"])
-        if it["narx"] and self.t_summa.qiymat() == 0:
-            self.t_summa.qoy(it["narx"])
+        q = rk.Qoralama(sana=self.t_sana.iso(), nom=self.t_nom.text(),
+                        summa=self.t_summa.qiymat())
+        rk.mahsulot_tanla(self.db, q, iid)
+        if q.nom != self.t_nom.text():
+            self.t_nom.setText(q.nom)
+        if q.summa != self.t_summa.qiymat():
+            self.t_summa.qoy(q.summa)
 
     def _turi_ozgardi(self):
         self.t_uchun_kim.setVisible(self.t_uchun.isChecked())
@@ -247,34 +267,22 @@ class BugunSahifa(Sahifa):
 
     def _qosh(self):
         summa = self.t_summa.qiymat()
-        if summa <= 0:
-            self.ogoh.korsat("Summa kiritilmagan.", "xato", 3000)
-            return
-
         uchunmi = self.t_uchun.isChecked()
-        kim_uchun = self.t_uchun_kim.odam_id() if uchunmi else None
-        if uchunmi and kim_uchun == self.t_kim.odam_id():
-            self.ogoh.korsat(
-                "To'lovchi va «kim uchun» bir odam — bu oddiy shaxsiy rasxod.",
-                "xato", 5000)
-            return
-
-        iid = self.t_item.currentData()
         nom = self.t_nom.text().strip()
+        # Tekshiruv va yozish — `core/rasxod_kirit.py` da (Telegram bot
+        # bilan bitta joyda). Katalog narxi shu yerda yangilanadi.
+        q = rk.Qoralama(
+            sana=self.t_sana.iso(), kim_toladi=self.t_kim.odam_id(),
+            turi_id=self.t_turi.turi_id(), item_id=self.t_item.currentData(),
+            nom=nom, summa=summa,
+            tur=(rk.UCHUN if uchunmi else
+                 rk.UMUMIY if self.t_umumiy.isChecked() else rk.SHAXSIY),
+            kim_uchun=self.t_uchun_kim.odam_id() if uchunmi else None)
         try:
-            entries.rasxod_qosh(
-                self.db, self.t_sana.iso(), nom, summa, self.t_kim.odam_id(),
-                umumiymi=self.t_umumiy.isChecked() or uchunmi,
-                turi_id=self.t_turi.turi_id(), item_id=iid,
-                kim_uchun=kim_uchun)
+            rk.saqla(self.db, q, katalog_narxi=True)
         except Exception as e:
-            self.ogoh.korsat(str(e), "xato", 6000)
+            self.ogoh.korsat(str(e), "xato", 5000)
             return
-
-        if iid:
-            it = self.db.q1("SELECT narx FROM item WHERE id=?", iid)
-            if it and it["narx"] != summa:
-                plan.item_narx_yangila(self.db, iid, summa)
 
         self.t_nom.clear()
         self.t_summa.tozala()
@@ -291,6 +299,23 @@ class BugunSahifa(Sahifa):
     def _tahrir(self):
         rid = self.oxirgi_jadval.tanlangan_id()
         if rid and RasxodDialog(self.db, rid, parent=self).exec():
+            self.oyna.yangila()
+
+    def _reja_och(self, *_):
+        from ui.eski.sahifa_reja_fakt import RejaRoyxatOyna
+        qid = self.reja_jadval.tanlangan_id()
+        if qid is None and self.reja_jadval.rowCount() == 1:
+            qid = self.reja_jadval.item(0, 0).data(Qt.UserRole)
+        if qid is None:
+            return
+        d = RejaRoyxatOyna(self.db, qid, self)
+        d.exec()
+        if d.ozgardi:
+            self.oyna.yangila()
+
+    def _reja_qosh(self):
+        from ui.eski.sahifa_reja_fakt import RejaYozuvDialog
+        if RejaYozuvDialog(self.db, plan.oy_kaliti(), parent=self).exec():
             self.oyna.yangila()
 
     def _tafsilot_och(self, jadval):
@@ -361,6 +386,26 @@ class BugunSahifa(Sahifa):
         self.bugun_jami.setText(
             f"Bugun jami: {money.fmt_som(jami)}" if jami
             else "Bugun hali rasxod yozilmagan.")
+
+        # bugunga rejalangan
+        satrlar, idlar, reja_j, tol_j = [], [], 0, 0
+        for y in plan.kun_reja_yozuvlari(self.db, bugun.isoformat()):
+            tolandi = y["rasxod"]["summa"] if y["rasxod"] else 0
+            soni = len(y["mahsulotlar"])
+            satrlar.append([
+                y["nom"],
+                f"{y['turi_belgi'] or ''} {y['turi_nom'] or ''}".strip() or "—",
+                "Umumiy" if y["umumiymi"] else (y["odam_nom"] or "—"),
+                f"{soni} ta" if soni else "—", y["summa"], tolandi,
+                plan.royxat_holati(y["summa"], tolandi)])
+            idlar.append(y["id"])
+            reja_j += y["summa"]
+            tol_j += tolandi
+        self.reja_jadval.tuldir(satrlar, idlar)
+        self.reja_jami.setText(
+            f"Bugunga reja {money.fmt_som(reja_j)} · aslida to'landi "
+            f"{money.fmt_som(tol_j)}" if satrlar else
+            "Bugunga reja yo'q.")
 
         # oxirgi yozuvlar
         qatorlar, idlar = [], []
@@ -615,9 +660,12 @@ class QarzSahifa(Sahifa):
         super().__init__(oyna)
         yangi = tugma("+ Qarz yozish", asosiy=True)
         tolov = tugma("+ Erkin to'lov")
+        tashqi = tugma("Tashqaridan qarz")
+        self.tashqi_tugma = tashqi
         yangi.clicked.connect(self._yangi)
         tolov.clicked.connect(lambda: self._tolov())
-        self.tana.addWidget(qator(sarlavha("Qarz"), None, tolov, yangi))
+        tashqi.clicked.connect(self._tashqi_oyna)
+        self.tana.addWidget(qator(sarlavha("Qarz"), None, tashqi, tolov, yangi))
 
         self.xabar = Xabar()
         self.tana.addWidget(self.xabar)
@@ -674,6 +722,17 @@ class QarzSahifa(Sahifa):
         qo.clicked.connect(self._qarz_ochir)
         q.qosh(qator(None, qo))
         self.tana.addWidget(q)
+
+        # ── tashqaridan olingan qarzlar ──────────────────────────────
+        # Alohida oynada (`TashqiQarzOyna`): kimdan, qancha qaytarish,
+        # yopish. Bu yerda faqat qisqa xulosa. `sof` ga tegmaydi, shuning
+        # uchun «Kim kimga qarzdor» da chiqmaydi.
+        tq = Karta("Tashqaridan olingan qarzlar")
+        self.tashqi_xulosa = izoh("")
+        tqa = tugma("Ochish")
+        tqa.clicked.connect(self._tashqi_oyna)
+        tq.qosh(qator(self.tashqi_xulosa, None, tqa))
+        self.tana.addWidget(tq)
 
         # ── to'lovlar ────────────────────────────────────────────────
         h = Karta("To'lovlar tarixi")
@@ -796,6 +855,25 @@ class QarzSahifa(Sahifa):
                              r["izoh"] or "—", r["summa"]])
             idlar.append(r["id"])
         self.hk_jadval.tuldir(qatorlar, idlar)
+
+        # tashqi qarzlar — faqat xulosa, tafsiloti alohida oynada
+        kimga = ledger.tashqi_kimga_qaytarish(self.db)
+        jami = sum(x["qoldiq"] for x in kimga)
+        self.tashqi_xulosa.setText(
+            f"{sum(x['soni'] for x in kimga)} ta ochiq · qaytarilishi kerak "
+            f"{money.fmt_som(jami)} ("
+            + ", ".join(x["kimdan"] for x in kimga) + ")"
+            if kimga else "Tashqi qarz yo'q.")
+        self.tashqi_tugma.setText(
+            f"Tashqaridan qarz · {money.fmt(jami)}" if jami else "Tashqaridan qarz")
+
+    # ── tashqi qarz ──────────────────────────────────────────────────
+
+    def _tashqi_oyna(self):
+        d = TashqiQarzOyna(self.db, self)
+        d.exec()
+        if d.ozgardi:
+            self.oyna.yangila()
 
     # ── boshqa amallar ───────────────────────────────────────────────
 

@@ -17,6 +17,15 @@ Rang oilalari: `KOK` — asosiy (siyoh-binafsha), `IKKI` — ikkilamchi
 `SARIQ`/`TOQ` — ogohlantirish, `ODAM_RANG`/`TUR_RANG` — odam va
 kategoriya ranglari.
 
+`TUR_RANG` TARTIBI tasodifiy emas: qo'shni ikki rang rang ajrata
+olmaydigan (protan/deutan) ko'zga ham, oddiy ko'zga ham farqlanadigan
+qilib tekshirilgan (OKLab ΔE: CVD ≥ 8, oddiy ≥ 15), doiradagi
+oxirgi→birinchi juftlik bilan birga. Doira bo'laklari shu tartibda
+bo'yaladi — ranglarni almashtirsangiz yoki qayta tartiblasangiz
+tekshiruvni qaytadan o'tkazing. Yorug' rejimlarda uchta rang oq
+kartaga nisbatan 3:1 dan past: shuning uchun doira yonida har doim
+nom, summa va foiz yozilgan ro'yxat turadi.
+
 QSS haqida uchta eslatma (uchalasi ham qonda yozilgan):
 
 1.  Ota-widgetdagi `setStyleSheet("background:transparent")` BUTUN
@@ -121,8 +130,8 @@ _PALITRA = {
         SOYA_RANG=(74, 58, 40),
         ODAM_RANG=["#4A40BE", "#0D7490", "#B0421F",
                    "#9C2C74", "#1D6F3F", "#8A5A12"],
-        TUR_RANG=["#B2490A", "#96600A", "#4D7C0F", "#12784E", "#0D7490",
-                  "#0369A1", "#3B5BDB", "#6D28D9", "#A02D74", "#BE123C"],
+        TUR_RANG=["#2A78D6", "#EB6834", "#1BAF7A", "#EDA100",
+                  "#E87BA4", "#008300", "#4A3AA7", "#E34948"],
     ),
 
     # ── oq: toza, salqin oq yer; xuddi shu siyoh-binafsha asos ───────
@@ -156,8 +165,8 @@ _PALITRA = {
         SOYA_RANG=(40, 40, 38),
         ODAM_RANG=["#3E36CC", "#0B7285", "#B23C18",
                    "#9E2470", "#146B3C", "#835310"],
-        TUR_RANG=["#C24A08", "#9A6300", "#4A7C0A", "#0E7A4A", "#0B7285",
-                  "#0369A1", "#2F4FD8", "#6926D6", "#A31E6E", "#BE0F39"],
+        TUR_RANG=["#2A78D6", "#EB6834", "#1BAF7A", "#EDA100",
+                  "#E87BA4", "#008300", "#4A3AA7", "#E34948"],
     ),
 
     # ── tungi: quyuq siyoh-ko'k, lekin TINIQ ─────────────────────────
@@ -196,8 +205,8 @@ _PALITRA = {
         SOYA_RANG=(0, 0, 0),
         ODAM_RANG=["#9A93FF", "#4CC8E0", "#F0906B",
                    "#F07CC0", "#5FD79B", "#E0B36A"],
-        TUR_RANG=["#FF8F4D", "#F0BE45", "#A3D65B", "#3BD68C", "#37B8D4",
-                  "#5BB0F5", "#8B9BFF", "#B98BFF", "#E86BB0", "#FF7B8E"],
+        TUR_RANG=["#3987E5", "#D95926", "#199E70", "#C98500",
+                  "#D55181", "#008300", "#9085E9", "#E66767"],
     ),
 }
 

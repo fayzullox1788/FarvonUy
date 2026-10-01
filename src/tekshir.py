@@ -652,11 +652,12 @@ _yuvuvchi = {x["sana"]: x["odam"] for x in _reja if x["nom"] == _idish["nom"]}
 teng("1-kun Fayzulloxon pishiradi", "Fayzulloxon", _oshpaz[_du9])
 teng("2-kun Otabek pishiradi", "Otabek", _oshpaz[_du9 + _td(days=1)])
 teng("3-kun Abbosxon pishiradi", "Abbosxon", _oshpaz[_du9 + _td(days=2)])
-teng("Fayzulloxon pishirsa Abbosxon yuvadi", "Abbosxon", _yuvuvchi[_du9])
-teng("Otabek pishirsa Fayzulloxon yuvadi", "Fayzulloxon",
+teng("Fayzulloxon pishirsa o'zi yuvadi", "Fayzulloxon", _yuvuvchi[_du9])
+teng("Otabek pishirsa o'zi yuvadi", "Otabek",
      _yuvuvchi[_du9 + _td(days=1)])
-teng("Abbosxon pishirsa Otabek yuvadi", "Otabek",
+teng("Abbosxon pishirsa o'zi yuvadi", "Abbosxon",
      _yuvuvchi[_du9 + _td(days=2)])
+teng("har kuni yuvuvchi = oshpaz", _oshpaz, _yuvuvchi)
 teng("idish ovqatdan keyin", "20:00",
      [x["vaqt"] for x in _reja if x["nom"] == _idish["nom"]][0])
 
@@ -666,7 +667,7 @@ teng("navbat 4-kunda aylanadi", "Fayzulloxon",
       if x["nom"] == _ovqat["nom"]][3])
 teng("boshqa odamdan boshlansa navbat undan yuradi", "Otabek",
      vz.navbat_rejasi(d9, _ovqat["id"], nO, _du9, "19:00", 1)[0]["odam"])
-teng("Otabekdan boshlansa Fayzulloxon yuvadi", "Fayzulloxon",
+teng("Otabekdan boshlansa Otabek o'zi yuvadi", "Otabek",
      vz.navbat_rejasi(d9, _ovqat["id"], nO, _du9, "19:00", 1)[1]["odam"])
 
 _n = vz.navbat_biriktir(d9, _ovqat["id"], nF, _du9, "19:00", 3)
@@ -693,7 +694,7 @@ teng("ergash almashtirildi", "Kir yuvish",
      vz.tur_ergash(d9, _ovqat["id"])["nom"])
 teng("yangi ergash bilan navbat to'liq", 6,
      len(vz.navbat_rejasi(d9, _ovqat["id"], nF, _du9, "19:00", 3)))
-teng("yangi ergash to'g'ri odamga tushdi", "Abbosxon",
+teng("yangi ergash to'g'ri odamga tushdi (oshpazning o'ziga)", "Fayzulloxon",
      vz.navbat_rejasi(d9, _ovqat["id"], nF, _du9, "19:00", 1)[1]["odam"])
 tekshir("ish o'zidan keyin kelolmaydi",
         _yiqiladimi(lambda: vz.tur_ergash_qoy(d9, _ovqat["id"], _ovqat["id"])))
@@ -792,6 +793,45 @@ for _j in ledger.juft_qarzlar(d):
          sum(x["summa"] for x in ledger.juft_tarkibi(
              d, _j.qarzdor_id, _j.kreditor_id)))
 
+print("\n── qarz: faqat to'lanmagani ───────────────────")
+
+# dB hozir: Bozorlik ulushi +30k, Taksi qarzi +20k, erkin to'lov −5k,
+# teskari «Non» −10k. Jami 35k. Kamaytiruvchi 15k eng eski qarzni —
+# Bozorlikni — qisman yopadi.
+_tm = ledger.juft_tolanmagan(dB, bO, bF)
+teng("to'lanmagan: ikkita qator", 2, len(_tm))
+teng("to'lanmagan yig'indisi juftlikka teng", 35_000,
+     sum(x["summa"] for x in _tm))
+teng("to'lovlar eng eski qarzdan ayirildi (Bozorlik 30k → 15k)",
+     (15_000, 30_000), (_tm[0]["summa"], _tm[0]["asl"]))
+teng("yangirog'i tegilmadi (Taksi 20k)", (20_000, 20_000),
+     (_tm[1]["summa"], _tm[1]["asl"]))
+tekshir("to'lov va manfiy qator chiqmaydi",
+        all(x["summa"] > 0 and x["turi"] != "To'lov" for x in _tm))
+teng("teskari yo'nalishda bo'sh", [], ledger.juft_tolanmagan(dB, bF, bO))
+
+# «To'landi» deb belgilangan blok va uning to'lovi birga yo'qoladi —
+# erkin to'lov esa boshqa qarzni yopishga ketadi.
+_bz = [b for b in settle.ochiq_bloklar(dB, bO, bF) if b["nom"] == "Bozorlik"][0]
+settle.bloklarni_yop(dB, [_bz["ulush_id"]], "2026-08-14")
+_tm2 = ledger.juft_tolanmagan(dB, bO, bF)
+_j2 = [j.summa for j in ledger.juft_qarzlar(dB)
+       if j.qarzdor_id == bO and j.kreditor_id == bF][0]
+teng("belgilangandan keyin ham yig'indi juftlikka teng", _j2,
+     sum(x["summa"] for x in _tm2))
+teng("to'langan blok ro'yxatdan chiqdi", ["Taksi"], [x["nom"] for x in _tm2])
+teng("erkin to'lov keyingi qarzni yopdi (Taksi 20k → 5k)", 5_000,
+     _tm2[0]["summa"])
+dB.undo()
+teng("undo'dan keyin blok qaytdi", 2, len(ledger.juft_tolanmagan(dB, bO, bF)))
+
+for _j in ledger.juft_qarzlar(d):
+    _tmx = ledger.juft_tolanmagan(d, _j.qarzdor_id, _j.kreditor_id)
+    teng(f"Excel: {_j.qarzdor_nom}→{_j.kreditor_nom} to'lanmagani mos",
+         _j.summa, sum(x["summa"] for x in _tmx))
+    tekshir(f"Excel: {_j.qarzdor_nom}→{_j.kreditor_nom} faqat musbat qatorlar",
+            all(0 < x["summa"] <= x["asl"] for x in _tmx))
+
 
 print("── vazifalar: navbatni o'zgartirish ──────────────")
 
@@ -839,21 +879,21 @@ teng("03.09 endi Abbosxon", "Abbosxon", _oshpaz(dA, _k3))
 teng("05.09 endi Fayzulloxon", "Fayzulloxon", _oshpaz(dA, _k5))
 teng("oradagi 04.09 tegilmadi", "Otabek", _oshpaz(dA, _k4))
 teng("navbat soni o'zgarmadi", _oldingi_soni, _pishirish_soni(dA))
-teng("03.09 yuvuvchi qoidaga mos (Abbosxon→Otabek)", "Otabek",
+teng("03.09 yuvuvchi qoidaga mos (Abbosxon o'zi yuvadi)", "Abbosxon",
      _yuvuvchi(dA, _k3))
-teng("05.09 yuvuvchi qoidaga mos (Fayzulloxon→Abbosxon)", "Abbosxon",
+teng("05.09 yuvuvchi qoidaga mos (Fayzulloxon o'zi yuvadi)", "Fayzulloxon",
      _yuvuvchi(dA, _k5))
 tekshir("almashuv bitta undo qadami",
         "almashdi" in (dA.oxirgi_guruh() or ("", ""))[1])
 dA.undo()
 teng("undo almashuvni qaytardi", "Fayzulloxon", _oshpaz(dA, _k3))
-teng("undo yuvuvchini ham qaytardi", "Abbosxon", _yuvuvchi(dA, _k3))
+teng("undo yuvuvchini ham qaytardi", "Fayzulloxon", _yuvuvchi(dA, _k3))
 
 # «faqat shu kunni berish» — almashuvsiz
 vz.bersin(dA, _v3, aA)
 teng("bersin: 03.09 Abbosxon", "Abbosxon", _oshpaz(dA, _k3))
 teng("bersin: 05.09 tegilmadi", "Abbosxon", _oshpaz(dA, _k5))
-teng("bersin: yuvuvchi ham to'g'rilandi", "Otabek", _yuvuvchi(dA, _k3))
+teng("bersin: yuvuvchi ham to'g'rilandi", "Abbosxon", _yuvuvchi(dA, _k3))
 _yangi_soni = _pishirish_soni(dA)
 teng("bersin: Abbosxonda bitta ko'p", _oldingi_soni["Abbosxon"] + 1,
      _yangi_soni["Abbosxon"])
@@ -1814,9 +1854,1599 @@ tekshir("soat o'tgach yana chiqiladi",
         dars.kerakmi(dD, _datetime.now() + _td(hours=2)))
 
 
+# ════════════════════════════════════ takroriy vazifa
+#
+# "Namoz o'qish har kuni" - qoida `vazifa_takror` da, kunlar esa
+# `vazifa` da. Bu yerda tekshiriladigan va'dalar:
+#
+#   * to'ldirish IDEMPOTENT: ikkinchi chaqiruv nusxa yozmaydi;
+#   * ufq har kuni suriladi, ya'ni ro'yxat tugamaydi;
+#   * o'tmishga hech qachon yozilmaydi;
+#   * qo'lda o'chirilgan kun QAYTA TIRILMAYDI;
+#   * qoida to'xtatilsa bajarilgani va o'tgani JOYIDA QOLADI.
+
+print("\n── takroriy vazifa ──────────────────────────────────────")
+
+dT = dbm.Db(_TMP / "bT.db", zaxirasiz=True)
+tF = entries.odam_qosh(dT, "Fayzulloxon")
+tO = entries.odam_qosh(dT, "Otabek")
+_TB = _date(2026, 9, 9)              # chorshanba
+_TOX = _TB + _td(days=vz.TAKROR_UFQ)
+
+
+def _tkunlar(odam=None, dan=None, gacha=None):
+    return vz.oraliq(dT, (dan or _TB).isoformat(),
+                     (gacha or _TOX).isoformat(), odam)
+
+
+_namoz = vz.takror_qosh(dT, "Namoz o'qish", tF, "06:00", 20, bugun=_TB)
+_kun = _tkunlar(tF)
+teng("har kuni: ufq bo'yicha hamma kun yozildi", vz.TAKROR_UFQ + 1, len(_kun))
+teng("birinchi kun - bugun", _TB.isoformat(), _kun[0]["sana"])
+tekshir("hammasi qoidadan chiqqan", all(vz.takrorlimi(v) for v in _kun))
+teng("kalit sana bilan quriladi",
+     f"takror:{_namoz}:{_TB.isoformat()}", _kun[0]["manba"])
+teng("vaqt va davomiylik qoidadan", ("06:00", 20),
+     (_kun[0]["vaqt"], _kun[0]["davomiylik"]))
+
+# Idempotentlik: xabarchi har DAQIQADA chaqiradi.
+teng("qayta to'ldirish nusxa yozmaydi", 0, vz.takror_toldir(dT, _TB))
+teng("kunlar soni o'zgarmadi", vz.TAKROR_UFQ + 1, len(_tkunlar(tF)))
+
+# Ufq suriladi - "yana 30 kunga yozib qo'y" degan ish yo'q.
+teng("ertasiga bitta yangi kun qo'shiladi", 1,
+     vz.takror_toldir(dT, _TB + _td(days=1)))
+teng("o'tmishga yozilmaydi", 0,
+     len(_tkunlar(tF, _date(2026, 1, 1), _TB - _td(days=1))))
+
+# Qo'lda o'chirilgan kun qaytib kelmaydi.
+_ertaga = [v for v in _tkunlar(tF) if v["sana"] == (_TB + _td(days=1)).isoformat()]
+vz.ochir(dT, _ertaga[0]["id"])
+teng("o'chirilgan kun tirilmaydi", 0, vz.takror_toldir(dT, _TB))
+tekshir("o'sha kun kalendarda yo'q",
+        not [v for v in _tkunlar(tF)
+             if v["sana"] == (_TB + _td(days=1)).isoformat()])
+
+# ── tanlangan kunlar
+_dush_juma = vz.takror_qosh(dT, "Sport", tO, "07:00", 60,
+                            naqsh=vz.NAQSH_KUNLAR, kunlar=[0, 4], bugun=_TB)
+_sport = [v for v in _tkunlar(tO) if v["nom"] == "Sport"]
+tekshir("faqat dushanba va juma",
+        {_date.fromisoformat(v["sana"]).weekday() for v in _sport} == {0, 4})
+tekshir("bir necha hafta yoziladi", len(_sport) >= 8)
+tekshir("bo'sh kun ro'yxati rad etiladi",
+        _yiqiladimi(lambda: vz.takror_qosh(dT, "X", tO,
+                                           naqsh=vz.NAQSH_KUNLAR,
+                                           kunlar=[], bugun=_TB)))
+
+# ── har N kunda
+_har3 = vz.takror_qosh(dT, "Kir yuvish", tO, "18:00", 60,
+                       naqsh=vz.NAQSH_ORALIQ, oraliq=3, bugun=_TB)
+_kir = sorted(v["sana"] for v in _tkunlar(tO) if v["nom"] == "Kir yuvish")
+teng("sanoq boshlanishdan yuradi", _TB.isoformat(), _kir[0])
+teng("keyingisi uch kundan keyin", (_TB + _td(days=3)).isoformat(), _kir[1])
+tekshir("oraliq 0 rad etiladi",
+        _yiqiladimi(lambda: vz.takror_qosh(dT, "Y", tO,
+                                           naqsh=vz.NAQSH_ORALIQ,
+                                           oraliq=0, bugun=_TB)))
+
+# ── to'xtatish: tarix qoladi, kelajak ketadi
+_bugungi = [v for v in _tkunlar(tF) if v["sana"] == _TB.isoformat()][0]
+vz.bajar(dT, _bugungi["id"])
+_keyingi = [v for v in _tkunlar(tF)
+            if v["sana"] == (_TB + _td(days=5)).isoformat()][0]
+vz.takror_ochir(dT, _namoz, bugun=_TB)
+tekshir("bajarilgan kun joyida qoladi",
+        vz.bitta(dT, _bugungi["id"]) is not None)
+tekshir("kelajakdagi kun olib tashlanadi",
+        vz.bitta(dT, _keyingi["id"]) is None)
+tekshir("qoida ro'yxatdan chiqdi",
+        "Namoz o'qish" not in [t["nom"] for t in vz.takrorlar(dT)])
+teng("to'xtagan qoida qayta to'lmaydi", 0, vz.takror_toldir(dT, _TB))
+tekshir("qoidasiz qolgan kun ham takroriy deb bilinadi",
+        vz.takrorlimi(vz.bitta(dT, _bugungi["id"])))
+tekshir("lekin egasi topilmaydi",
+        vz.takror_egasi(dT, vz.bitta(dT, _bugungi["id"])) is None)
+
+# ── boshqa jadvallarga tegmaydi
+tekshir("takror kitob tengligiga tegmaydi", ledger.audit(dT)["toza"])
+
+# ── undo: qoida va undan chiqqan kunlar BITTA qadam
+dT2 = dbm.Db(_TMP / "bT2.db", zaxirasiz=True)
+t2 = entries.odam_qosh(dT2, "Abbosxon")
+vz.takror_qosh(dT2, "Dori ichish", t2, "08:00", 10, bugun=_TB)
+teng("qoidadan kunlar chiqdi", vz.TAKROR_UFQ + 1,
+     len(vz.oraliq(dT2, _TB.isoformat(), _TOX.isoformat())))
+dT2.undo()
+teng("bitta undo hammasini oldi", 0,
+     len(vz.oraliq(dT2, _TB.isoformat(), _TOX.isoformat())))
+teng("qoida ham qaytdi", 0, len(vz.takrorlar(dT2)))
+
+
+# ═════════════════════════════════════════════════════════ namoz qazosi
+#
+# «Qazo bo'ldi»: namoz QAZO holatiga o'tadi va o'sha odamga
+# «qazosini o'qish» ishi yoziladi — bitta amal, bitta undo.
+
+print("\n── namoz qazosi ─────────────────────────────────────────")
+
+_asr_q = vz.takror_qosh(dT, "Asr namozi", tF, "17:00", 5, bugun=_TB)
+_asr1 = [v for v in _tkunlar(tF) if v["nom"] == "Asr namozi"
+         and v["sana"] == _TB.isoformat()][0]
+tekshir("«Asr namozi» — namoz", vz.namozmi(_asr1))
+tekshir("«Peshin» ham namoz", vz.namozmi({"nom": "Peshin", "manba": None}))
+tekshir("«Shom nomozi» (imlo) ham namoz",
+        vz.namozmi({"nom": "Shom nomozi", "manba": None}))
+tekshir("«Sport» namoz emas", not vz.namozmi({"nom": "Sport", "manba": None}))
+tekshir("namoz bo'lmagan ishni qazo qilib bo'lmaydi",
+        _yiqiladimi(lambda: vz.qazo_qil(dT, _sport[0]["id"], bugun=_TB)))
+
+_qid = vz.qazo_qil(dT, _asr1["id"], bugun=_TB)
+_q = vz.bitta(dT, _qid)
+teng("namoz qazo holatida", vz.QAZO, vz.bitta(dT, _asr1["id"])["holat"])
+teng("qazo ishi nomi", "Asr namozi — qazosini o'qish", _q["nom"])
+teng("qazo ishi o'sha odamda", tF, _q["odam_id"])
+teng("qazo ishi bugunga, vaqtsiz", (_TB.isoformat(), None),
+     (_q["sana"], _q["vaqt"]))
+tekshir("qazo ishining o'zi namoz deb olinmaydi", not vz.namozmi(_q))
+tekshir("qazo bo'lgan namoz yopiq — eslatma so'ramaydi",
+        vz.yopiqmi(vz.bitta(dT, _asr1["id"])))
+tekshir("qazoni qayta qazo qilib bo'lmaydi",
+        _yiqiladimi(lambda: vz.qazo_qil(dT, _asr1["id"], bugun=_TB)))
+teng("sanoqda qazo alohida", 1,
+     vz.sanoq(dT, _TB.isoformat(), _TB.isoformat(), tF)["qazo"])
+
+# O'tgan kun qazo bo'lsa ham qazo ishi BUGUNGA tushadi.
+_asr0 = vz.qosh(dT, "Asr namozi", tF, _TB - _td(days=2), "17:00", 5)
+_qid0 = vz.qazo_qil(dT, _asr0, bugun=_TB)
+teng("o'tgan kunning qazosi bugunga", _TB.isoformat(),
+     vz.bitta(dT, _qid0)["sana"])
+
+# Undo — ikkalasi birga qaytadi.
+dT.undo()
+teng("undo: namoz yana ochiq", vz.OCHIQ, vz.bitta(dT, _asr0)["holat"])
+tekshir("undo: qazo ishi yo'q", vz.bitta(dT, _qid0) is None)
+
+# Qayta ochilsa — hali o'qilmagan qazo ishi olib tashlanadi.
+vz.bajar(dT, _asr1["id"], False)
+teng("qayta ochildi", vz.OCHIQ, vz.bitta(dT, _asr1["id"])["holat"])
+tekshir("ochiq qazo ishi ham ketdi", vz.bitta(dT, _qid) is None)
+
+
+# ═══════════════════════════════════════════ analitika: doira bo'laklari
+
+print("\n── analitika: doira bo'laklari ──────────────────────")
+
+dP = dbm.Db(_TMP / "bP.db", zaxirasiz=True)
+pF = entries.odam_qosh(dP, "Fayzulloxon")
+_pt = {r["nom"]: r["id"] for r in dP.q("SELECT id, nom FROM turi")}
+_P1, _P2 = "2026-09-01", "2026-09-30"
+
+
+def _prasxod(summa, tur=None, sana="2026-09-10"):
+    return entries.rasxod_qosh(dP, sana, "sinov", summa, pF, umumiymi=False,
+                               turi_id=_pt[tur] if tur else None)
+
+
+teng("rasxod yo'q — bo'lak yo'q", [], ledger.doira_bolaklari(dP, _P1, _P2))
+
+# Uchta teng bo'lak: oddiy yaxlitlash 99,9% berardi.
+for _t in ("Ovqat", "Kiyim", "Transport"):
+    _prasxod(100_000, _t)
+_uch = ledger.doira_bolaklari(dP, _P1, _P2)
+teng("uch teng bo'lak foizi aynan 100%", 1000, sum(b["ulush"] for b in _uch))
+teng("uch teng bo'lak: 33,4 / 33,3 / 33,3", [333, 333, 334],
+     sorted(b["ulush"] for b in _uch))
+tekshir("5 tadan kam — yig'ilmaydi",
+        all(b["tur"] == "turi" for b in _uch))
+
+for _t, _s in (("Bozorlik", 90_000), ("Gigiena", 20_000),
+               ("Sog'liq", 15_000), ("Kommunal", 5_000)):
+    _prasxod(_s, _t)
+_prasxod(900_000)                                  # kategoriyasiz — eng kattasi
+_prasxod(700_000, "Ovqat", sana="2026-08-31")      # oraliqdan tashqarida
+_ochir = _prasxod(500_000, "Kiyim")
+entries.rasxod_ochir(dP, _ochir)                   # o'chirilgan
+
+_bol = ledger.doira_bolaklari(dP, _P1, _P2, korsat=4)
+_jami = dP.skalyar("SELECT SUM(summa) FROM rasxod WHERE ochirilgan=0"
+                   " AND sana BETWEEN ? AND ?", _P1, _P2)
+teng("bo'laklar yig'indisi = oraliqdagi rasxod", _jami,
+     sum(b["summa"] for b in _bol))
+teng("foizlar yig'indisi aynan 100%", 1000, sum(b["ulush"] for b in _bol))
+teng("korsat=4 — 4 ta kategoriya + «Qolganlari»", 5,
+     sum(1 for b in _bol if b["tur"] in ("turi", "qolgan")))
+_hammasi = ledger.doira_bolaklari(dP, _P1, _P2, korsat=100)
+tekshir("hammasi ochilsa «Qolganlari» yo'q",
+        all(b["tur"] != "qolgan" for b in _hammasi))
+teng("ochilganda ham yig'indi o'sha", _jami, sum(b["summa"] for b in _hammasi))
+teng("birlamchi — 6 ta ko'rsatiladi", 6, ledger.DOIRA_QADAM)
+teng("tartib: kategoriyalar katta→kichik, keyin qolgan, keyin kategoriyasiz",
+     ["turi", "turi", "turi", "turi", "qolgan", "kategoriyasiz"],
+     [b["tur"] for b in _bol])
+teng("kategoriyasiz katta bo'lsa ham oxirida", 900_000, _bol[-1]["summa"])
+teng("qolganlari = kichik kategoriyalar yig'indisi", 20_000 + 15_000 + 5_000,
+     _bol[4]["summa"])
+teng("qolganlari ichida kimlar borligi aytiladi", 3, len(_bol[4]["ichida"]))
+tekshir("kategoriyalar kamayish tartibida",
+        [b["summa"] for b in _bol[:4]]
+        == sorted((b["summa"] for b in _bol[:4]), reverse=True))
+tekshir("o'chirilgan rasxod kirmaydi",
+        next(b for b in _bol if b["nom"] == "Kiyim")["summa"] == 100_000)
+dP.yop()
+
+
+# ═════════════════════════════════════════════════════════ tashqi qarz
+
+print("\n── Tashqi qarz ──")
+dX = dbm.Db(_TMP / "bX.db", zaxirasiz=True)
+xF = entries.odam_qosh(dX, "Fayzulloxon")
+xO = entries.odam_qosh(dX, "Otabek")
+entries.kirim_qosh(dX, "2026-09-01", xF, 1_000_000)
+
+
+def _xb(oid):
+    return ledger.balans(dX, oid)
+
+
+_n0, _a0, _s0 = _xb(xF)["naqd"], _xb(xF)["adolat"], _xb(xF)["sof"]
+_tq = entries.tashqi_qarz_qosh(dX, "2026-09-05", xF, "  Aziz aka ", 500_000,
+                               "telefon")
+teng("qarz naqdga tushadi", _n0 + 500_000, _xb(xF)["naqd"])
+teng("adolat ham oshadi (ayniyat saqlanadi)", _a0 + 500_000, _xb(xF)["adolat"])
+teng("sof ga tegmaydi — uydagilar orasidagi qarz emas", _s0, _xb(xF)["sof"])
+teng("qoldiq ko'rinadi", 500_000, _xb(xF)["tashqi_qoldiq"])
+teng("boshqa odamga tegmaydi", 0, _xb(xO)["naqd"])
+teng("kimdan tozalab yoziladi", "Aziz aka",
+     dX.skalyar("SELECT kimdan FROM tashqi_qarz WHERE id=?", _tq))
+tekshir("audit toza (qarz olingandan keyin)", ledger.audit(dX).toza,
+        "; ".join(ledger.audit(dX).muammolar))
+tekshir("juft qarzlarda chiqmaydi", ledger.juft_qarzlar(dX) == [])
+
+entries.tashqi_tolov_qosh(dX, _tq, "2026-09-10", 200_000)
+teng("qisman qaytarildi — qoldiq", 300_000, _xb(xF)["tashqi_qoldiq"])
+teng("qaytarilgan naqddan chiqadi", _n0 + 300_000, _xb(xF)["naqd"])
+teng("tashqi_qoldiq funksiyasi", 300_000, entries.tashqi_qoldiq(dX, _tq))
+tekshir("ortig'i bilan qaytarib bo'lmaydi",
+        _yiqiladimi(lambda: entries.tashqi_tolov_qosh(dX, _tq, "2026-09-11",
+                                                      300_001)))
+tekshir("kimdan bo'sh bo'lsa yiqiladi",
+        _yiqiladimi(lambda: entries.tashqi_qarz_qosh(dX, "2026-09-05", xF,
+                                                     "  ", 1)))
+tekshir("ochiq tashqi qarzli odamni o'chirib bo'lmaydi",
+        _yiqiladimi(lambda: entries.odam_ochir(dX, xF)))
+_ro = ledger.tashqi_qarzlar(dX)
+teng("ro'yxat: olingan/qaytgan/qoldiq",
+     [(500_000, 200_000, 300_000)],
+     [(r["summa"], r["qaytgan"], r["qoldiq"]) for r in _ro])
+teng("oldingi ismlar taklif qilinadi", ["Aziz aka"],
+     ledger.tashqi_kimdanlar(dX))
+
+entries.tashqi_tolov_qosh(dX, _tq, "2026-09-12", 300_000)
+teng("to'liq qaytarildi", 0, _xb(xF)["tashqi_qoldiq"])
+teng("yopilgani ochiqlar ro'yxatida yo'q", [],
+     ledger.tashqi_qarzlar(dX, faqat_ochiq=True))
+tekshir("audit toza (qaytarilgandan keyin)", ledger.audit(dX).toza)
+
+# O'chirish — to'lovlari bilan birga, bitta undo qadami.
+_tq2 = entries.tashqi_qarz_qosh(dX, "2026-09-15", xF, "Bank", 400_000)
+entries.tashqi_tolov_qosh(dX, _tq2, "2026-09-16", 100_000)
+_n1 = _xb(xF)["naqd"]
+entries.tashqi_qarz_ochir(dX, _tq2)
+teng("o'chirilgan qarz va to'lovi naqddan chiqadi", _n1 - 300_000,
+     _xb(xF)["naqd"])
+teng("to'lovlari ham o'chdi", 0, dX.skalyar(
+    "SELECT COUNT(*) FROM tashqi_tolov WHERE tashqi_qarz_id=? AND ochirilgan=0",
+    _tq2))
+dX.undo()
+teng("undo — qarz va to'lov birga qaytadi", _n1, _xb(xF)["naqd"])
+tekshir("audit toza (undo'dan keyin)", ledger.audit(dX).toza)
+
+# Alohida oyna: kimga qancha qaytarish kerak + qarzni bir tugmada yopish.
+_n2 = _xb(xF)["naqd"]
+_tq3 = entries.tashqi_qarz_qosh(dX, "2026-09-18", xF, "Aziz aka", 250_000)
+teng("kimga qaytarish: qarz beruvchi bo'yicha, kattasi birinchi",
+     [("Bank", 300_000, 1), ("Aziz aka", 250_000, 1)],
+     [(x["kimdan"], x["qoldiq"], x["soni"])
+      for x in ledger.tashqi_kimga_qaytarish(dX)])
+entries.tashqi_tolov_qosh(dX, _tq3, "2026-09-19", 50_000)
+_yt = entries.tashqi_qarz_yop(dX, _tq3, "2026-09-20")
+teng("yopish — butun qoldiq bitta to'lov", 200_000,
+     dX.skalyar("SELECT summa FROM tashqi_tolov WHERE id=?", _yt))
+teng("yopilgan qarz qoldig'i 0", 0, entries.tashqi_qoldiq(dX, _tq3))
+teng("yopilgani «kimga qaytarish» dan chiqdi", ["Bank"],
+     [x["kimdan"] for x in ledger.tashqi_kimga_qaytarish(dX)])
+teng("olib-qaytarilgan qarz naqdni o'zgartirmaydi", _n2, _xb(xF)["naqd"])
+tekshir("yopilganni qayta yopib bo'lmaydi",
+        _yiqiladimi(lambda: entries.tashqi_qarz_yop(dX, _tq3, "2026-09-21")))
+tekshir("audit toza (yopishdan keyin)", ledger.audit(dX).toza)
+dX.undo()
+teng("undo — yopish bekor, qoldiq qaytdi", 200_000,
+     entries.tashqi_qoldiq(dX, _tq3))
+
+# Yopilgan oy tashqi qarzni ham qulflaydi.
+dX.con.execute("INSERT INTO davr(oy,holat) VALUES('2026-08','yopilgan')")
+try:
+    entries.tashqi_qarz_qosh(dX, "2026-08-20", xF, "Aziz aka", 1_000)
+    _qulf = False
+except dbm.DavrYopilgan:
+    _qulf = True
+tekshir("yopilgan oyga tashqi qarz yozilmaydi", _qulf)
+dX.yop()
+
+
+# ═════════════════════════════════════════ umumiy tashqi qarz
+
+print("\n── Umumiy tashqi qarz ──")
+dUq = dbm.Db(_TMP / "bUq.db", zaxirasiz=True)
+uF = entries.odam_qosh(dUq, "Fayzulloxon")
+uO = entries.odam_qosh(dUq, "Otabek")
+uA = entries.odam_qosh(dUq, "Abbosxon")
+entries.kirim_qosh(dUq, "2026-09-01", uF, 1_000_000)
+
+
+def _b(oid):
+    r = ledger.balans(dUq, oid)
+    return r["naqd"], r["sof"], r["adolat"]
+
+
+_boshi = {o: _b(o) for o in (uF, uO, uA)}
+
+
+def _farq(oid):
+    return tuple(x - y for x, y in zip(_b(oid), _boshi[oid]))
+
+
+_uq = entries.tashqi_qarz_qosh(dUq, "2026-09-10", uF, "Aziz aka", 300_000,
+                               "ijara", umumiy=True)
+# Yangi qoida (2026-10-01): pul hammaga TENG beriladi, ichki qarz yo'q.
+for _o, _n in ((uF, "olgan"), (uO, "Otabek"), (uA, "Abbosxon")):
+    teng(f"{_n}: qo'liga o'z ulushi — naqd +100k, sof 0, adolat +100k",
+         (100_000, 0, 100_000), _farq(_o))
+teng("kim kimga: umumiy tashqi qarz ichki qarz yaratmaydi", [],
+     ledger.juft_qarzlar(dUq))
+teng("tashqi qoldiq — har kimda o'z ulushi", [100_000] * 3,
+     [ledger.balans(dUq, o)["tashqi_qoldiq"] for o in (uF, uO, uA)])
+teng("qarzim: Otabekda o'z ulushi", 100_000,
+     ledger.odam_qarzlari(dUq, uO)["tashqi_jami"])
+tekshir("audit toza (olingandan keyin)", ledger.audit(dUq).toza,
+        "; ".join(ledger.audit(dUq).muammolar))
+
+entries.tashqi_tolov_qosh(dUq, _uq, "2026-09-15", 150_000)
+teng("yarmi qaytarildi: hammadan teng ayirildi", [(50_000, 0, 50_000)] * 3,
+     [_farq(o) for o in (uF, uO, uA)])
+tekshir("audit toza (qisman)", ledger.audit(dUq).toza)
+entries.tashqi_tolov_qosh(dUq, _uq, "2026-09-20", 150_000)
+for _o, _n in ((uF, "olgan"), (uO, "Otabek"), (uA, "Abbosxon")):
+    teng(f"to'liq qaytarildi — {_n}: hammasi joyiga qaytdi", (0, 0, 0), _farq(_o))
+teng("to'liq qaytarilgach — ichki qarz yo'q", [], ledger.juft_qarzlar(dUq))
+tekshir("audit toza (to'liq)", ledger.audit(dUq).toza)
+
+# Ikki kishiga, toq summa — tiyin yo'qolmaydi
+_uq2 = entries.tashqi_qarz_qosh(dUq, "2026-09-21", uO, "Bank", 100_001,
+                                umumiy=True, qatnashchilar=[uO, uF])
+teng("ulushlar yig'indisi aynan qarz", 100_001, dUq.skalyar(
+    "SELECT SUM(summa) FROM tashqi_ulush WHERE qarz_id=? AND tolov_id IS NULL",
+    _uq2))
+tekshir("Abbosxonga ulush tushmadi", not dUq.q1(
+    "SELECT 1 FROM tashqi_ulush WHERE qarz_id=? AND odam_id=?", _uq2, uA))
+entries.tashqi_tolov_qosh(dUq, _uq2, "2026-09-22", 33_333)
+teng("to'lov ulushlari yig'indisi aynan to'lov", 33_333, dUq.skalyar(
+    "SELECT SUM(summa) FROM tashqi_ulush WHERE qarz_id=? AND tolov_id IS NOT NULL",
+    _uq2))
+tekshir("audit toza (toq summa)", ledger.audit(dUq).toza)
+entries.tashqi_qarz_ochir(dUq, _uq2)
+teng("o'chirilgan umumiy qarz — hech kimga ta'sir yo'q", (0, 0, 0), _farq(uO))
+tekshir("audit toza (o'chirilgach)", ledger.audit(dUq).toza)
+
+# Mavjud shaxsiy qarzni (to'lovi bilan) umumiy qilish va qaytarish
+_uq3 = entries.tashqi_qarz_qosh(dUq, "2026-09-23", uF, "Akbarshox", 90_000)
+entries.tashqi_tolov_qosh(dUq, _uq3, "2026-09-24", 30_000)
+_oldin = {o: _b(o) for o in (uF, uO, uA)}
+entries.tashqi_umumiy_qoy(dUq, _uq3, [uF, uO, uA])
+teng("umumiy qilindi: Otabek — qolgan 60k dan ulushi 20k (qo'liga)",
+     (20_000, 0), (_b(uO)[0] - _oldin[uO][0], _b(uO)[1] - _oldin[uO][1]))
+teng("olganning naqdi — endi faqat o'z ulushi", _oldin[uF][0] - 40_000,
+     _b(uF)[0])
+tekshir("audit toza (umumiy qilingach)", ledger.audit(dUq).toza)
+tekshir("ro'yxatda ulushlar ko'rinadi", "Otabek:30000" in next(
+    r["ulushlar"] for r in ledger.tashqi_qarzlar(dUq) if r["id"] == _uq3))
+dUq.undo()
+teng("undo — yana shaxsiy", _oldin[uO], _b(uO))
+entries.tashqi_umumiy_qoy(dUq, _uq3, [uF, uO, uA])
+entries.tashqi_umumiy_qoy(dUq, _uq3, None)
+teng("shaxsiy qilinsa — avvalgi holat", _oldin[uO], _b(uO))
+tekshir("bo'sh ro'yxat bilan umumiy qilib bo'lmaydi",
+        _yiqiladimi(lambda: entries.tashqi_umumiy_qoy(dUq, _uq3, [])))
+tekshir("audit toza (oxiri)", ledger.audit(dUq).toza)
+
+# Qaytarish rasxoddagidek sozlanadi: aniq summalar
+_uq4 = entries.tashqi_qarz_qosh(dUq, "2026-09-25", uF, "Do'kon", 90_000,
+                                umumiy=True, qatnashchilar=[uF, uO, uA])
+_o4 = {o: _b(o) for o in (uF, uO, uA)}
+entries.tashqi_tolov_qosh(dUq, _uq4, "2026-09-26", 30_000,
+                          usul=money.USUL_ANIQ,
+                          parametrlar={uF: 20_000, uO: 10_000})
+teng("sozlangan qaytarish: kim qancha to'lagan", (-20_000, -10_000, 0),
+     tuple(_b(o)[0] - _o4[o][0] for o in (uF, uO, uA)))
+tekshir("sozlangan qaytarish: sof o'zgarmadi",
+        all(_b(o)[1] == _o4[o][1] for o in (uF, uO, uA)))
+_uq5 = entries.tashqi_qarz_qosh(dUq, "2026-09-27", uF, "Bank", 100_000,
+                                umumiy=True, usul=money.USUL_FOIZ,
+                                parametrlar={uF: 50, uO: 50})
+teng("olishda ham sozlanadi: foiz", {uF: 50_000, uO: 50_000}, {
+    r["odam_id"]: r["summa"] for r in dUq.q(
+        "SELECT odam_id, summa FROM tashqi_ulush WHERE qarz_id=?"
+        " AND tolov_id IS NULL AND ochirilgan=0", _uq5)})
+tekshir("audit toza (sozlangan)", ledger.audit(dUq).toza)
+
+# Botda: umumiy qarz ulushdorga ham ko'rinadi — o'z ulushi bilan
+from core import tg_menyu as _tm  # noqa: E402
+_uq4 = entries.tashqi_qarz_qosh(dUq, "2026-09-25", uF, "Shoxrux aka", 60_000,
+                                umumiy=True, qatnashchilar=[uF, uO, uA])
+entries.tashqi_tolov_qosh(dUq, _uq4, "2026-09-25", 30_000)
+_tO = _tm.tashqi(dUq, uO)
+tekshir("bot: Otabek umumiy qarzni ko'radi", "Shoxrux aka" in _tO and "umumiy" in _tO)
+tekshir("bot: Otabekning qolgan ulushi 10 000",
+        "Sizning ulushingiz: <b>" + money.fmt_som(10_000) in _tO)
+tekshir("bot: shaxsiy qarz boshqaga ko'rinmaydi", "Akbarshox" not in _tO)
+tekshir("bot: olgan odam ham ko'radi", "Shoxrux aka" in _tm.tashqi(dUq, uF))
+dUq.yop()
+
+
+# ═════════════════════════════════════════ ikonkali kategoriya
+
+print("\n── Ikonkali kategoriya ──")
+from core import kategoriya as kt
+from core import plan  # noqa: E402
+dI = dbm.Db(_TMP / "bI.db", zaxirasiz=True)
+iF = entries.odam_qosh(dI, "Fayzulloxon")
+_bl = kt.belgilar()
+teng("200 ta ikonka kesilgan, yashirinlari chiqmaydi",
+     200 - len(kt.YASHIRIN), len(_bl))
+tekshir("yashirin ikonka ro'yxatda yo'q", not kt.YASHIRIN & set(_bl))
+tekshir("ikonkalar nomsiz keladi", kt.nomlanganlar(dI) == {})
+_f1, _f2 = _bl[0], _bl[1]
+_t1 = kt.nom_ber(dI, _f1, "  Kitoblar ")
+teng("nom berildi — kategoriya bo'ldi", "Kitoblar",
+     dI.skalyar("SELECT nom FROM turi WHERE id=?", _t1))
+teng("ikonka faylga bog'landi", _f1,
+     dI.skalyar("SELECT rasm FROM turi WHERE id=?", _t1))
+kt.nom_ber(dI, _f1, "Darsliklar")
+teng("qayta nom — o'sha kategoriya o'zgaradi, yangisi yaratilmaydi",
+     (_t1, "Darsliklar"), (kt.nomlanganlar(dI)[_f1]["id"],
+                           kt.nomlanganlar(dI)[_f1]["nom"]))
+tekshir("band nom rad etiladi",
+        _yiqiladimi(lambda: kt.nom_ber(dI, _f2, "Darsliklar")))
+tekshir("bo'sh nom rad etiladi", _yiqiladimi(lambda: kt.nom_ber(dI, _f2, " ")))
+tekshir("yo'q ikonka rad etiladi",
+        _yiqiladimi(lambda: kt.nom_ber(dI, "yoq_99.png", "X")))
+
+_r = entries.rasxod_qosh(dI, "2026-09-20", "daftar", 30_000, iF,
+                         umumiymi=False, turi_id=_t1)
+kt.nomini_olib_tashla(dI, _f1)
+tekshir("nomi olib tashlangan ikonka yana nomsiz", _f1 not in kt.nomlanganlar(dI))
+teng("eski rasxod kategoriyasini yo'qotmaydi", _t1,
+     dI.skalyar("SELECT turi_id FROM rasxod WHERE id=?", _r))
+teng("qayta o'sha nom — eski kategoriya tiriladi", _t1,
+     kt.nom_ber(dI, _f2, "Darsliklar"))
+
+# Sabab va kategoriya majburiy
+tekshir("sababsiz rasxod rad etiladi",
+        _yiqiladimi(lambda: entries.rasxod_majburiy(dI, "  ", _t1)))
+tekshir("kategoriyasiz rasxod rad etiladi",
+        _yiqiladimi(lambda: entries.rasxod_majburiy(dI, "non", None)))
+kt.nomini_olib_tashla(dI, _f2)
+tekshir("nofaol kategoriya rad etiladi",
+        _yiqiladimi(lambda: entries.rasxod_majburiy(dI, "non", _t1)))
+_ot = dI.skalyar("SELECT id FROM turi WHERE faol=1 AND rasm IS NULL LIMIT 1")
+tekshir("sabab + faol kategoriya — o'tadi",
+        not _yiqiladimi(lambda: entries.rasxod_majburiy(dI, "non", _ot)))
+tekshir("audit toza", ledger.audit(dI).toza)
+
+# Analitika: hamma kategoriya, ishlatilmagani ham
+_tA = kt.nom_ber(dI, _bl[10], "Sinov yangi")
+entries.rasxod_qosh(dI, "2026-09-21", "x", 10_000, iF, umumiymi=False,
+                    turi_id=_ot)
+entries.rasxod_qosh(dI, "2026-09-22", "y", 5_000, iF, umumiymi=False)
+_kj = ledger.kategoriya_jadvali(dI, "2026-09-01", "2026-09-30")
+_kjn = {x["nom"]: x for x in _kj}
+tekshir("yangi, ishlatilmagan kategoriya ham bor (0 bilan)",
+        _kjn.get("Sinov yangi", {}).get("summa") == 0)
+tekshir("ikonkasi bilan", _kjn["Sinov yangi"]["rasm"] == _bl[10])
+teng("hamma faol kategoriya ro'yxatda",
+     dI.skalyar("SELECT COUNT(*) FROM turi WHERE faol=1"),
+     sum(1 for x in _kj if x["turi_id"] is not None and x["nom"] != "Darsliklar"))
+tekshir("nofaol, lekin rasxodi bor kategoriya chiqadi",
+        "Darsliklar" in _kjn)
+teng("kategoriyasiz oxirida", "Kategoriyasiz", _kj[-1]["nom"])
+teng("ulushlar yig'indisi aynan 100%", 1000, sum(x["ulush"] for x in _kj))
+teng("summa yig'indisi = oraliqdagi rasxod",
+     dI.skalyar("SELECT SUM(summa) FROM rasxod WHERE ochirilgan=0"
+                " AND sana BETWEEN '2026-09-01' AND '2026-09-30'"),
+     sum(x["summa"] for x in _kj))
+teng("oyning 1-kunidan bugungacha", ("2026-09-01", "2026-09-25"),
+     plan.oy_bugungacha("2026-09-25"))
+teng("1-noyabrda — faqat 1-noyabr", ("2026-11-01", "2026-11-01"),
+     plan.oy_bugungacha("2026-11-01"))
+dI.yop()
+
+
+# ═════════════════════════════════════════ mahsulotlar va daraxt
+
+print("\n── Mahsulotlar ──")
+from core import mahsulot as mh  # noqa: E402
+dM = dbm.Db(_TMP / "bM.db", zaxirasiz=True)
+mF = entries.odam_qosh(dM, "Fayzulloxon")
+mO = entries.odam_qosh(dM, "Otabek")
+_eski_turi = dM.skalyar("SELECT COUNT(*) FROM turi")
+_boz = dM.skalyar("SELECT id FROM turi WHERE nom='Bozorlik'")
+_mev = mh.kategoriya_qosh(dM, "Mevalar", _boz, rasm=mh.bosh_belgilar(dM)[0])
+_sab = mh.kategoriya_qosh(dM, "Sabzavotlar", _boz, rasm=mh.bosh_belgilar(dM)[0])
+_sut = mh.kategoriya_qosh(dM, "Sut mahsulotlari", _boz,
+                          rasm=mh.bosh_belgilar(dM)[0])
+_tro = mh.kategoriya_qosh(dM, "Tropik", _mev,                     # 3-daraja
+                          rasm=mh.bosh_belgilar(dM)[0])
+# Ichki kategoriyaga rasm majburiy, bo'sh va haqiqiy bo'lishi shart
+tekshir("ichki kategoriya rasmsiz — rad etiladi",
+        _yiqiladimi(lambda: mh.kategoriya_qosh(dM, "Rasmsiz", _boz)))
+tekshir("ichki kategoriya — yo'q rasm rad etiladi",
+        _yiqiladimi(lambda: mh.kategoriya_qosh(dM, "Soxta", _boz,
+                                               rasm="yoq_99.png")))
+_mev_rasm = dM.skalyar("SELECT rasm FROM turi WHERE id=?", _mev)
+tekshir("ichki kategoriya rasmi yozildi", bool(_mev_rasm))
+tekshir("band rasm (boshqa kategoriyada) rad etiladi",
+        _yiqiladimi(lambda: mh.kategoriya_qosh(dM, "Band", _boz,
+                                               rasm=_mev_rasm)))
+tekshir("band rasm bo'sh ro'yxatda yo'q", _mev_rasm not in mh.bosh_belgilar(dM))
+teng("rad etilganlar yozilmadi", 0,
+     dM.skalyar("SELECT COUNT(*) FROM turi WHERE nom IN ('Rasmsiz','Soxta','Band')"))
+teng("mavjud kategoriyalar o'chmadi", _eski_turi + 4,
+     dM.skalyar("SELECT COUNT(*) FROM turi WHERE faol=1"))
+_boz_tugun = next(t for t in mh.daraxt(dM) if t["id"] == _boz)
+teng("daraxt: Bozorlik ichida 3 ta ichki", 3, len(_boz_tugun["bolalar"]))
+teng("avlodlar — har chuqurlikda", {_boz, _mev, _sab, _sut, _tro},
+     set(mh.avlodlar(dM, _boz)))
+teng("yo'l nomi", "Bozorlik › Mevalar › Tropik", mh.yol_nomi(dM, _tro))
+tekshir("band nom rad etiladi",
+        _yiqiladimi(lambda: mh.kategoriya_qosh(dM, "Mevalar", _boz,
+                                               rasm=mh.bosh_belgilar(dM)[0])))
+
+_olma = mh.saqla(dM, nom="Olma", turi_id=_mev, narx=18_000, miqdor="1",
+                 olchov="kg")
+_banan = mh.saqla(dM, nom="Banan", turi_id=_tro, narx="25000", miqdor=None,
+                  ogirlik="", litr="", olchov="", izoh="")
+_sut_m = mh.saqla(dM, nom="Sut", turi_id=_sut, litr="0,9", narx=None)
+_non = mh.saqla(dM, nom="Non", turi_id=_boz)
+r = dM.q1("SELECT * FROM item WHERE id=?", _banan)
+tekshir("bo'sh maydonlar NULL — xato yo'q",
+        r["miqdor"] is None and r["ogirlik"] is None and r["olchov"] is None)
+teng("vergulli son o'qiladi", 0.9,
+     dM.skalyar("SELECT litr FROM item WHERE id=?", _sut_m))
+teng("bo'sh narx — 0", 0, dM.skalyar("SELECT narx FROM item WHERE id=?", _sut_m))
+tekshir("nomsiz mahsulot rad", _yiqiladimi(
+    lambda: mh.saqla(dM, nom=" ", turi_id=_mev)))
+tekshir("kategoriyasiz mahsulot rad", _yiqiladimi(
+    lambda: mh.saqla(dM, nom="X", turi_id=None)))
+tekshir("manfiy narx rad", _yiqiladimi(
+    lambda: mh.saqla(dM, nom="X", turi_id=_mev, narx=-1)))
+tekshir("son emas — tushunarli xato", _yiqiladimi(
+    lambda: mh.saqla(dM, nom="X", turi_id=_mev, ogirlik="abc")))
+
+teng("Bozorlik — ichkidagilar ham ko'rinadi", {"Olma", "Banan", "Sut", "Non"},
+     {r["nom"] for r in mh.mahsulotlar(dM, _boz)})
+teng("Mevalar — Tropik ichidagisi ham", {"Olma", "Banan"},
+     {r["nom"] for r in mh.mahsulotlar(dM, _mev)})
+teng("Sabzavotlar — bo'sh", [], mh.mahsulotlar(dM, _sab))
+teng("qidiruv (katta-kichik harf farqsiz)", ["Olma"],
+     [r["nom"] for r in mh.mahsulotlar(dM, None, "OLM")])
+teng("kategoriya yo'li mahsulotda", "Bozorlik › Mevalar › Tropik",
+     next(r for r in mh.mahsulotlar(dM) if r["nom"] == "Banan")["kategoriya"])
+
+mh.saqla(dM, _olma, nom="Olma", turi_id=_mev, narx=20_000, miqdor=1,
+         olchov="kg", faol=False)
+tekshir("faol emas — rasxod ro'yxatida yo'q",
+        "Olma" not in [r["nom"] for r in plan.turi_itemlari(dM, _boz)])
+tekshir("faol emas — Mahsulotlar varag'ida bor",
+        "Olma" in [r["nom"] for r in mh.mahsulotlar(dM, _boz)])
+teng("faol almashtirish", True, mh.faol_almashtir(dM, _olma))
+_ti = plan.turi_itemlari(dM, _boz)
+teng("rasxod oynasi: Bozorlik → ichkidagi mahsulotlar ham",
+     {"Olma", "Banan", "Sut", "Non"}, {r["nom"] for r in _ti})
+teng("o'zi to'g'ridan-to'g'ri Bozorlikdagi birinchi", "Non", _ti[0]["nom"])
+teng("ichkidagisi qaysi kategoriyada ekani bilan", "Tropik",
+     next(r for r in _ti if r["nom"] == "Banan")["turi_nom"])
+
+# Rasxod mahsulot bilan, narx o'zgarsa eski rasxod o'zgarmaydi
+_rx = entries.rasxod_qosh(dM, "2026-09-20", "Olma", 20_000, mF, umumiymi=True,
+                          turi_id=_mev, item_id=_olma)
+teng("rasxod mahsulotga bog'landi", _olma,
+     dM.skalyar("SELECT item_id FROM rasxod WHERE id=?", _rx))
+mh.saqla(dM, _olma, nom="Olma", turi_id=_mev, narx=30_000)
+teng("mahsulot narxi o'zgardi — eski rasxod o'zgarmadi", 20_000,
+     dM.skalyar("SELECT summa FROM rasxod WHERE id=?", _rx))
+mh.ochir(dM, _olma)
+teng("o'chirilgan mahsulot ro'yxatda yo'q", [],
+     [r for r in mh.mahsulotlar(dM) if r["id"] == _olma])
+teng("o'chirilgan mahsulotning rasxodi joyida", _olma,
+     dM.skalyar("SELECT item_id FROM rasxod WHERE id=? AND ochirilgan=0", _rx))
+dM.undo()
+tekshir("undo — mahsulot qaytdi",
+        any(r["id"] == _olma for r in mh.mahsulotlar(dM)))
+
+# Doira va budjet: ichki kategoriya otasiga qo'shiladi
+# Umumiy — «Reja va fakt» ning umumiy doirasi shularni sanaydi.
+entries.rasxod_qosh(dM, "2026-09-21", "bozor", 50_000, mF, umumiymi=True,
+                    turi_id=_boz)
+_tb = {t["nom"]: t["summa"] for t in ledger.turi_boyicha(dM, "2026-09-01",
+                                                          "2026-09-30")}
+teng("doira: Mevalar rasxodi Bozorlikka qo'shildi", 70_000, _tb.get("Bozorlik"))
+tekshir("doirada ichki kategoriya alohida bo'lak emas", "Mevalar" not in _tb)
+tekshir("«Hamma kategoriyalar» da faqat asosiylar",
+        "Mevalar" not in [x["nom"] for x in
+                          ledger.kategoriya_jadvali(dM, "2026-09-01", "2026-09-30")])
+plan.budjet_qoy(dM, _boz, "2026-09", 100_000)
+teng("budjet: ichki kategoriya rasxodi ham hisoblandi", 70_000,
+     next(b for b in plan.turi_budjet(dM, "2026-09") if b["turi_id"] == _boz)["fakt"])
+tekshir("audit toza", ledger.audit(dM).toza)
+
+# Reja va fakt (Analitika): oylik reja, kategoriya rejasi, oshib ketish
+import money as _mn
+teng("foiz: 1 860 000 / 3 000 000 = 62%", 62, _mn.foiz(1_860_000, 3_000_000))
+teng("foiz: oshib ketsa cheklanmaydi", 120, _mn.foiz(120, 100))
+tekshir("foiz: reja 0 — None", _mn.foiz(5, 0) is None)
+teng("oy surish: dekabr → yanvar", "2027-01", plan.oy_sur("2026-12", 1))
+
+
+def _rf_qator(oy="2026-09"):
+    r = plan.reja_va_fakt(dM, oy)
+    return r, next((q for q in r["qatorlar"] if q["turi_id"] == _boz), None)
+
+
+_rf, _rq = _rf_qator()
+tekshir("reja-fakt: faqat kategoriya rejasi — reja bor", _rf["reja_bor"])
+teng("reja-fakt: umumiy yo'q → reja = kategoriyalar yig'indisi",
+     _rf["turi_reja_jami"], _rf["reja"])
+teng("reja-fakt: Bozorlik (ichki bilan) fakt", 70_000, _rq["fakt"])
+teng("reja-fakt: Bozorlik qolgan", 30_000, _rq["qolgan"])
+teng("reja-fakt: 70% — yaxshi", ("yaxshi", 70), (_rq["holat"], _rq["foiz"]))
+tekshir("reja-fakt: ichki kategoriya alohida qator emas",
+        "Mevalar" not in [q["nom"] for q in _rf["qatorlar"]])
+teng("reja-fakt: umumiy fakt = oyning UMUMIY rasxodi (butun summasi)",
+     dM.skalyar("SELECT SUM(summa) FROM rasxod WHERE ochirilgan=0"
+                " AND umumiymi=1 AND kim_uchun IS NULL"
+                " AND sana BETWEEN '2026-09-01' AND '2026-09-30'"), _rf["fakt"])
+
+# Shaxsiy reja — alohida doira: o'z yozuvlari va o'z shaxsiy rasxodi
+_shx = entries.rasxod_qosh(dM, "2026-09-22", "kitob", 30_000, mF,
+                           umumiymi=False, turi_id=_boz)
+teng("shaxsiy rasxod umumiy faktga kirmaydi", _rf["fakt"],
+     plan.reja_va_fakt(dM, "2026-09")["fakt"])
+tekshir("shaxsiy reja: odamsiz rad etiladi", _yiqiladimi(
+    lambda: plan.reja_yozuv_saqla(dM, "2026-09-05", "x", _boz, 1,
+                                  umumiymi=False)))
+_shq = plan.reja_yozuv_saqla(dM, "2026-09-05", "Kitoblar", _boz, 40_000,
+                             umumiymi=False, odam_id=mF)
+_rs = plan.reja_va_fakt(dM, "2026-09", mF)
+teng("shaxsiy reja: reja/fakt/qolgan", (40_000, 30_000, 10_000),
+     (_rs["reja"], _rs["fakt"], _rs["qolgan"]))
+teng("shaxsiy reja umumiy rejaga qo'shilmaydi", _rf["reja"],
+     plan.reja_va_fakt(dM, "2026-09")["reja"])
+tekshir("shaxsiy reja: boshqa odamda ko'rinmaydi",
+        not plan.reja_bormi(dM, "2026-09", mO))
+teng("shaxsiy reja: yozuvlar ro'yxati doira bo'yicha", ([_shq], []),
+     ([y["id"] for y in plan.reja_yozuvlari(dM, "2026-09", mF)],
+      [y["id"] for y in plan.reja_yozuvlari(dM, "2026-09", mO)]))
+dM.undo()
+dM.undo()
+
+plan.reja_saqla(dM, "2026-09", 50_000, {_boz: 60_000})
+_rf, _rq = _rf_qator()
+teng("reja-fakt: umumiy reja qo'yildi", (50_000, True),
+     (_rf["reja"], _rf["umumiy_qoyilgan"]))
+teng("reja-fakt: oshib ketgani yashirilmaydi (manfiy qolgan)",
+     50_000 - _rf["fakt"], _rf["qolgan"])
+teng("reja-fakt: Bozorlik oshdi", ("oshdi", -10_000, 117),
+     (_rq["holat"], _rq["qolgan"], _rq["foiz"]))
+teng("reja-fakt: diqqat — oshib ketgan kategoriya", _boz,
+     _rf["diqqat"]["turi_id"])
+plan.reja_saqla(dM, "2026-09", 50_000, {_boz: 87_500})
+teng("reja-fakt: 80% — limitga yaqin", ("yaqin", 80),
+     (_rf_qator()[1]["holat"], _rf_qator()[1]["foiz"]))
+dM.undo()
+teng("reja-fakt: undo — bitta saqlash bitta qadam", 60_000, _rf_qator()[1]["reja"])
+dM.undo()
+_rf, _rq = _rf_qator()
+teng("reja-fakt: undo — umumiy reja va kategoriya qaytdi", (False, 100_000),
+     (_rf["umumiy_qoyilgan"], _rq["reja"]))
+tekshir("reja-fakt: 2026-10 da reja yo'q", not plan.reja_bormi(dM, "2026-10"))
+tekshir("reja-fakt: o'tgan oydan ko'chirildi",
+        plan.reja_kochir(dM, "2026-09", "2026-10")
+        and plan.turi_reja(dM, "2026-10") == plan.turi_reja(dM, "2026-09"))
+dM.undo()
+tekshir("reja-fakt: ko'chirish ham bitta undo", not plan.reja_bormi(dM, "2026-10"))
+tekshir("audit toza (reja-fakt)", ledger.audit(dM).toza)
+
+# Reja rasxod kabi: yozuv + mahsulotlar, kategoriya rejasiga qo'shiladi
+from core import rasxod_kirit as _rk
+_ni = plan.item_qosh(dM, "Reja non", 4_000, _mev)
+_yq = plan.reja_yozuv_saqla(dM, "2026-12-07", "Meva", _mev, 9_000,
+                            [{"item_id": _ni, "miqdor": 2, "summa": 8_000},
+                             {"item_id": _ni, "summa": 1_000}])
+teng("reja yozuvi: ichki kategoriya otasining rejasiga", {_boz: 9_000},
+     plan.turi_reja(dM, "2026-12"))
+teng("reja yozuvi: mahsulotlari", [8_000, 1_000],
+     [x["summa"] for x in plan.reja_yozuv_mahsulotlari(dM, _yq)])
+tekshir("reja yozuvi: summa ≠ yig'indi rad etiladi", _yiqiladimi(
+    lambda: plan.reja_yozuv_saqla(dM, "2026-12-07", "x", _mev, 5,
+                                  [{"item_id": _ni, "summa": 4_000}])))
+tekshir("reja yozuvi: sababsiz rad etiladi", _yiqiladimi(
+    lambda: plan.reja_yozuv_saqla(dM, "2026-12-07", "", _mev, 5)))
+plan.budjet_qoy(dM, _boz, "2026-12", 1_000)
+teng("reja yozuvi: limit bilan qo'shiladi", 10_000,
+     plan.turi_reja(dM, "2026-12")[_boz])
+teng("reja yozuvi: limit oynasi faqat limitni ko'radi", {_boz: 1_000},
+     plan.limit_reja(dM, "2026-12"))
+dM.undo()
+plan.reja_yozuv_saqla(dM, "2027-01-15", "Meva", _mev, 4_000,
+                      [{"item_id": _ni, "summa": 4_000}], qator_id=_yq)
+tekshir("reja yozuvi: sana boshqa oyga — o'sha oyga o'tdi",
+        not plan.reja_bormi(dM, "2026-12")
+        and plan.turi_reja(dM, "2027-01") == {_boz: 4_000})
+dM.undo()
+tekshir("reja yozuvi: kochir — yozuv va mahsulotlari",
+        plan.reja_kochir(dM, "2026-12", "2027-02")
+        and [len(plan.reja_yozuv_mahsulotlari(dM, y["id"]))
+             for y in plan.reja_yozuvlari(dM, "2027-02")] == [2])
+dM.undo()
+plan.reja_yozuv_ochir(dM, _yq)
+tekshir("reja yozuvi: o'chirildi", not plan.reja_bormi(dM, "2026-12"))
+dM.undo()
+dM.undo()
+tekshir("reja yozuvi: undo — hammasi qaytdi", not plan.reja_bormi(dM, "2026-12"))
+tekshir("audit toza (reja yozuvi)", ledger.audit(dM).toza)
+
+# «Aslida to'landi»: rejadan haqiqiy rasxod (toifa ichi oynasi)
+_bq = plan.reja_yozuv_saqla(dM, "2026-12-06", "Bozor", _mev, 9_000,
+                            [{"item_id": _ni, "miqdor": 2, "summa": 8_000},
+                             {"item_id": _ni, "summa": 1_000}])
+_bk = plan.kategoriya_reja_yozuvlari(dM, "2026-12", _boz)
+teng("toifa ichi: ichki kategoriyadagi reja kuni otasida", [_bq],
+     [y["id"] for y in _bk])
+_bm = [m["id"] for m in _bk[0]["mahsulotlar"]]
+_brid = plan.reja_bajar(dM, _bq, {_bm[0]: 8_500, _bm[1]: 0}, mF)
+teng("bajar: rasxod — aslida to'langani, rejadagi sana", (8_500, "2026-12-06", 1),
+     (dM.skalyar("SELECT summa FROM rasxod WHERE id=?", _brid),
+      dM.skalyar("SELECT sana FROM rasxod WHERE id=?", _brid),
+      dM.skalyar("SELECT umumiymi FROM rasxod WHERE id=?", _brid)))
+teng("bajar: faqat olingan mahsulot rasxodda", [8_500],
+     [x["summa"] for x in _rk.rasxod_mahsulotlari(dM, _brid)])
+teng("bajar: umumiy fakt rasxoddan", 8_500,
+     next(q for q in plan.reja_va_fakt(dM, "2026-12")["qatorlar"]
+          if q["turi_id"] == _boz)["fakt"])
+teng("bajar: qayta saqlash — o'sha rasxod yangilanadi", (_brid, 9_700),
+     (plan.reja_bajar(dM, _bq, {_bm[0]: 8_500, _bm[1]: 1_200}, mF),
+      dM.skalyar("SELECT summa FROM rasxod WHERE id=?", _brid)))
+teng("bajar: to'langanlar rejada saqlandi", [8_500, 1_200],
+     [m["tolangan"] for m in plan.kategoriya_reja_yozuvlari(
+         dM, "2026-12", _boz)[0]["mahsulotlar"]])
+tekshir("bajar: manfiy rad etiladi", _yiqiladimi(
+    lambda: plan.reja_bajar(dM, _bq, {_bm[0]: -1}, mF)))
+tekshir("audit toza (bajar)", ledger.audit(dM).toza)
+plan.reja_bajar(dM, _bq, {}, mF)
+tekshir("bajar: hammasi 0 — rasxod o'chdi", not dM.skalyar(
+    "SELECT COUNT(*) FROM rasxod WHERE id=? AND ochirilgan=0", _brid))
+dM.undo()
+teng("bajar: undo — rasxod qaytdi", 9_700,
+     dM.skalyar("SELECT summa FROM rasxod WHERE id=? AND ochirilgan=0", _brid))
+_bs = plan.reja_yozuv_saqla(dM, "2026-12-08", "Kitob", _boz, 5_000,
+                            umumiymi=False, odam_id=mF)
+_bsr = plan.reja_bajar(dM, _bs, {None: 6_000}, mO)
+teng("bajar: shaxsiy rejani boshqasi to'lasa — «uning uchun»", (mO, mF),
+     (dM.skalyar("SELECT kim_toladi FROM rasxod WHERE id=?", _bsr),
+      dM.skalyar("SELECT kim_uchun FROM rasxod WHERE id=?", _bsr)))
+teng("bajar: shaxsiy fakt o'sha odamda", 6_000,
+     plan.reja_va_fakt(dM, "2026-12", mF)["fakt"])
+tekshir("audit toza (shaxsiy bajar)", ledger.audit(dM).toza)
+for _ in range(5):
+    dM.undo()
+tekshir("bajar: undo — reja ham, rasxodlar ham qaytdi",
+        not plan.reja_bormi(dM, "2026-12") and not dM.skalyar(
+            "SELECT COUNT(*) FROM rasxod WHERE id IN (?, ?) AND ochirilgan=0",
+            _brid, _bsr))
+
+# Ro'yxatdan nusxa — keyingi kunga, mahsulotlari bilan, to'lanmagan
+_nq0 = plan.reja_yozuv_saqla(dM, "2026-12-31", "Non", _mev, 4_000,
+                             [{"item_id": _ni, "summa": 4_000}],
+                             umumiymi=False, odam_id=mF)
+plan.reja_bajar(dM, _nq0, {plan.kategoriya_reja_yozuvlari(
+    dM, "2026-12", _boz, mF)[0]["mahsulotlar"][0]["id"]: 4_500}, mF)
+_nq1 = plan.reja_yozuv_nusxa(dM, _nq0)
+_nqy = plan.reja_yozuv_toliq(dM, _nq1)
+teng("nusxa: oy oxirida — o'sha kun (oydan chiqmaydi)", "2026-12-31",
+     _nqy["sana"])
+teng("nusxa: nom, doira, mahsulotlar", ("Non", 0, mF, [4_000]),
+     (_nqy["nom"], _nqy["umumiymi"], _nqy["odam_id"],
+      [m["summa"] for m in _nqy["mahsulotlar"]]))
+tekshir("nusxa: to'langani va rasxodi ko'chmadi",
+        _nqy["rasxod"] is None
+        and all(m["tolangan"] is None for m in _nqy["mahsulotlar"]))
+_nq2 = plan.reja_yozuv_saqla(dM, "2026-12-07", "Sut", _mev, 1_000)
+teng("nusxa: keyingi kunga", "2026-12-08", plan.reja_yozuv_toliq(
+    dM, plan.reja_yozuv_nusxa(dM, _nq2))["sana"])
+for _ in range(5):
+    dM.undo()
+tekshir("nusxa: undo — hammasi qaytdi", not plan.reja_bormi(dM, "2026-12"))
+
+# Rejaga band — hisobda yo'q qismi qarz, balans minusga tushmaydi
+plan.reja_saqla(dM, plan.oy_kaliti(), 10_000_000, {})
+_bh = plan.band_hisob(dM)
+_nq = {r["id"]: max(0, r["naqd"]) for r in ledger.balanslar(dM)}
+tekshir("band: hech kimdan qo'lidagidan ko'p ayirilmaydi",
+        all(v["ayirildi"] <= _nq[k] for k, v in _bh.items()))
+_as = plan.asosiy_odam(dM)
+_boshqalar = sum(v["qarz"] for k, v in _bh.items() if k != _as)
+tekshir("band: boshqalarda ayirilgan + qarz = band",
+        all(v["ayirildi"] + v["qarz"] == v["band"]
+            for k, v in _bh.items() if k != _as))
+teng("band: asosiy — o'zi + boshqalarning yetmagani", _bh[_as]["band"]
+     + _boshqalar, _bh[_as]["ayirildi"] + _bh[_as]["qarz"])
+for _o in _bh:
+    _bt = plan.band_tafsilot(dM, _o)
+    teng(f"band tafsilot ({_o}): umumiy ulush + shaxsiy = band",
+         plan.band_pul(dM).get(_o, 0), _bt["jami"])
+_boshqa = next(k for k in _bh if k != plan.asosiy_odam(dM))
+teng("band: hisobda yo'q qismi «Qarzim» ga qo'shildi",
+     ledger.odam_qarzlari(dM, _boshqa)["jami"] + _bh[_boshqa]["qarz"],
+     plan.odam_qarzlari(dM, _boshqa)["jami"])
+dM.undo()
+
+# «Bugun»: shu kunga rejalangan ro'yxatlar — umumiy va shaxsiy
+_kq1 = plan.reja_yozuv_saqla(dM, "2026-12-09", "Non", _mev, 2_000)
+_kq2 = plan.reja_yozuv_saqla(dM, "2026-12-09", "Kitob", _mev, 3_000,
+                             umumiymi=False, odam_id=mF)
+plan.reja_yozuv_saqla(dM, "2026-12-10", "Ertaga", _mev, 1_000)
+teng("bugunga reja: faqat shu kun, umumiy oldin", [_kq1, _kq2],
+     [y["id"] for y in plan.kun_reja_yozuvlari(dM, "2026-12-09")])
+teng("ro'yxat holati", ["olinmagan", "rejadagidek", "+500 ortiq"],
+     [plan.royxat_holati(1_000, t) for t in (0, 1_000, 1_500)])
+for _ in range(3):
+    dM.undo()
+
+# Limit (ro'yxatsiz kategoriya rejasi) → oddiy ro'yxat
+plan.budjet_qoy(dM, _boz, "2026-12", 70_000)
+_rj0 = plan.turi_reja(dM, "2026-12")
+_lq = plan.limitni_royxatga(dM, "2026-12", _boz)
+teng("limit → ro'yxat: kategoriya rejasi o'zgarmadi", _rj0,
+     plan.turi_reja(dM, "2026-12"))
+teng("limit → ro'yxat: limit 0, ro'yxat summasi = limit", ({}, 70_000),
+     (plan.limit_reja(dM, "2026-12"),
+      dM.skalyar("SELECT summa FROM reja_qator WHERE id=?", _lq)))
+dM.undo()
+teng("limit → ro'yxat: bitta undo", ({_boz: 70_000}, 0),
+     (plan.limit_reja(dM, "2026-12"), len(plan.reja_yozuvlari(dM, "2026-12"))))
+dM.undo()
+
+# Bitta rasxodda bir nechta mahsulot
+_o1 = dM.skalyar("SELECT id FROM odam WHERE faol=1 ORDER BY id")
+_kq = _rk.Qoralama(sana="2026-09-20", kim_toladi=_o1, turi_id=_mev,
+                   nom="Bozor", summa=13_000, mahsulotlar=[
+                       {"item_id": _ni, "miqdor": 2, "summa": 8_000},
+                       {"item_id": _ni, "summa": 5_000}, {}])
+_krid = _rk.saqla(dM, _kq)
+teng("ko'p mahsulot: qatorlar (bo'shi tashlandi)", [8_000, 5_000],
+     [x["summa"] for x in _rk.rasxod_mahsulotlari(dM, _krid)])
+teng("ko'p mahsulot: rasxod bitta mahsulotga bog'lanmaydi", None,
+     dM.skalyar("SELECT item_id FROM rasxod WHERE id=?", _krid, birlamchi=None))
+teng("ko'p mahsulot: ulushlar yig'indisi = summa", 13_000,
+     dM.skalyar("SELECT SUM(summa) FROM ulush WHERE rasxod_id=?", _krid))
+tekshir("ko'p mahsulot: summa ≠ yig'indi rad etiladi", _yiqiladimi(
+    lambda: _rk.saqla(dM, _rk.Qoralama(
+        sana="2026-09-20", kim_toladi=_o1, turi_id=_mev, nom="x", summa=1,
+        mahsulotlar=[{"item_id": _ni, "summa": 5_000}]))))
+tekshir("ko'p mahsulot: summasiz qator rad etiladi", _yiqiladimi(
+    lambda: _rk.saqla(dM, _rk.Qoralama(
+        sana="2026-09-20", kim_toladi=_o1, turi_id=_mev, nom="x", summa=0,
+        mahsulotlar=[{"item_id": _ni, "summa": 0}]))))
+_kq.summa, _kq.mahsulotlar = 4_000, [{"item_id": _ni, "summa": 4_000}]
+_rk.tahrirla(dM, _krid, _kq)
+teng("ko'p mahsulot: tahrir — bitta qolsa unga bog'lanadi", (4_000, _ni, 1),
+     (dM.skalyar("SELECT summa FROM rasxod WHERE id=?", _krid),
+      dM.skalyar("SELECT item_id FROM rasxod WHERE id=?", _krid),
+      len(_rk.rasxod_mahsulotlari(dM, _krid))))
+tekshir("audit toza (ko'p mahsulot)", ledger.audit(dM).toza)
+dM.undo()
+teng("ko'p mahsulot: tahrir bitta undo", (13_000, 2),
+     (dM.skalyar("SELECT summa FROM rasxod WHERE id=?", _krid),
+      len(_rk.rasxod_mahsulotlari(dM, _krid))))
+dM.undo()
+tekshir("ko'p mahsulot: saqlash bitta undo", not dM.skalyar(
+    "SELECT COUNT(*) FROM rasxod WHERE id=? AND ochirilgan=0", _krid))
+tekshir("ko'p mahsulot: bot qoralamasi lug'atdan tiklanadi",
+        _rk.Qoralama.lugatdan(_rk.Qoralama(sana="2026-09-20").lugat())
+        == _rk.Qoralama(sana="2026-09-20"))
+
+# Katalogda yo'q mahsulot — o'sha zahoti yoziladi, katalogga qo'shiladi
+_yn = _rk.Qoralama(sana="2026-09-20", kim_toladi=_o1, turi_id=_mev,
+                   nom="Yangi", summa=10_001, mahsulotlar=[
+                       {"nom": "Anor (yangi)", "miqdor": 3, "summa": 10_001}])
+_yrid = _rk.saqla(dM, _yn)
+_yi = dM.q1("SELECT * FROM item WHERE nom='Anor (yangi)' AND ochirilgan=0")
+tekshir("yangi mahsulot: katalogga qo'shildi (shu kategoriyaga)",
+        _yi is not None and _yi["turi_id"] == _mev)
+teng("yangi mahsulot: narx — bir dona (pastga yaxlit)", 3_333, _yi["narx"])
+teng("yangi mahsulot: qator va rasxod unga bog'landi", (_yi["id"], _yi["id"]),
+     (_rk.rasxod_mahsulotlari(dM, _yrid)[0]["item_id"],
+      dM.skalyar("SELECT item_id FROM rasxod WHERE id=?", _yrid)))
+_yq2 = plan.reja_yozuv_saqla(dM, "2026-12-01", "Anor", _mev, 5_000,
+                             [{"nom": "anor (YANGI)", "summa": 5_000}])
+teng("yangi mahsulot: shu nom qayta yozilsa yangisi yaratilmaydi", 1,
+     dM.skalyar("SELECT COUNT(*) FROM item WHERE nom LIKE 'anor (yangi)'"
+                " AND ochirilgan=0"))
+teng("yangi mahsulot: rejada ham o'sha mahsulotga", _yi["id"],
+     plan.reja_yozuv_mahsulotlari(dM, _yq2)[0]["item_id"])
+dM.undo()
+dM.undo()
+tekshir("yangi mahsulot: undo — mahsulot ham, rasxod ham qaytdi",
+        not dM.skalyar("SELECT COUNT(*) FROM item WHERE nom='Anor (yangi)'"
+                       " AND ochirilgan=0")
+        and not dM.skalyar("SELECT COUNT(*) FROM rasxod WHERE id=? AND"
+                           " ochirilgan=0", _yrid))
+tekshir("audit toza (yangi mahsulot)", ledger.audit(dM).toza)
+dM.undo()                                     # «Reja non» katalogdan
+
+# Rejaga band pul: sarflanmagan reja faol odamlarga TENG bo'linadi
+tekshir("band: reja yo'q oyda — hech kimdan band emas",
+        plan.band_pul(dM, "2026-11-05") == {})
+_v0 = {r["id"]: (r["naqd"], r["adolat"]) for r in ledger.balanslar(dM)}
+plan.reja_saqla(dM, "2026-09", _rf["fakt"] + 100_000, {})
+_band = plan.band_pul(dM, "2026-09-15")
+teng("band: yig'indisi = sarflanmagan reja", 100_000, sum(_band.values()))
+teng("band: hamma faol odamdan", {r["id"] for r in ledger.balanslar(dM)},
+     set(_band))
+tekshir("band: teng (farq ko'pi bilan 1 so'm)",
+        max(_band.values()) - min(_band.values()) <= 1)
+_dj = {x["id"]: x["naqd"] for x in ledger.darajalar(dM, _band)}
+tekshir("band: darajalarda qo'ldagi puldan ayirildi",
+        all(_dj[i] == _v0[i][0] - _band[i] for i in _band))
+teng("band: v_balans o'zgarmadi (faqat ko'rsatish)", _v0,
+     {r["id"]: (r["naqd"], r["adolat"]) for r in ledger.balanslar(dM)})
+plan.reja_saqla(dM, "2026-09", max(1, _rf["fakt"] - 5_000), {})
+tekshir("band: reja oshib ketsa — band 0",
+        plan.band_pul(dM, "2026-09-15") == {})
+plan.reja_yozuv_saqla(dM, "2026-09-05", "Kitoblar", _boz, 7_000,
+                      umumiymi=False, odam_id=mF)
+teng("band: shaxsiy reja qolgani — faqat o'sha odamdan", {mF: 7_000},
+     plan.band_pul(dM, "2026-09-15"))
+dM.undo()
+dM.undo()
+dM.undo()
+tekshir("audit toza (band)", ledger.audit(dM).toza)
+
+# Yon panel: faqat asosiy odamning puli; boshqada pul bo'lmasa band undan
+plan.reja_saqla(dM, plan.oy_kaliti(), 10_000_000, {})
+_qp = plan.qoldagi_pul(dM)
+_bp = plan.band_pul(dM)
+_nq = {r["id"]: r["naqd"] for r in ledger.balanslar(dM)}
+teng("qo'ldagi pul: asosiy odam — birinchi faol", dM.skalyar(
+    "SELECT id FROM odam WHERE faol=1 ORDER BY tartib, id"), _qp["odam_id"])
+teng("qo'ldagi pul: o'z bandi + boshqalarning yetmagani, qo'ldagidan ko'p emas",
+     min(max(0, _nq[_qp["odam_id"]]), _bp.get(_qp["odam_id"], 0) + sum(
+         max(0, b - max(0, _nq.get(o, 0))) for o, b in _bp.items()
+         if o != _qp["odam_id"])), _qp["band"])
+tekshir("qo'ldagi pul: rejadan minusga tushmaydi",
+        _qp["qoldi"] >= min(0, _nq[_qp["odam_id"]]))
+teng("qo'ldagi pul = naqd − band", _nq[_qp["odam_id"]] - _qp["band"],
+     _qp["qoldi"])
+dM.undo()
+
+# «Qarzim»: ichki + tashqi, juft_qarzlar va tashqi_qarzlar bilan bir xil
+for _o in (mF, mO):
+    _q = plan.ledger.odam_qarzlari(dM, _o)
+    teng(f"qarzim ({_o}): ichki = juftlikdagi qarzi", sum(
+        j.summa for j in ledger.juft_qarzlar(dM) if j.qarzdor_id == _o),
+        _q["ichki_jami"])
+    teng(f"qarzim ({_o}): tashqi = ochiq tashqi qarz qoldig'i", sum(
+        t["qoldiq"] for t in ledger.tashqi_qarzlar(dM, True)
+        if t["odam_id"] == _o), _q["tashqi_jami"])
+    teng(f"qarzim ({_o}): jami", _q["ichki_jami"] + _q["tashqi_jami"],
+         _q["jami"])
+
+# Kategoriya o'chirish himoyasi
+tekshir("ichida ichki kategoriya bor — o'chmaydi",
+        _yiqiladimi(lambda: mh.kategoriya_ochir(dM, _mev)))
+tekshir("ichida mahsulot bor — o'chmaydi",
+        _yiqiladimi(lambda: mh.kategoriya_ochir(dM, _sut)))
+mh.kategoriya_ochir(dM, _sab)
+tekshir("bo'sh kategoriya o'chdi (faol=0, qator joyida)",
+        dM.skalyar("SELECT faol FROM turi WHERE id=?", _sab) == 0)
+teng("qayta qo'shilsa — o'sha qator tiriladi", _sab,
+     mh.kategoriya_qosh(dM, "Sabzavotlar", _boz,
+                        rasm=mh.bosh_belgilar(dM)[0]))
+mh.kategoriya_nomla(dM, _sab, "Ko'katlar")
+teng("nomi o'zgardi", "Ko'katlar", dM.skalyar("SELECT nom FROM turi WHERE id=?", _sab))
+
+# Mavjud kategoriyani boshqasining ichiga ko'chirish (Gigiena → Bozorlik)
+_gig = mh.kategoriya_qosh(dM, "Gigiena sinov")
+entries.rasxod_qosh(dM, "2026-09-22", "sovun", 15_000, mF, umumiymi=False,
+                    turi_id=_gig)
+_tb0 = {t["nom"]: t["summa"] for t in ledger.turi_boyicha(dM, "2026-09-01",
+                                                           "2026-09-30")}
+teng("ko'chirishdan oldin — alohida bo'lak", 15_000, _tb0.get("Gigiena sinov"))
+tekshir("ko'chish joylari: o'zi va avlodlari yo'q",
+        not {_mev, _tro} & {t["id"] for t, _ in mh.kochish_joylari(dM, _mev)}
+        and _boz in {t["id"] for t, _ in mh.kochish_joylari(dM, _mev)})
+mh.kategoriya_kochir(dM, _gig, _boz)
+teng("ko'chdi — yo'l", "Bozorlik › Gigiena sinov", mh.yol_nomi(dM, _gig))
+_tb1 = {t["nom"]: t["summa"] for t in ledger.turi_boyicha(dM, "2026-09-01",
+                                                           "2026-09-30")}
+teng("doira: rasxodi yangi otasiga qo'shildi", _tb0["Bozorlik"] + 15_000,
+     _tb1.get("Bozorlik"))
+tekshir("doirada endi alohida bo'lak emas", "Gigiena sinov" not in _tb1)
+teng("eski rasxodning kategoriyasi o'zgarmadi", 1, dM.skalyar(
+    "SELECT COUNT(*) FROM rasxod WHERE turi_id=? AND ochirilgan=0", _gig))
+tekshir("o'z avlodining ichiga ko'chmaydi (halqa)",
+        _yiqiladimi(lambda: mh.kategoriya_kochir(dM, _mev, _tro)))
+tekshir("o'zining ichiga ko'chmaydi",
+        _yiqiladimi(lambda: mh.kategoriya_kochir(dM, _boz, _boz)))
+mh.kategoriya_kochir(dM, _mev, _gig)       # ichki kategoriyasi bilan birga
+teng("ichki kategoriya ham birga ko'chdi",
+     "Bozorlik › Gigiena sinov › Mevalar › Tropik", mh.yol_nomi(dM, _tro))
+dM.undo()
+teng("undo — joyiga qaytdi", "Bozorlik › Mevalar", mh.yol_nomi(dM, _mev))
+mh.kategoriya_kochir(dM, _gig, None)
+teng("asosiyga qaytarish", "Gigiena sinov", mh.yol_nomi(dM, _gig))
+tekshir("audit toza (ko'chirish)", ledger.audit(dM).toza)
+
+# Rasm
+_png = (b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+        b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\xcf\xc0"
+        b"\x00\x00\x03\x01\x01\x00\xc9\xfe\x92\xef\x00\x00\x00\x00IEND\xaeB`\x82")
+_manba = _TMP / "olma.png"
+_manba.write_bytes(_png)
+_f = mh.rasm_qoy(dM, _banan, _manba)
+tekshir("rasm dastur papkasiga nusxalandi", mh.rasm_yoli(_f) is not None)
+_manba.unlink()
+tekshir("asl fayl o'chsa ham rasm qoladi", mh.rasm_yoli(_f) is not None)
+mh.rasm_olib_tashla(dM, _banan)
+tekshir("rasm olib tashlandi",
+        dM.q1("SELECT rasm FROM item WHERE id=?", _banan)["rasm"] is None)
+tekshir("fayl diskda qoldi (undo uchun)", (config.MAHSULOT_RASM / _f).exists())
+dM.undo()
+teng("undo — rasm qaytdi", _f, dM.skalyar("SELECT rasm FROM item WHERE id=?", _banan))
+tekshir("noto'g'ri tur rad", _yiqiladimi(
+    lambda: mh.rasm_baytdan(dM, _banan, b"x", ".exe")))
+tekshir("bo'sh rasm rad", _yiqiladimi(
+    lambda: mh.rasm_baytdan(dM, _banan, b"", ".jpg")))
+tekshir("rasmsiz mahsulotda rasm_yoli None — xato yo'q",
+        mh.rasm_yoli(None) is None and mh.rasm_yoli("yoq.jpg") is None)
+
+# Telegram: telefondan rasm
+dM.apply("odam", "UPDATE", {"telegram": "fsultonoov"}, mF)
+_tg = []
+
+
+def _tg_sorov(token, metod, **m):
+    _tg.append((metod, m))
+    return {"file_path": "photos/file_7.jpg"} if metod == "getFile" else {}
+
+
+_asl_sorov, _asl_yukla = xb._sorov, xb._fayl_yukla
+xb._sorov = _tg_sorov
+xb._fayl_yukla = lambda token, yol: _png
+try:
+    def _rasm_xabar(izoh, kim="fsultonoov", tur="private"):
+        return {"chat": {"id": 55, "type": tur}, "from": {"username": kim},
+                "caption": izoh,
+                "photo": [{"file_id": "kichik", "width": 90, "height": 90},
+                          {"file_id": "orta", "width": 1280, "height": 960},
+                          {"file_id": "katta", "width": 4000, "height": 3000}]}
+    teng("izohdagi nom bo'yicha biriktirildi", "rasm: Sut",
+         xb._rasmni_ishla(dM, _rasm_xabar("  sut "), "T"))
+    tekshir("mahsulotga rasm yozildi",
+            dM.q1("SELECT rasm FROM item WHERE id=?", _sut_m)["rasm"] is not None)
+    teng("1280 dan katta bo'lmagan eng katta o'lcham olindi", "orta",
+         next(m for mt, m in _tg if mt == "getFile")["file_id"])
+    tekshir("javob yuborildi", any(mt == "sendMessage" and "✔" in m["text"]
+                                   for mt, m in _tg))
+    teng("topilmasa — xabar", "rasm: topilmadi (Qovun)",
+         xb._rasmni_ishla(dM, _rasm_xabar("Qovun"), "T"))
+    teng("izohsiz — xabar", "rasm: izohsiz",
+         xb._rasmni_ishla(dM, _rasm_xabar(""), "T"))
+    tekshir("notanish odam rasmi e'tiborsiz",
+            xb._rasmni_ishla(dM, _rasm_xabar("Sut", kim="begona"), "T") is None)
+    tekshir("guruhdagi rasm e'tiborsiz",
+            xb._rasmni_ishla(dM, _rasm_xabar("Sut", tur="group"), "T") is None)
+finally:
+    xb._sorov, xb._fayl_yukla = _asl_sorov, _asl_yukla
+dM.yop()
+
+
+# ═════════════════════════════════════════ Telegram orqali rasxod
+
+print("\n── Telegram rasxod ──")
+from core import rasxod_kirit as rk  # noqa: E402
+from core import tg_rasxod as tr  # noqa: E402
+dX2 = dbm.Db(_TMP / "bX2.db", zaxirasiz=True)
+xF2 = entries.odam_qosh(dX2, "Fayzulloxon")
+xO2 = entries.odam_qosh(dX2, "Otabek")
+xA2 = entries.odam_qosh(dX2, "Abbosxon")
+dX2.apply("odam", "UPDATE", {"telegram": "fsultonoov"}, xF2)
+dX2.apply("odam", "UPDATE", {"telegram": "otabek"}, xO2)
+_bz2 = dX2.skalyar("SELECT id FROM turi WHERE nom='Bozorlik'")
+_tr2 = dX2.skalyar("SELECT id FROM turi WHERE nom='Transport'")
+_mv2 = mh.kategoriya_qosh(dX2, "Mevalar", _bz2,
+                          rasm=mh.bosh_belgilar(dX2)[0])
+_ol2 = mh.saqla(dX2, nom="Olma", turi_id=_mv2, narx=18_000, miqdor=1, olchov="kg")
+mh.rasm_baytdan(dX2, _ol2, _png, ".png")
+xb.sozlama_qoy(dX2, token="T", guruh="-100", yoqilgan=True)
+
+_tq, _rasmlar, _navbat = [], [], []
+_mid = [100]
+
+
+def _tq_sorov(token, metod, **m):
+    m.pop("_vaqt", None)
+    _tq.append((metod, m))
+    if metod == "sendMessage":
+        _mid[0] += 1
+        return {"message_id": _mid[0]}
+    if metod == "getUpdates":
+        u, _navbat[:] = list(_navbat), []
+        return u
+    return {}
+
+
+_asl_sorov2, _asl_rasm2 = xb._sorov, getattr(xb, "_rasm_yubor", None)
+xb._sorov = _tq_sorov
+xb._rasm_yubor = lambda token, chat, yol, izoh: _rasmlar.append((chat, izoh))
+_CHAT = 555
+_BUGUN = "2026-09-25"
+
+
+def _tugma(data, mid=None, kim=xF2):
+    h = tr.holat_ol(dX2, _CHAT)
+    cb = {"id": "c", "data": data, "from": {"username": "fsultonoov"},
+          "message": {"message_id": mid or (h or {}).get("xabar"),
+                      "chat": {"id": _CHAT, "type": "private"}}}
+    return tr.tugma_bosildi(dX2, "T", cb, kim)
+
+
+def _matn(t, kim=xF2):
+    return tr.matn_keldi(dX2, "T", {"chat": {"id": _CHAT, "type": "private"},
+                                    "text": t}, kim)
+
+
+def _oxirgi_klav():
+    for mt, m in reversed(_tq):
+        if "reply_markup" in m and "inline_keyboard" in m["reply_markup"]:
+            return [b["callback_data"] for q in json.loads(
+                m["reply_markup"])["inline_keyboard"] for b in q]
+    return []
+
+
+import json  # noqa: E402
+try:
+    # ── 1. Mahsulot bilan, umumiy, bir odam chiqarilgan, kecha ──────────
+    tr.boshlash(dX2, "T", _CHAT, xF2, bugun=_BUGUN)
+    tekshir("boshlandi: kategoriyalar ko'rinadi", f"rx:k:{_bz2}" in _oxirgi_klav())
+    _tugma(f"rx:k:{_bz2}")
+    tekshir("ichki kategoriyasi bor — ichiga kirdi",
+            tr.holat_ol(dX2, _CHAT)["ota"] == _bz2
+            and f"rx:kt:{_bz2}" in _oxirgi_klav() and f"rx:k:{_mv2}" in _oxirgi_klav())
+    _tugma(f"rx:k:{_mv2}")
+    teng("kategoriya → mahsulot qadami", "mah", tr.holat_ol(dX2, _CHAT)["qadam"])
+    tekshir("mahsulot ro'yxatda", f"rx:m:{_ol2}" in _oxirgi_klav())
+    _tugma(f"rx:m:{_ol2}")
+    _h = tr.holat_ol(dX2, _CHAT)
+    teng("mahsulotdan nom va narx (umumiy qoida)", ("Olma", 18_000),
+         (_h["q"].nom, _h["q"].summa))
+    tekshir("mahsulot rasmi va ma'lumoti yuborildi",
+            _rasmlar and "Olma" in _rasmlar[-1][1] and "Mevalar" in _rasmlar[-1][1])
+    _tugma("rx:n")
+    _tugma("rx:s")
+    _tugma(f"rx:p:{xF2}")
+    _tugma("rx:t:u")
+    teng("umumiy — uydagilar belgilangan", {xF2, xO2, xA2},
+         set(tr.holat_ol(dX2, _CHAT)["q"].parametrlar))
+    _tugma(f"rx:q:{xA2}")
+    teng("Abbosxon olib tashlandi", {xF2, xO2},
+         set(tr.holat_ol(dX2, _CHAT)["q"].parametrlar))
+    _tugma("rx:qd")
+    _tugma("rx:d:1")
+    teng("kecha tanlandi", "2026-09-24", tr.holat_ol(dX2, _CHAT)["q"].sana)
+    _xabar_oldin = tr.holat_ol(dX2, _CHAT)["xabar"]
+    _r = _tugma("rx:ok")
+    tekshir("saqlandi", _r.startswith("rx: saqlandi"))
+    _rid = int(_r.split("#")[1])
+    _rx = dX2.q1("SELECT * FROM rasxod WHERE id=?", _rid)
+    teng("rasxod maydonlari", ("2026-09-24", "Olma", 18_000, _mv2, _ol2, xF2, 1),
+         (_rx["sana"], _rx["nom"], _rx["summa"], _rx["turi_id"], _rx["item_id"],
+          _rx["kim_toladi"], _rx["umumiymi"]))
+    teng("ulushlar — faqat tanlanganlarga", {xF2: 9_000, xO2: 9_000},
+         {r["odam_id"]: r["summa"] for r in dX2.q(
+             "SELECT odam_id, summa FROM ulush WHERE rasxod_id=?", _rid)})
+    tekshir("suhbat tozalandi", tr.holat_ol(dX2, _CHAT) is None)
+    tekshir("«Bekor qilish» tugmasi bor", f"rx:del:{_rid}" in _oxirgi_klav())
+
+    # Dasturdagi oyna bilan AYNAN bir xil natija
+    _q = rk.Qoralama(sana="2026-09-24", kim_toladi=xF2, turi_id=_mv2,
+                     tur=rk.UMUMIY, parametrlar={xF2: 1.0, xO2: 1.0})
+    rk.mahsulot_tanla(dX2, _q, _ol2)
+    _rid_d = rk.saqla(dX2, _q)
+    _qat = "SELECT sana,nom,summa,turi_id,item_id,kim_toladi,umumiymi,kim_uchun FROM rasxod WHERE id=?"
+    teng("bot va dastur — bir xil rasxod", tuple(dX2.q1(_qat, _rid_d)),
+         tuple(dX2.q1(_qat, _rid)))
+    teng("bot va dastur — bir xil ulushlar",
+         [tuple(r) for r in dX2.q("SELECT odam_id, summa FROM ulush WHERE rasxod_id=? ORDER BY odam_id", _rid_d)],
+         [tuple(r) for r in dX2.q("SELECT odam_id, summa FROM ulush WHERE rasxod_id=? ORDER BY odam_id", _rid)])
+    entries.rasxod_ochir(dX2, _rid_d)
+
+    # ── 2. Matn bilan: mahsulotsiz kategoriya, boshqa uchun ────────────
+    tr.boshlash(dX2, "T", _CHAT, xO2, bugun=_BUGUN)
+    _tugma(f"rx:k:{_tr2}", kim=xO2)
+    teng("mahsuloti yo'q — to'g'ri sababga", "nom", tr.holat_ol(dX2, _CHAT)["qadam"])
+    _matn("Taksi", kim=xO2)
+    _matn("abc", kim=xO2)
+    teng("noto'g'ri summa — o'sha qadamda qoladi", "summa",
+         tr.holat_ol(dX2, _CHAT)["qadam"])
+    _matn("25 000", kim=xO2)
+    teng("summa o'qildi", 25_000, tr.holat_ol(dX2, _CHAT)["q"].summa)
+    teng("to'lovchi — yozgan odam", xO2, tr.holat_ol(dX2, _CHAT)["q"].kim_toladi)
+    _tugma(f"rx:p:{xO2}", kim=xO2)
+    _tugma("rx:t:b", kim=xO2)
+    tekshir("«kim uchun» da to'lovchi yo'q", f"rx:u:{xO2}" not in _oxirgi_klav())
+    _tugma(f"rx:u:{xF2}", kim=xO2)
+    _r2 = _tugma("rx:ok", kim=xO2)
+    _rid2 = int(_r2.split("#")[1])
+    _rx2 = dX2.q1("SELECT * FROM rasxod WHERE id=?", _rid2)
+    teng("boshqa uchun saqlandi", (xO2, xF2, "Taksi", _tr2, None),
+         (_rx2["kim_toladi"], _rx2["kim_uchun"], _rx2["nom"], _rx2["turi_id"],
+          _rx2["item_id"]))
+    teng("u qarzdor bo'ldi (to'liq ulush)", 25_000, dX2.skalyar(
+        "SELECT summa FROM ulush WHERE rasxod_id=? AND odam_id=?", _rid2, xF2))
+
+    # ── 3. Tekshiruv botda ham xuddi dasturdagidek to'xtatadi ──────────
+    tr.boshlash(dX2, "T", _CHAT, xF2, bugun=_BUGUN)
+    _tugma(f"rx:k:{_tr2}")
+    _matn("Avtobus")
+    _matn("5000")
+    _tugma(f"rx:p:{xF2}")
+    _tugma("rx:t:u")
+    for _o in (xF2, xO2, xA2):
+        _tugma(f"rx:q:{_o}")
+    _tugma("rx:qd")
+    _oldin = dX2.skalyar("SELECT COUNT(*) FROM rasxod")
+    _tugma("rx:ok")
+    teng("hech kim tanlanmasa saqlanmaydi", _oldin,
+         dX2.skalyar("SELECT COUNT(*) FROM rasxod"))
+    teng("xato matni — dasturdagi bilan bir xil",
+         "Kamida bitta odam tanlangan bo'lishi kerak.",
+         tr.holat_ol(dX2, _CHAT)["xato"])
+    _matn("/bekor")
+    tekshir("/bekor — suhbat tozalandi", tr.holat_ol(dX2, _CHAT) is None)
+
+    # ── 4. Eski xabar, bekor qilish, ruxsat ────────────────────────────
+    teng("eski xabardagi tugma e'tiborsiz", "rx: eski", _tugma("rx:t:u", mid=1))
+    _tugma(f"rx:del:{_rid}", mid=999)
+    teng("«Bekor qilish» — rasxod o'chdi", 1,
+         dX2.skalyar("SELECT ochirilgan FROM rasxod WHERE id=?", _rid))
+    teng("ikkinchi marta — tegmaydi", "rx: del (yo'q)",
+         _tugma(f"rx:del:{_rid}", mid=999))
+    teng("summa: nuqtali", 25_000, tr._summa_oqi("25.000"))
+    teng("summa: so'm bilan", 7_000, tr._summa_oqi("7000 so'm"))
+    tekshir("summa: manfiy/harf rad",
+            tr._summa_oqi("-5") is None and tr._summa_oqi("besh") is None)
+
+    # To'liq yo'l: getUpdates → xabar.py → tg_rasxod
+    _off = int(dX2.sozlama("tg_offset", "0") or 0)
+    _navbat[:] = [
+        {"update_id": 900, "message": {"chat": {"id": _CHAT, "type": "private"},
+                                       "from": {"username": "fsultonoov"},
+                                       "text": "➕ Rasxod"}},
+        {"update_id": 901, "message": {"chat": {"id": 777, "type": "private"},
+                                       "from": {"username": "begona"},
+                                       "text": "/rasxod"}},
+        {"update_id": 902, "message": {"chat": {"id": -100, "type": "group"},
+                                       "from": {"username": "fsultonoov"},
+                                       "text": "/rasxod"}},
+    ]
+    _nat = xb.tugmalarni_qayta_ishla(dX2)
+    tekshir("uy a'zosi shaxsiy chatda — boshlandi", "rx: boshlandi" in _nat)
+    tekshir("begona va guruh — e'tiborsiz",
+            _nat.count("rx: boshlandi") == 1 and tr.holat_ol(dX2, 777) is None
+            and tr.holat_ol(dX2, -100) is None)
+    teng("offset surildi", "903", dX2.sozlama("tg_offset"))
+    _navbat[:] = [{"update_id": 903, "callback_query": {
+        "id": "z", "data": "rx:x", "from": {"username": "fsultonoov"},
+        "message": {"message_id": tr.holat_ol(dX2, _CHAT)["xabar"],
+                    "chat": {"id": _CHAT, "type": "private"}}}}]
+    teng("tugma ham xabar.py orqali yetib keladi", ["rx: bekor"],
+         xb.tugmalarni_qayta_ishla(dX2))
+    teng("uzun so'rov: timeout Telegramga beriladi", 20, next(
+        m for mt, m in reversed(_tq) if mt == "getUpdates") and (
+        xb.tugmalarni_qayta_ishla(dX2, kutish=20) or True) and next(
+        m for mt, m in reversed(_tq) if mt == "getUpdates")["timeout"])
+    tekshir("audit toza", ledger.audit(dX2).toza)
+
+    # ── 5. Menyu: Moliya va Vazifalar ──────────────────────────────────
+    from core import tg_menyu as tm  # noqa: E402
+    teng("/start — asosiy menyu", [[tm.MOLIYA, tm.VAZIFALAR]],
+         tm.javob(dX2, "/start", xF2)[1])
+    _mm = [t for q in tm.javob(dX2, tm.MOLIYA, xF2)[1] for t in q]
+    teng("Moliya menyusi — faqat kerakli bo'limlar",
+         [tm.PULIM, tm.AYLANMA, tm.TASHQI, tm.RASXOD, tm.ASOSIY], _mm)
+    tekshir("olib tashlanganlar menyuda yo'q",
+            not any(x in t for t in _mm for x in
+                    ("Qancha qarzim", "Otabekdan", "Abbosxondan", "Fayzulloxondan")))
+    teng("Vazifalar menyusi: Uy ishlari, Shaxsiy ishlar, Universitet",
+         [["🏠 Uy ishlari", "🔒 Shaxsiy ishlar"], ["🎓 Universitet"], [tm.ASOSIY]],
+         tm.javob(dX2, tm.VAZIFALAR, xF2)[1])
+    tekshir("eski tugma matni ham ishlaydi",
+            "Universitet" in (tm.javob(dX2, "🎓 Bugun qanday darslarim bor", xF2)
+                              or ("",))[0])
+    tekshir("qo'lda «universitet» — darslar",
+            "Universitet" in (tm.javob(dX2, "universitet", xF2) or ("",))[0])
+
+    # Pul — dasturdagi `v_balans` bilan aynan bir xil son
+    _bF = ledger.balans(dX2, xF2)
+    tekshir("«Qancha pulim bor» — naqd va adolat dasturdagidek",
+            money.fmt_som(_bF["naqd"]) in tm.pulim(dX2, xF2)
+            and money.fmt_som(_bF["adolat"]) in tm.pulim(dX2, xF2))
+    _juft = {(j.qarzdor_id, j.kreditor_id): j.summa for j in ledger.juft_qarzlar(dX2)}
+    teng("test holati: Fayzulloxon Otabekka qarzdor",
+         True, (xF2, xO2) in _juft)
+    tekshir("aylanma — hamma juftlik",
+            all(money.fmt_som(s) in tm.aylanma(dX2) for s in _juft.values()))
+    entries.tashqi_qarz_qosh(dX2, "2026-09-20", xF2, "Aziz aka", 40_000, "telefon")
+    tekshir("tashqi qarz — o'zinikida bor", "Aziz aka" in tm.tashqi(dX2, xF2))
+    tekshir("tashqi qarz — boshqanikida yo'q", "Aziz aka" not in tm.tashqi(dX2, xO2))
+
+    # Vazifa, dars va shaxsiy ish — ALOHIDA
+    _kun = _date(2026, 9, 25)
+    _ttur = vz.tur_qosh(dX2, "Kitob o'qish", shaxsiy=True)
+    vz.tur_qosh(dX2, "Algoritmlar", shaxsiy=True)
+    vz.qosh(dX2, "Idish yuvish", xF2, _kun, "20:00")
+    vz.qosh(dX2, "Kitob o'qish", xF2, _kun, "21:00")
+    _dv = vz.qosh(dX2, "Algoritmlar", xF2, _kun, "09:00", izoh="Karimov · B-204")
+    dX2.apply("vazifa", "UPDATE", {"manba": "dars:2026-09-25:1"}, _dv)
+    vz.qosh(dX2, "Idish yuvish", xO2, _kun, "20:00")
+    teng("uy vazifasi — faqat uyniki", ["Idish yuvish"],
+         [v["nom"] for v in tm.bugungi(dX2, xF2, "uy", _kun)])
+    teng("dars — faqat dars (shaxsiy turi bo'lsa ham)", ["Algoritmlar"],
+         [v["nom"] for v in tm.bugungi(dX2, xF2, "dars", _kun)])
+    teng("shaxsiy — darssiz", ["Kitob o'qish"],
+         [v["nom"] for v in tm.bugungi(dX2, xF2, "shaxsiy", _kun)])
+    tekshir("dars izohi (o'qituvchi · xona) ko'rinadi",
+            "B-204" in tm.darslar(dX2, xF2, _kun))
+    tekshir("boshqa odamning vazifasi chiqmaydi",
+            len(tm.bugungi(dX2, xF2, "uy", _kun)) == 1)
+    tekshir("bo'sh kun — tushunarli javob",
+            "biriktirilmagan" in tm.uy_vazifalari(dX2, xA2, _kun))
+
+    # Router: menyu tugmasi → reply keyboard; rasxod suhbati buzilmaydi
+    _tq.clear()
+    _navbat[:] = [{"update_id": 950, "message": {
+        "chat": {"id": _CHAT, "type": "private"},
+        "from": {"username": "fsultonoov"}, "text": tm.MOLIYA}}]
+    teng("«Moliya» xabar.py orqali", ["menyu: 💰 Moliya"],
+         xb.tugmalarni_qayta_ishla(dX2))
+    _km = next(m for mt, m in _tq if mt == "sendMessage")["reply_markup"]
+    tekshir("javobda Moliya tugmalari (reply keyboard)",
+            tm.PULIM in _km and '"is_persistent": true' in _km)
+    tm.matn_keldi(dX2, "T", {"chat": {"id": _CHAT, "type": "private"},
+                             "text": tm.RASXOD}, xF2)
+    teng("«Rasxod yozish» — o'sha suhbat boshlandi", "kat",
+         tr.holat_ol(dX2, _CHAT)["qadam"])
+    _tugma(f"rx:k:{_tr2}")
+    _navbat[:] = [{"update_id": 951, "message": {
+        "chat": {"id": _CHAT, "type": "private"},
+        "from": {"username": "fsultonoov"}, "text": tm.PULIM}}]
+    xb.tugmalarni_qayta_ishla(dX2)
+    teng("suhbat o'rtasida menyu bosilsa — sabab bo'lib yozilmaydi", "",
+         tr.holat_ol(dX2, _CHAT)["q"].nom)
+    _matn("/bekor")
+
+    # Qo'lda yozilgan so'z ham tugmadek; tushunilmasa — jim qolmaydi
+    for _yoz, _kut in (("moliya", tm.PULIM), ("MOLIYA", tm.PULIM),
+                       ("vazifalar", tm.DARS), ("/menu", tm.MOLIYA)):
+        tekshir(f"qo'lda «{_yoz}» — menyu ochiladi",
+                any(_kut in q for q in (tm.javob(dX2, _yoz, xF2) or ("", [[]]))[1]))
+    tekshir("qo'lda «qancha pulim bor?» — javob",
+            "pulingiz" in (tm.javob(dX2, "qancha pulim bor?", xF2) or ("",))[0])
+    tekshir("olib tashlanganlarni qo'lda yozish ham ishlamaydi",
+            tm.javob(dX2, "otabekdan qarz", xF2) is None
+            and tm.javob(dX2, "qancha qarzim bor", xF2) is None)
+    _tq.clear()
+    _navbat[:] = [{"update_id": 960, "message": {
+        "chat": {"id": _CHAT, "type": "private"},
+        "from": {"username": "fsultonoov"}, "text": "salom"}}]
+    teng("tushunarsiz matn — javobsiz qolmaydi", ["menyu: tushunmadim"],
+         xb.tugmalarni_qayta_ishla(dX2))
+    tekshir("tushunmadim — menyu tugmalari bilan", tm.MOLIYA in next(
+        m for mt, m in _tq if mt == "sendMessage")["reply_markup"])
+
+    # xabarchi: uzun so'rov oynasi reja oralig'idan oshmaydi
+    import xabarchi as _xch  # noqa: E402
+    _soat = [0.0]
+    _kutishlar, _eslatmalar = [], []
+
+    class _SoxtaXabar:
+        @staticmethod
+        def tugmalarni_qayta_ishla(baza, kutish=0):
+            _kutishlar.append(kutish)
+            _soat[0] += kutish or 1
+            return []
+
+        @staticmethod
+        def yubor_kutilayotgan(baza, hozir, sinov=False):
+            _eslatmalar.append(_soat[0])
+            return []
+
+    _asl_mono = _xch.time.monotonic
+    _xch.time.monotonic = lambda: _soat[0]
+    try:
+        _xch._tingla(_SoxtaXabar, None)
+    finally:
+        _xch.time.monotonic = _asl_mono
+    tekshir("tinglash reja oralig'idan (300 s) oldin tugaydi",
+            _soat[0] <= _xch.ISH_VAQTI < 300)
+    tekshir("har so'rov 25 s dan oshmaydi", max(_kutishlar) <= _xch.SOROV_VAQTI)
+    tekshir("tinglash paytida eslatma har daqiqada tekshiriladi",
+            len(_eslatmalar) >= 3)
+
+    class _XatoXabar(_SoxtaXabar):
+        @staticmethod
+        def tugmalarni_qayta_ishla(baza, kutish=0):
+            _kutishlar.append("x")
+            return ["Xato: tarmoq yo'q"]
+    _kutishlar.clear()
+    _soat[0] = 0.0
+    _asl_uxla = _xch.time.sleep
+    _xch.time.monotonic = lambda: _soat[0]
+    _xch.time.sleep = lambda t: _soat.__setitem__(0, _soat[0] + t)
+    try:
+        _xch._tingla(_XatoXabar, None, 0.0)
+    finally:
+        _xch.time.monotonic, _xch.time.sleep = _asl_mono, _asl_uxla
+    tekshir("tarmoq xatosidan keyin chiqib ketmaydi — qayta urinadi",
+            len(_kutishlar) > 10)
+    tekshir("xato bo'lsa ham oyna vaqtida tugaydi", _soat[0] <= _xch.ISH_VAQTI)
+finally:
+    xb._sorov = _asl_sorov2
+    if _asl_rasm2:
+        xb._rasm_yubor = _asl_rasm2
+dX2.yop()
+
+
+# ═════════════════════════════════════ analitika — odam bo'yicha filtr
+
+print("\n── Analitika: odam filtri va kategoriya ichi ──")
+dAn = dbm.Db(_TMP / "bAn.db", zaxirasiz=True)
+aF = entries.odam_qosh(dAn, "Fayzulloxon")
+aO = entries.odam_qosh(dAn, "Otabek")
+aB = entries.odam_qosh(dAn, "Bobur")
+_aboz = dAn.skalyar("SELECT id FROM turi WHERE nom='Bozorlik'")
+_akiy = dAn.skalyar("SELECT id FROM turi WHERE nom<>'Bozorlik'"
+                    " AND ota_id IS NULL ORDER BY id LIMIT 1")
+_ameva = mh.kategoriya_qosh(dAn, "Mevalar", _aboz,
+                            rasm=mh.bosh_belgilar(dAn)[0])
+_A1, _A2 = "2026-09-01", "2026-09-30"
+# umumiy 90 000 (uchga teng), Mevalar ichki kategoriyada
+entries.rasxod_qosh(dAn, "2026-09-02", "bozor", 90_000, aF, turi_id=_aboz)
+entries.rasxod_qosh(dAn, "2026-09-03", "olma", 30_000, aO, turi_id=_ameva)
+# Fayzulloxonning shaxsiy rasxodi
+entries.rasxod_qosh(dAn, "2026-09-04", "kiyim", 50_000, aF, umumiymi=False,
+                    turi_id=_akiy)
+# Otabek Fayzulloxon UCHUN olgan — Fayzulloxonning shaxsiysi
+entries.rasxod_qosh(dAn, "2026-09-05", "poyabzal", 70_000, aO,
+                    turi_id=_akiy, kim_uchun=aF)
+# oraliqdan tashqarida — hisobga kirmaydi
+entries.rasxod_qosh(dAn, "2026-10-01", "oktabr", 99_000, aF, umumiymi=False,
+                    turi_id=_akiy)
+
+_ax = ledger.odam_rasxod_xulosa(dAn, aF, _A1, _A2)
+teng("odam: shaxsiy = o'zi + uning uchun olingan", 120_000, _ax["shaxsiy"])
+teng("odam: umumiy = faqat ULUSHI (butun summa emas)", 40_000, _ax["umumiy"])
+teng("odam: jami", 160_000, _ax["jami"])
+# v_balans butun davrni ko'radi — solishtirish ham butun davr bilan
+_bal = {b["id"]: b for b in dAn.q("SELECT * FROM v_balans")}
+_axh = ledger.odam_rasxod_xulosa(dAn, aF, "2000-01-01", "2100-12-31")
+teng("odam: v_balans bilan bir xil (shaxsiy + uchun_ulush)",
+     _bal[aF]["shaxsiy"] + _bal[aF]["uchun_ulush"], _axh["shaxsiy"])
+teng("odam: v_balans bilan bir xil (umumiy_ulush)",
+     _bal[aF]["umumiy_ulush"], _axh["umumiy"])
+_atb = {t["turi_id"]: t for t in ledger.turi_boyicha(dAn, _A1, _A2, aF, "umumiy")}
+teng("odam: ichki kategoriya ulushi otasiga qo'shildi", 40_000,
+     _atb[_aboz]["summa"])
+tekshir("odam: umumiyda shaxsiy kategoriya yo'q", _akiy not in _atb)
+teng("odam: uch kishining ulushi = uyning umumiy rasxodi", 120_000,
+     sum(ledger.odam_rasxod_xulosa(dAn, o, _A1, _A2)["umumiy"]
+         for o in (aF, aO, aB)))
+teng("filtrsiz — eskicha, uyning butun rasxodi", 240_000,
+     sum(t["summa"] for t in ledger.turi_boyicha(dAn, _A1, _A2)))
+_adoira = ledger.doira_bolaklari(dAn, _A1, _A2, odam_id=aF, qism="hammasi")
+teng("doira (odam): yig'indi = jami", 160_000,
+     sum(b["summa"] for b in _adoira))
+teng("doira (odam): ulush 100%", 1000, sum(b["ulush"] for b in _adoira))
+_akj = ledger.kategoriya_jadvali(dAn, _A1, _A2, aF, "shaxsiy")
+teng("jadval (odam, shaxsiy)", 120_000, sum(t["summa"] for t in _akj))
+
+# Kategoriya ichi: har rasxod, yig'indisi bo'lakdagi songa teng
+_aich = ledger.kategoriya_rasxodlari(dAn, [_aboz], _A1, _A2)
+teng("ichi: Bozorlik — ichki kategoriya rasxodi ham", 2, len(_aich))
+teng("ichi: yig'indi = bo'lak", 120_000, sum(x["summa"] for x in _aich))
+_aich = ledger.kategoriya_rasxodlari(dAn, [_aboz], _A1, _A2, aF, "hammasi")
+teng("ichi (odam): faqat ulushi", 40_000, sum(x["summa"] for x in _aich))
+teng("ichi (odam): butun summa ham bor", 120_000, sum(x["jami"] for x in _aich))
+_aich = ledger.kategoriya_rasxodlari(dAn, [_akiy], _A1, _A2, aF, "shaxsiy")
+teng("ichi (odam, shaxsiy): kiyim + poyabzal", {"kiyim", "poyabzal"},
+     {x["nom"] for x in _aich})
+tekshir("ichi: oraliqdan tashqarisi yo'q",
+        all(x["nom"] != "oktabr" for x in _aich))
+teng("ichi: bo'sh ro'yxat", [],
+     ledger.kategoriya_rasxodlari(dAn, [], _A1, _A2))
+entries.rasxod_qosh(dAn, "2026-09-06", "nomsiz", 6_000, aF, umumiymi=False)
+teng("ichi: «Kategoriyasiz»", ["nomsiz"],
+     [x["nom"] for x in ledger.kategoriya_rasxodlari(dAn, [None], _A1, _A2)])
+_aql = ledger.doira_bolaklari(dAn, _A1, _A2, korsat=1)
+_anomli = {t["turi_id"] for t in ledger.turi_boyicha(dAn, _A1, _A2)
+           if t["turi_id"] is not None}
+teng("doira: «Qolganlari» ichida birinchisidan boshqa hammasi",
+     _anomli - {_aql[0]["turi_id"]},
+     set(next(b for b in _aql if b["tur"] == "qolgan")["idlar"]))
+try:
+    ledger.turi_boyicha(dAn, _A1, _A2, aF, "yolgon")
+    tekshir("noma'lum qism rad etiladi", False)
+except ValueError:
+    tekshir("noma'lum qism rad etiladi", True)
+tekshir("audit toza (analitika)", ledger.audit(dAn).toza)
+
+# Kategoriyani ro'yxatdan almashtirish — bir nechtasi, bitta undo
+_akiy2 = dAn.skalyar("SELECT id FROM turi WHERE ota_id IS NULL AND faol=1"
+                     " AND id NOT IN (?, ?) ORDER BY id LIMIT 1", _aboz, _akiy)
+_aitem = dAn.apply("item", "INSERT", {"nom": "Olma", "turi_id": _ameva})
+_ax1 = entries.rasxod_qosh(dAn, "2026-09-07", "olma2", 12_000, aF,
+                           turi_id=_ameva, item_id=_aitem)
+_ax2 = entries.rasxod_qosh(dAn, "2026-09-07", "non", 8_000, aO, turi_id=_aboz)
+_bal0 = [dict(r) for r in dAn.q("SELECT * FROM v_balans ORDER BY id")]
+_ulush0 = dAn.q("SELECT rasxod_id, odam_id, summa FROM ulush ORDER BY id")
+teng("turi: ikkitasi almashdi", 2,
+     entries.rasxod_turi_qoy(dAn, [_ax1, _ax2, _ax2], _akiy2))
+teng("turi: yangi kategoriya yozildi", {_akiy2},
+     {r["turi_id"] for r in dAn.q("SELECT turi_id FROM rasxod WHERE id IN (?,?)",
+                                  _ax1, _ax2)})
+teng("turi: boshqa kategoriyaning mahsuloti bo'shatildi", None,
+     dAn.skalyar("SELECT item_id FROM rasxod WHERE id=?", _ax1, birlamchi=None))
+teng("turi: balansga tegmadi", _bal0,
+     [dict(r) for r in dAn.q("SELECT * FROM v_balans ORDER BY id")])
+teng("turi: ulushlar o'zgarmadi", [tuple(r) for r in _ulush0],
+     [tuple(r) for r in dAn.q("SELECT rasxod_id, odam_id, summa FROM ulush"
+                              " ORDER BY id")])
+tekshir("audit toza (kategoriya almashgandan keyin)", ledger.audit(dAn).toza)
+_aguruh = dAn.skalyar("SELECT COUNT(*) FROM ozgarishlar")
+teng("turi: allaqachon shu kategoriyada — 0, yozuv yo'q", 0,
+     entries.rasxod_turi_qoy(dAn, [_ax1], _akiy2))
+teng("turi: bo'sh chaqiruv log yozmadi", _aguruh,
+     dAn.skalyar("SELECT COUNT(*) FROM ozgarishlar"))
+dAn.undo()
+teng("turi: bitta undo ikkalasini qaytardi", [_ameva, _aboz],
+     [dAn.skalyar("SELECT turi_id FROM rasxod WHERE id=?", x)
+      for x in (_ax1, _ax2)])
+teng("turi: undo mahsulotni ham qaytardi", _aitem,
+     dAn.skalyar("SELECT item_id FROM rasxod WHERE id=?", _ax1))
+for _yomon in (None, 999_999):
+    try:
+        entries.rasxod_turi_qoy(dAn, [_ax1], _yomon)
+        tekshir(f"turi: yaroqsiz kategoriya ({_yomon}) rad etiladi", False)
+    except ValueError:
+        tekshir(f"turi: yaroqsiz kategoriya ({_yomon}) rad etiladi", True)
+dAn.yop()
+
+
 # ═════════════════════════════════════════════════════════ yakun
 
-dG.yop(); dS.yop(); dR.yop(); dK.yop(); dO.yop(); d.yop(); d2.yop(); d3.yop(); dU.yop(); d8.yop(); d9.yop(); dA.yop(); dB.yop(); dC.yop(); dD.yop()
+dG.yop(); dS.yop(); dR.yop(); dK.yop(); dO.yop(); d.yop(); d2.yop(); d3.yop(); dU.yop(); d8.yop(); d9.yop(); dA.yop(); dB.yop(); dC.yop(); dD.yop(); dT.yop(); dT2.yop()
 shutil.rmtree(_TMP, ignore_errors=True)
 
 print("\n" + "═" * 62)

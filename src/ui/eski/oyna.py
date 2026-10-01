@@ -26,13 +26,16 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QHBoxLayout,
 
 import config
 import money
-from core import ledger
+from core import ledger, plan
 from core import vazifa as vz
 from ui.eski import theme
 from ui.eski.sahifa_asosiy import (BugunSahifa, KirimSahifa, QarzSahifa,
                               RasxodSahifa)
-from ui.eski.sahifa_qosh import (HisobotSahifa, OdamSahifa, RejaSahifa,
-                            SozlamaSahifa)
+from ui.eski.sahifa_analitika import AnalitikaSahifa
+from ui.eski.sahifa_kategoriya import KategoriyaSahifa
+from ui.eski.sahifa_mahsulot import MahsulotSahifa
+from ui.eski.sahifa_qosh import (HisobotSahifa, OdamSahifa,  # noqa: F401
+                                 RejaSahifa, SozlamaSahifa)  # noqa: F401
 from ui.eski.sahifa_tanlov import TanlovSahifa
 from ui.eski.widgets import GildirakQalqoni, qayta_chiz, yoq
 from ui.eski.sahifa_vazifalar import (ShaxsiyVazifaSahifa,
@@ -40,12 +43,23 @@ from ui.eski.sahifa_vazifalar import (ShaxsiyVazifaSahifa,
 
 MOLIYA_SAHIFALAR = [
     ("Bugun",       "◆", BugunSahifa),
-    ("Rasxodlar",   "▤", RasxodSahifa),
+    # «Rasxodlar» varag'i foydalanuvchi so'rovi bilan menyudan olindi
+    # (2026-09-25): rasxod «Bugun» da yoziladi va tahrirlanadi. Sinf
+    # joyida — qaytarish uchun shu qatorni ochish kifoya.
+    # ("Rasxodlar",   "▤", RasxodSahifa),
     ("Kirim",       "▲", KirimSahifa),
     ("Qarz",        "⇄", QarzSahifa),
     ("Shaxsiy",     "◉", OdamSahifa),
-    ("Reja",        "☰", RejaSahifa),
-    ("Hisobot",     "▦", HisobotSahifa),
+    # «Reja» va «Hisobot» varaqlari foydalanuvchi so'rovi bilan menyudan
+    # olindi (2026-09-30). Sinflar joyida — qaytarish uchun qatorni ochish
+    # kifoya. (Oylik reja/fakt Analitika → «Reja va fakt» da qoladi.)
+    # ("Reja",        "☰", RejaSahifa),
+    # ("Hisobot",     "▦", HisobotSahifa),
+    # Nomlar foydalanuvchi so'rovi bilan almashtirilgan (2026-09-30):
+    # mahsulot/kategoriya daraxti — «Kategoriyalar», ikonkalar — «Iconlar».
+    ("Kategoriyalar", "▣", MahsulotSahifa),
+    ("Iconlar",     "◈", KategoriyaSahifa),
+    ("Analitika",   "◔", AnalitikaSahifa),
     ("Sozlamalar",  "⚙", SozlamaSahifa),
 ]
 
@@ -254,12 +268,17 @@ class Oyna(QMainWindow):
             return
 
         a = ledger.audit(self.db)
-        naqd = self.db.skalyar("SELECT SUM(naqd) FROM v_balans")
+        # Faqat asosiy odamning (Fayzulloxon) puli; boshqalarda pul
+        # bo'lmasa ularning rejaga ulushi ham undan — `plan.qoldagi_pul`.
+        qp = plan.qoldagi_pul(self.db)
         holat = ("✔ kitob teng" if a.toza else "✘ kitob teng emas!")
         rang = theme.YON_KUL if a.toza else theme.QIZIL_TUQ
         self.yon_holat.setText(
-            f"Qo'ldagi jami pul<br><b style='font-size:14px;color:{theme.MATN_OQ}'>"
-            f"{money.fmt(naqd)}</b> so'm<br><br>"
+            f"{qp['nom']}ning qo'lidagi pul<br>"
+            f"<b style='font-size:14px;color:{theme.MATN_OQ}'>"
+            f"{money.fmt(qp['qoldi'])}</b> so'm"
+            + (f"<br>rejaga band {money.fmt(qp['band'])}" if qp["band"] else "")
+            + "<br><br>"
             f"<span style='color:{rang}'>{holat}</span>")
         self.statusBar().showMessage("Moliya")
 

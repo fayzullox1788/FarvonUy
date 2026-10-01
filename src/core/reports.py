@@ -292,7 +292,7 @@ def html_hisobot(db, boshi: str, oxiri: str,
     q.append(f"<div class='karta'><h2>Tekshiruv</h2>{nishon}"
              f"<div class='izoh'>Qarzlar yig'indisi: {a.sof_yigindi} "
              f"(nolga teng bo'lishi shart) &nbsp;·&nbsp; "
-             f"Naqd pul: {_pul(a.naqd_yigindi)} = kirim − rasxod "
+             f"Naqd pul: {_pul(a.naqd_yigindi)} = kirim − rasxod + tashqi qarz "
              f"({_pul(a.kutilgan_naqd)})</div>")
     for m in a.muammolar:
         q.append(f"<div class='izoh manfiy'>{html.escape(m)}</div>")
@@ -491,6 +491,7 @@ def vazifa_excel(db, dan: str, oxiri: str, odam_id=None,
         kun = vz._sana(r["sana"])
         bajarildi = r["holat"] == vz.BAJARILDI
         holat = ("Bajarildi" if bajarildi
+                 else "Qazo" if r["holat"] == vz.QAZO
                  else ("Kechikkan" if kun < bugun else "Kutilmoqda"))
         qiymatlar = [vz.KUNLAR[kun.weekday()], kun.strftime("%d.%m.%Y"),
                      r["vaqt"] or "kun bo'yi", r["nom"], r["odam"], holat,

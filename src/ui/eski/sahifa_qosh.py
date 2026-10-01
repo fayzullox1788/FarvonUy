@@ -72,7 +72,11 @@ class OdamSahifa(Sahifa):
         self.tushuntirish.qosh(self.tush_matn)
         self.tana.addWidget(self.tushuntirish)
 
+        # Foydalanuvchi so'rovi bilan YASHIRILGAN (2026-10-01) — hisoblanib
+        # turadi, `setVisible(True)` qaytaradi.
         k = Karta("Kunlik harakat")
+        self.kunlik_karta = k
+        k.setVisible(False)
         self.jadval = Jadval(
             ["Kun", "Kirim", "Shaxsiy rasxod", "Umumiy ulushi", "Qoldiq"],
             pul_ustunlar={1, 2, 3, 4})
@@ -102,7 +106,16 @@ class OdamSahifa(Sahifa):
         b = ledger.balans(self.db, oid)
         if not b:
             return
-        self.darajalar.qoy([x for x in ledger.darajalar(self.db)
+        # Reja tuzilgan bo'lsa, oyning sarflanmagan rejasidan shu odamning
+        # teng ulushi band — qo'ldagi va adolatli puldan ayiriladi.
+        # Qo'ldagi puldan faqat bor qismi ayiriladi (`plan.band_hisob`):
+        # yetmagani — qarz, balans rejadan minusga tushmaydi.
+        bh = plan.band_hisob(self.db)
+        mening = bh.get(oid, {"band": 0, "ayirildi": 0, "qarz": 0,
+                              "qoplaydi": 0})
+        band = mening["ayirildi"]
+        band_hamma = plan.band_ayirma(self.db)
+        self.darajalar.qoy([x for x in ledger.darajalar(self.db, band_hamma)
                             if x["id"] == oid])
 
         while self.kartalar.count():
@@ -110,39 +123,78 @@ class OdamSahifa(Sahifa):
             if x.widget():
                 x.widget().deleteLater()
         self.kartalar.addWidget(RaqamKarta(
-            "Real balans", b["naqd"], "hozir qo'lingdagi pul"))
-        self.kartalar.addWidget(RaqamKarta(
-            "Sof pozitsiya", b["sof"],
-            "senga qarzdorlar" if b["sof"] > 0 else
-            ("sen qarzdorsan" if b["sof"] < 0 else "qarz yo'q"), rangli=True))
-        self.kartalar.addWidget(RaqamKarta(
-            "Adolatli balans", b["adolat"], "hisoblashgandan keyin qoladi"))
-        self.kartalar.addWidget(RaqamKarta(
-            "Jami kirim", b["kirim"], f"shaxsiy rasxod {money.fmt(b['shaxsiy'])}"))
-        if b["uchun_ulush"]:
-            k = RaqamKarta("Men uchun olingan", b["uchun_ulush"],
-                           "boshqa to'lagan — qarz")
+            "Real balans", b["naqd"] - band,
+            f"rejaga band {money.fmt(band)} ayirilgan" if band
+            else "hozir qo'lingdagi pul"))
+        if mening["band"] or mening["qoplaydi"]:
+            if mening["qarz"]:
+                izohi = (f"{money.fmt(mening['qarz'])} hisobda yo'q — "
+                         f"qarzga yozildi")
+            elif mening["qoplaydi"]:
+                izohi = (f"boshqalar o'rniga {money.fmt(mening['qoplaydi'])}"
+                         f" qoplandi")
+            else:
+                izohi = "oy rejasidan ulush"
+            k = RaqamKarta("Rejaga band", mening["band"] + mening["qoplaydi"],
+                           izohi)
             k.izoh_holati("berasan")
+            # Tugma: umumiy va shaxsiy reja uchun ajratilgan pul.
+            k.setCursor(Qt.PointingHandCursor)
+            k.setToolTip("Bosing — umumiy va shaxsiy reja uchun ajratilgan pul")
+            k.mousePressEvent = lambda _e, oid=oid: self._band(oid)
+            self.band_karta = k
             self.kartalar.addWidget(k)
+        self.kartalar.addWidget(RaqamKarta(
+            "Adolatli balans", b["adolat"] - mening["band"],
+            "rejadan keyin qoladi" if band else "hisoblashgandan keyin qoladi"))
+        # «Jami kirim» kartasi foydalanuvchi so'rovi bilan olib tashlangan
+        # (2026-10-01); kirim «Hisob» qatorida va tooltipda ko'rinadi.
+        # Qarz uchun YAGONA karta-tugma (2026-10-01, foydalanuvchi so'ragan):
+        # ichki + tashqi qarz jami; bosilsa `QarzlarimOyna` — ikkalasi ham
+        # ro'yxati bilan, shu yerda yopiladi. «Sof pozitsiya», «Men uchun
+        # olingan» va «Tashqi qarz» kartalari shu bilan almashgan.
+        qz = plan.odam_qarzlari(self.db, oid)
+        izohlar = []
+        if qz["jami"]:
+            izohlar.append(f"uyda {money.fmt(qz['ichki_jami'])} · "
+                           f"tashqi {money.fmt(qz['tashqi_jami'])}"
+                           + (f" · rejadan {money.fmt(qz['reja_jami'])}"
+                              if qz["reja_jami"] else ""))
+        else:
+            izohlar.append("qarz yo'q")
+        if qz["menga_jami"]:
+            izohlar.append(f"senga qarzdor {money.fmt(qz['menga_jami'])}")
+        k = RaqamKarta("Qarzim", qz["jami"], " · ".join(izohlar))
+        k.izoh_holati("berasan" if qz["jami"] else "qaytadi")
+        k.setCursor(Qt.PointingHandCursor)
+        k.setToolTip("Bosing — ichki va tashqi qarzlar, shu yerda yopish")
+        k.mousePressEvent = lambda _e, oid=oid: self._qarzlar(oid)
+        self.qarz_karta = k
+        self.kartalar.addWidget(k)
 
         # Uzun tushuntirish emas — bitta qatorlik hisob. Kim batafsil
         # ko'rmoqchi bo'lsa, sichqonchani ustiga olib borsa chiqadi.
         self.tush_matn.setText(
             f"{money.fmt(b['kirim'])} kirim  −  "
             f"{money.fmt(b['shaxsiy'])} shaxsiy  −  "
-            f"{money.fmt(b['umumiy_ulush'] + b['uchun_ulush'])} ulush  =  "
-            f"<b>{money.fmt(b['adolat'])}</b> adolatli balans")
+            f"{money.fmt(b['umumiy_ulush'] + b['uchun_ulush'])} ulush  "
+            + (f"−  {money.fmt(mening['band'])} rejaga band  " if mening['band'] else "")
+            + f"=  <b>{money.fmt(b['adolat'] - mening['band'])}</b> adolatli balans")
         self.tushuntirish.setToolTip(
-            f"Real balans (qo'ldagi pul): {money.fmt(b['naqd'])}\n"
+            f"Real balans (qo'ldagi pul): {money.fmt(b['naqd'] - band)}\n"
             f"  kirim {money.fmt(b['kirim'])}\n"
             f"  − shaxsiy {money.fmt(b['shaxsiy'])}\n"
             f"  − umumiyga to'lagani {money.fmt(b['umumiy_tolagan'])}\n"
             f"  − bergan qarzi {money.fmt(b['qarz_bergan'])}\n"
             f"  + olgan qarzi {money.fmt(b['qarz_olgan'])}\n"
             f"  − to'lagani {money.fmt(b['hk_tolagan'])}\n"
-            f"  + olgani {money.fmt(b['hk_olgan'])}\n\n"
+            f"  + olgani {money.fmt(b['hk_olgan'])}\n"
+            f"  + tashqaridan olgan qarzi {money.fmt(b['tashqi_olgan'])}\n"
+            f"  − uni qaytargani {money.fmt(b['tashqi_qaytargan'])}\n"
+            f"  − rejaga band {money.fmt(band)}\n\n"
             f"Sof pozitsiya: {money.fmt(b['sof'], True)}\n"
-            f"Adolatli balans = real balans + sof pozitsiya")
+            f"Adolatli balans = real balans + sof pozitsiya\n"
+            f"(Rejaga band — oyning sarflanmagan rejasi, hammaga teng)")
 
         self.jadval.tuldir(
             [[sana_qisqa(k["sana"]), k["kirim"], k["shaxsiy"], k["ulush"],
@@ -170,6 +222,17 @@ class OdamSahifa(Sahifa):
                 f"{r['belgi'] or ''} {r['turi_nom'] or ''}".strip() or "—",
                 tur, r["summa"]])
         self.rasxod_jadval.tuldir(qatorlar)
+
+    def _band(self, oid: int):
+        from ui.eski.dialogs import RejagaBandOyna
+        RejagaBandOyna(self.db, oid, self).exec()
+
+    def _qarzlar(self, oid: int):
+        from ui.eski.dialogs import QarzlarimOyna
+        d = QarzlarimOyna(self.db, oid, self)
+        d.exec()
+        if d.ozgardi:
+            self.oyna.yangila()
 
     def _eksport(self):
         oid = self.kim.odam_id()
@@ -529,11 +592,13 @@ class HisobotSahifa(Sahifa):
             f"shu tempda pul {p['yetadi_kun']} kunga yetadi"
             if p["yetadi_kun"] else "hisoblab bo'lmadi"))
 
-        self.darajalar.qoy(ledger.darajalar(self.db))
+        band = plan.band_ayirma(self.db)
+        self.darajalar.qoy(ledger.darajalar(self.db, band))
 
         self.balans_jadval.tuldir(
             [[r["nom"], r["kirim"], r["shaxsiy"], r["umumiy_tolagan"],
-              r["umumiy_ulush"], r["naqd"], r["sof"], r["adolat"]]
+              r["umumiy_ulush"], r["naqd"] - band.get(r["id"], 0), r["sof"],
+              r["adolat"] - band.get(r["id"], 0)]
              for r in ledger.balanslar(self.db)], rangli_ustunlar={6})
 
         turlar = ledger.turi_boyicha(self.db, dan, gacha)
@@ -553,7 +618,7 @@ class HisobotSahifa(Sahifa):
                 f"<span style='color:{theme.YASHIL};font-weight:700'>"
                 f"✔ KITOB TENG</span><br><br>"
                 f"Qarzlar yig'indisi: {a.sof_yigindi} (nolga teng bo'lishi shart)<br>"
-                f"Naqd pul: {money.fmt(a.naqd_yigindi)} = kirim − rasxod "
+                f"Naqd pul: {money.fmt(a.naqd_yigindi)} = kirim − rasxod + tashqi qarz "
                 f"({money.fmt(a.kutilgan_naqd)})<br>"
                 f"Har odam uchun: adolatli balans = real balans + sof pozitsiya ✔<br>"
                 f"Har umumiy rasxodning ulushlari summasiga teng ✔")

@@ -35,6 +35,18 @@ def fmt_som(summa: int | float | None, belgi: bool = False) -> str:
     return f"{fmt(summa, belgi)} so'm"
 
 
+def foiz(qism: int, butun: int) -> int | None:
+    """`qism` `butun` ning necha foizi — butun son, yarmi yuqoriga.
+
+    Float yo'q: 1 860 000 / 3 000 000 → 62. `butun` 0 yoki manfiy
+    bo'lsa foiz ma'nosiz — None. 100 dan oshishi mumkin (oshib ketgan
+    reja), CHEKLANMAYDI.
+    """
+    if not butun or butun <= 0:
+        return None
+    return (int(qism) * 200 + int(butun)) // (2 * int(butun))
+
+
 def parse(matn: str) -> int:
     """'1 559 000', '1559000', '1.559.000', '1559k', '1,5 mln' -> butun so'm.
 

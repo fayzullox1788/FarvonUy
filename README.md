@@ -103,14 +103,13 @@ o'zi joylashadi (`odam.tartib` bo'yicha), va har kuni idish yuvish ham
 qo'shiladi:
 
 ```
-Dushanba   19:00  Fayzulloxon pishiradi   20:00  Abbosxon yuvadi
-Seshanba   19:00  Otabek pishiradi        20:00  Fayzulloxon yuvadi
-Chorshanba 19:00  Abbosxon pishiradi      20:00  Otabek yuvadi
+Dushanba   19:00  Fayzulloxon pishiradi   20:00  Fayzulloxon yuvadi
+Seshanba   19:00  Otabek pishiradi        20:00  Otabek yuvadi
+Chorshanba 19:00  Abbosxon pishiradi      20:00  Abbosxon yuvadi
 Payshanba  19:00  Fayzulloxon … (aylanadi)
 ```
 
-Qoida: **idishni navbatdagi OLDINGI odam yuvadi** — ya'ni kecha
-pishirgan odam bugun yuvadi.
+Qoida: **kim ovqat qilsa, idishni ham o'sha yuvadi.**
 
 Necha kunga yozilishi «Biriktirish» oynasida tanlanadi (birlamchi
 7 kun) va yozishdan oldin butun ro'yxat ko'rsatiladi. Hammasi bitta
@@ -127,7 +126,7 @@ tafsilot oynasida «Navbatni o'zgartirish» bor:
 | **Faqat shu kunni berish** | almashuvsiz — shu kun boshqasiga o'tadi, xolos. Reja tuzilishidan oldingi tartibsizlikni tekislash uchun: kim ortiqcha qilgan bo'lsa, bitta navbat boshqasiga o'tkaziladi. |
 
 Ikkalasida ham o'sha kunning **idish yuvuvchisi o'zi qayta hisoblanadi** —
-«kim pishirsa, undan oldingi yuvadi» qoidasi buzilmaydi. Har biri bitta
+«kim pishirsa, o'sha yuvadi» qoidasi buzilmaydi. Har biri bitta
 amal: kerak bo'lsa bitta qadamda qaytariladi.
 
 Ovqatdan keyin qaysi ish kelishi Vazifalar ro'yxatidagi «keyin:»
@@ -174,6 +173,33 @@ savol takrorlanmaydi.
 
 Boshlang'ich qadamlar bir marta ekiladi; xohlaganini qo'shish yoki
 olib tashlash mumkin.
+
+### Takroriy vazifalar
+
+«Namoz o'qish» kabi ish har kuni takrorlanadi. Uni har hafta qayta
+yozib chiqish shart emas: yangi vazifa (yoki «Biriktirish») oynasida
+**«Takrorlansin»** ni belgilang.
+
+| Naqsh | Nima bo'ladi |
+|---|---|
+| **Har kuni** | har kuni, ayni soatda |
+| **Tanlangan kunlar** | faqat belgilangan hafta kunlarida (Du, Ch, Ju) |
+| **Har N kunda** | ikki, uch … kunda bir marta |
+
+Belgilangan zahoti oynada **qaysi kunlarga tushishi** ko'rsatiladi.
+
+Kalendar **30 kunga oldindan** to'ldiriladi va o'zi davom etadi:
+dastur har ochilganda va `xabarchi.py` har chaqirilganda yetishmagan
+kunlarni yozib qo'yadi. Ya'ni ro'yxat hech qachon tugamaydi.
+
+Takroriy kun oddiy vazifa bo'lib turadi — eslatma ham, Telegram
+tugmasi ham, odat sanog'i ham eskisicha ishlaydi.
+
+**Bitta kunni bekor qilish qoidani to'xtatmaydi**, va o'sha kun
+keyin qaytib ham kelmaydi. Butun qoidani to'xtatish — **Vazifalar →
+Takroriy vazifalar** kartasidagi ✕. U bugundan boshlab hali
+bajarilmagan kunlarni oladi; **o'tgan kunlar va bajarilganlari
+joyida qoladi**.
 
 ### Odatlar va yutuqlar
 
@@ -347,13 +373,31 @@ Bittasi buzilsa — «Hisobot» sahifasida qizil yozuv chiqadi.
 ## Qarz qayerdan chiqqan
 
 «Qarz» sahifasidagi «Otabek → Fayzulloxon: 547 667» qatoriga bosilsa,
-o'sha son NIMADAN yig'ilgani ochiladi: har bir umumiy rasxod ulushi,
-to'g'ridan-to'g'ri qarz va to'lov — sanasi, nomi va holati bilan.
+o'sha sonning **hali to'lanmagan** qismi ochiladi: qaysi rasxod ulushi
+va qaysi qarz — sanasi va nomi bilan. To'langani ko'rinmaydi.
 
-`+` qarzni oshirgan yozuv, `−` kamaytirgan (teskari yo'nalishdagi
-rasxod yoki to'lov). **Qatorlar yig'indisi aynan yuqoridagi songa
-teng** — `tekshir.py` har juftlik uchun shuni tekshiradi, chunki
-tafsilot boshqa raqam ko'rsatsa butun sahifaga ishonch yo'qoladi.
+To'lovlar ko'pincha «erkin» yoziladi — qaysi rasxod uchun ekani
+aytilmaydi. Shuning uchun ular (va teskari yo'nalishdagi rasxodlar)
+**eng eski qarzdan boshlab** ayiriladi: to'liq yopilgani chiqmaydi,
+qisman yopilganining qolgan qismi «Qisman · asli …» bo'lib chiqadi.
+«To'landi» deb belgilangan rasxod o'z to'lovi bilan birga chiqib ketadi.
+
+**Qatorlar yig'indisi aynan yuqoridagi songa teng** — `tekshir.py`
+har juftlik uchun shuni tekshiradi, chunki tafsilot boshqa raqam
+ko'rsatsa butun sahifaga ishonch yo'qoladi.
+
+## Analitika
+
+Moliya bo'limidagi «Analitika» varag'i — hozircha bitta doira:
+tanlangan oraliqdagi rasxod kategoriyalar bo'yicha. Yonida har
+bo'lakning nomi, summasi va foizi yozilgan; sichqoncha bilan bo'lak
+ustiga borilsa rasxodlar soni ham chiqadi.
+
+* Rangli bo'lak ko'pi bilan **5 ta**: kategoriya ko'p bo'lsa eng
+  kattalari qoladi, kichiklari bitta kulrang «Qolganlari» ga yig'iladi.
+* Kategoriyasi tanlanmagan rasxod — shtrixli kulrang «Kategoriyasiz»,
+  doim oxirida.
+* Foizlar yig'indisi har doim aynan **100,0%** (`money.bol_tortli`).
 
 ---
 

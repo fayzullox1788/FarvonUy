@@ -35,8 +35,13 @@ from ui.eski.widgets import (Jadval, Karta, OdamTanla, RaqamKarta, SanaEdit,
                              bolim, izoh, qator, sarlavha, tugma, yoq,
                              yorliq)
 
-SOAT_DAN = 6         # to'r shu soatdan boshlanadi
+SOAT_DAN = 0         # to'r butun sutkani ko'rsatadi
 SOAT_GACHA = 24
+# Aylanma kalendar: sutka UCH marta ketma-ket chiziladi va aylantirgich
+# doim o'rtadagisida ushlab turiladi (`HaftaTaqvim._halqa`). 23:59 dan
+# pastga tushilsa o'sha kunning 00:00 i keladi — cheksiz halqa.
+NUSXA = 3
+KUN_DAQIQA = 24 * 60
 SOAT_H = 52          # bir soatning balandligi (piksel)
 YONBOSH = 62         # chapdagi soat ustuni
 BOSH_H = 62          # kun sarlavhalari
@@ -127,6 +132,49 @@ class VazifaDialog(QDialog):
                            self.vaqtsiz.toggled):
                 signal.connect(self._navbatni_korsat)
 
+        # ── takror: «har kuni namoz» bitta QOIDA bo'lib yoziladi.
+        # Navbatli ishda ko'rsatilmaydi: ovqat allaqachon aylanma
+        # jadval, ustiga ikkinchi takror qo'yish qarama-qarshilik
+        # bo'lardi. Tahrirlashda ham yo'q: u yerda bitta KUN
+        # o'zgartiriladi, qoida esa Vazifalar varag'ida turadi.
+        self.takrorli = vazifa_id is None and not self.navbatli
+        self.takror = QCheckBox("Takrorlansin")
+        self.naqsh = QComboBox()
+        for kalit, nom in vz.NAQSHLAR.items():
+            self.naqsh.addItem(nom, kalit)
+        self.oraliq = QSpinBox()
+        self.oraliq.setRange(1, 90)
+        self.oraliq.setValue(2)
+        self.oraliq.setPrefix("har ")
+        self.oraliq.setSuffix(" kunda")
+        self.kun_qutilar = []
+        for i, kun_nom in enumerate(vz.KUN_QISQA):
+            q = QCheckBox(kun_nom)
+            q.setChecked(i == vz._sana(self.sana.iso()).weekday())
+            self.kun_qutilar.append(q)
+        self.kunlar_qator = qator(*self.kun_qutilar, None)
+        self.takror_korsat = izoh("")
+        if self.takrorli:
+            takror_karta = Karta("Takrorlanish")
+            takror_karta.qosh(qator(self.takror, self.naqsh,
+                                    self.oraliq, None))
+            takror_karta.qosh(self.kunlar_qator)
+            takror_karta.qosh(self.takror_korsat)
+            tashqi.addWidget(takror_karta)
+            # Ko'rsatish/yashirish FAQAT karta layoutga qo'shilgandan
+            # KEYIN: otasi yo'q widgetni ko'rsatish Qt'da yangi OYNA
+            # ochish demakdir va ekranda qora quti chaqnab o'tadi.
+            for signal in (self.takror.toggled,
+                           self.naqsh.currentIndexChanged,
+                           self.oraliq.valueChanged,
+                           self.sana.dateChanged,
+                           self.vaqt.timeChanged,
+                           self.vaqtsiz.toggled):
+                signal.connect(self._takrorni_korsat)
+            for q in self.kun_qutilar:
+                q.toggled.connect(self._takrorni_korsat)
+            self._takrorni_korsat()
+
         self.vaqtsiz.toggled.connect(self._vaqtsiz_ozgardi)
 
         tugmalar = QDialogButtonBox(QDialogButtonBox.Save
@@ -152,6 +200,48 @@ class VazifaDialog(QDialog):
     def _vaqtsiz_ozgardi(self, yoqilgan: bool):
         self.vaqt.setEnabled(not yoqilgan)
         self.davomiylik.setEnabled(not yoqilgan)
+
+    def _tanlangan_kunlar(self) -> list[int]:
+        return [i for i, q in enumerate(self.kun_qutilar) if q.isChecked()]
+
+    def _takrorni_korsat(self):
+        """Qoida qaysi kunlarga tushishini OLDINDAN ko'rsatadi.
+
+        Matn haqiqiy `vz.takror_sanalari()` dan quriladi, ya'ni bu
+        yerda ikkinchi hisob-kitob yo'q: ko'ringan narsa aynan
+        yoziladigan narsa.
+        """
+        if not self.takrorli:
+            return
+        yoqilgan = self.takror.isChecked()
+        naqsh = self.naqsh.currentData()
+        self.naqsh.setEnabled(yoqilgan)
+        self.oraliq.setVisible(yoqilgan and naqsh == vz.NAQSH_ORALIQ)
+        self.kunlar_qator.setVisible(yoqilgan and naqsh == vz.NAQSH_KUNLAR)
+        if not yoqilgan:
+            self.takror_korsat.setText(
+                "Faqat tanlangan kunga bitta vazifa yoziladi.")
+            return
+        kunlar = self._tanlangan_kunlar()
+        if naqsh == vz.NAQSH_KUNLAR and not kunlar:
+            self.takror_korsat.setText(
+                "Kamida bitta hafta kuni tanlanishi kerak.")
+            return
+        d0 = vz._sana(self.sana.iso())
+        qoida = {"boshlanish": d0.isoformat(), "tugash": None,
+                 "naqsh": naqsh,
+                 "kunlar": ",".join(str(k) for k in kunlar),
+                 "oraliq": self.oraliq.value()}
+        sanalar = vz.takror_sanalari(
+            qoida, d0, d0 + timedelta(days=vz.TAKROR_UFQ))
+        vaqt = (None if self.vaqtsiz.isChecked()
+                else self.vaqt.time().toString("HH:mm"))
+        koz = "   ".join(x.strftime("%d.%m") for x in sanalar[:5])
+        self.takror_korsat.setText(
+            f"{vz.NAQSHLAR[naqsh]} {vaqt or 'aniq vaqtsiz'}.\n"
+            f"{koz}   ...\n"
+            f"Kalendar {vz.TAKROR_UFQ} kunga oldindan to'ldiriladi va "
+            f"o'zi davom etadi — qayta yozib chiqish shart emas.")
 
     def _navbatni_korsat(self):
         """Navbat rejasini oldindan ko'rsatadi — kim pishiradi, kim yuvadi."""
@@ -217,6 +307,15 @@ class VazifaDialog(QDialog):
                     self.db, self.tur["id"], maydonlar["odam_id"],
                     maydonlar["sana"], maydonlar["vaqt"],
                     self.navbat_kun.value())
+            elif self.takrorli and self.takror.isChecked():
+                vz.takror_qosh(
+                    self.db, maydonlar["nom"], maydonlar["odam_id"],
+                    maydonlar["vaqt"], maydonlar["davomiylik"],
+                    naqsh=self.naqsh.currentData(),
+                    kunlar=self._tanlangan_kunlar(),
+                    oraliq=self.oraliq.value(),
+                    izoh=maydonlar["izoh"],
+                    boshlanish=maydonlar["sana"])
             else:
                 vz.qosh(self.db, **maydonlar)
         except Exception as e:
@@ -257,6 +356,7 @@ class VazifaTafsilot(QDialog):
             ("Vaqt", f"{v['vaqt']} · {v['davomiylik']} daqiqa"
                      if v["vaqt"] else "aniq vaqtsiz"),
             ("Holati", "Bajarildi" if v["holat"] == vz.BAJARILDI
+                       else "Qazo bo'ldi" if v["holat"] == vz.QAZO
                        else "Bajarilmagan"),
         ]
         if v["bajarilgan"]:
@@ -269,6 +369,16 @@ class VazifaTafsilot(QDialog):
             satrlar.append(("Menyu", f"🍲 {v['menyu']}"))
         if v["izoh"]:
             satrlar.append(("Izoh", v["izoh"]))
+        # Takroriy qoidadan chiqqan kun. Buni ko'rsatish SHART:
+        # aks holda «bekor qildim, ertaga yana turibdi» degan holat
+        # tushunarsiz bo'lardi — bekor qilish bitta KUNni oladi,
+        # qoidani emas.
+        tk = vz.takror_egasi(db, v)
+        if tk is not None:
+            satrlar.append(("Takror", "🔁 " + vz.takror_tavsif(tk)
+                            + "  ·  faqat shu kun bekor qilinadi"))
+        elif vz.takrorlimi(v):
+            satrlar.append(("Takror", "qoida to'xtatilgan"))
 
         karta = Karta("Ma'lumot")
         for yorliq_matn, qiymat in satrlar:
@@ -285,7 +395,14 @@ class VazifaTafsilot(QDialog):
         t_tahrir.clicked.connect(self._tahrir)
         t_bekor = tugma("Vazifani bekor qilish", xavfli=True)
         t_bekor.clicked.connect(self._bekor)
-        tashqi.addWidget(qator(t_holat, t_tahrir, None, t_bekor))
+        if vz.namozmi(v) and v["holat"] == vz.OCHIQ:
+            t_qazo = tugma("Qazo bo'ldi")
+            t_qazo.setToolTip("Namoz o'qilmay qoldi: qazo deb belgilanadi va "
+                              "«qazosini o'qish» ishi bugunga qo'shiladi.")
+            t_qazo.clicked.connect(self._qazo)
+            tashqi.addWidget(qator(t_holat, t_qazo, t_tahrir, None, t_bekor))
+        else:
+            tashqi.addWidget(qator(t_holat, t_tahrir, None, t_bekor))
 
         # ── navbatni o'zgartirish
         almash = Karta("Navbatni o'zgartirish")
@@ -307,7 +424,7 @@ class VazifaTafsilot(QDialog):
         almash.qosh(qator(yorliq("Kimga:"), self.yangi_odam, None))
         almash.qosh(qator(t_almash, t_bersin, None))
         self.almash_izoh = izoh(
-            "Kim pishirsa, idishni undan oldingi navbatchi yuvadi — "
+            "Kim pishirsa, idishni ham o'sha yuvadi — "
             "o'zgartirilganda o'sha kunning yuvuvchisi ham o'zi to'g'rilanadi.")
         almash.qosh(self.almash_izoh)
         tashqi.addWidget(almash)
@@ -375,6 +492,15 @@ class VazifaTafsilot(QDialog):
         self.ozgardi = True
         self.accept()
 
+    def _qazo(self):
+        try:
+            vz.qazo_qil(self.db, self.vazifa_id)
+        except Exception as e:
+            xato_koraset(self, str(e))
+            return
+        self.ozgardi = True
+        self.accept()
+
     def _tahrir(self):
         if VazifaDialog(self.db, self.vazifa_id, parent=self).exec():
             self.ozgardi = True
@@ -408,7 +534,7 @@ class _Blok(QFrame):
         self.vazifa_id = qator_["id"]
         self.setCursor(Qt.PointingHandCursor)
         bajarildi = qator_["holat"] == vz.BAJARILDI
-        kechikkan = (not bajarildi
+        kechikkan = (qator_["holat"] == vz.OCHIQ
                      and vz._sana(qator_["sana"]) < date.today())
         asos = _rang(qator_["odam_id"])
         # Bajarilgan ish O'CHIB qolmaydi, YASHIL bo'lib yonadi.
@@ -441,7 +567,9 @@ class _Blok(QFrame):
         # ✓ nom bilan bir xil o'lchamda emas: u alohida, kattaroq va
         # yashil yorliqda turadi (pastda). Matnda faqat kechikkan
         # belgisi qoladi.
-        belgi = "" if bajarildi else ("⏳ " if kechikkan else "")
+        belgi = "" if bajarildi else (
+            "🕌 " if qator_["holat"] == vz.QAZO else
+            "⏳ " if kechikkan else "")
         self._toliq = belgi + qator_["nom"]
         pas_matn = f"{qator_['vaqt'] or ''} · {qator_['odam']}".strip(" ·")
         # Oshpaz Telegramda taom tanlagan bo'lsa kalendarda ham
@@ -493,6 +621,7 @@ class _Blok(QFrame):
         ich.addStretch(1)
 
         holat = "bajarildi" if bajarildi else (
+            "qazo bo'ldi" if qator_["holat"] == vz.QAZO else
             "kechikkan" if kechikkan else "bajarilmagan")
         maslahat = (f"{qator_['nom']}\n{qator_['odam']} · "
                     f"{qator_['sana']} {qator_['vaqt'] or ''}\n{holat}")
@@ -668,24 +797,28 @@ class HaftaTor(QWidget):
         self.kunlar: list[date] = []
         self.qatorlar: list = []
         self._bloklar: list[_Blok] = []
-        self.setMinimumHeight((SOAT_GACHA - SOAT_DAN) * SOAT_H + 8)
+        self.setMinimumHeight(NUSXA * 24 * SOAT_H)
 
     def qoy(self, kunlar, qatorlar):
         self.kunlar = list(kunlar)
         self.qatorlar = [r for r in qatorlar if r["vaqt"]]
-        for b in self._bloklar:
+        for b, _ in self._bloklar:
             yoq(b)
+        # Har vazifa har nusxada bittadan blok: halqa qaysi joyda
+        # «ulansa» ham ko'rinish bir xil bo'lsin.
         self._bloklar = []
-        for r in self.qatorlar:
-            b = _Blok(r, self)
-            b.bosildi.connect(self.vazifa_bosildi)
-            b.show()
-            self._bloklar.append(b)
+        for nusxa in range(NUSXA):
+            for r in self.qatorlar:
+                b = _Blok(r, self)
+                b.bosildi.connect(self.vazifa_bosildi)
+                b.show()
+                self._bloklar.append((b, nusxa))
         self._joylashtir()
         self.update()
 
-    def y_vaqtdan(self, daqiqa: int) -> float:
-        return (daqiqa - SOAT_DAN * 60) / 60 * SOAT_H
+    def y_vaqtdan(self, daqiqa: int, nusxa: int = 1) -> float:
+        """Vaqtning y si. Birlamchi — o'rtadagi (asosiy) nusxa."""
+        return (nusxa * KUN_DAQIQA + daqiqa) / 60 * SOAT_H
 
     def _joylashtir(self):
         if not self.kunlar:
@@ -695,7 +828,9 @@ class HaftaTor(QWidget):
         for r in self.qatorlar:
             bandlik.setdefault((r["sana"], vz._daqiqa(r["vaqt"])),
                                []).append(r["id"])
-        for blok, r in zip(self._bloklar, self.qatorlar):
+        n_q = len(self.qatorlar)
+        for k, (blok, nusxa) in enumerate(self._bloklar):
+            r = self.qatorlar[k % n_q]
             try:
                 ustun = self.kunlar.index(vz._sana(r["sana"]))
             except ValueError:
@@ -703,7 +838,7 @@ class HaftaTor(QWidget):
                 continue
             blok.show()
             daqiqa = vz._daqiqa(r["vaqt"])
-            y = self.y_vaqtdan(daqiqa)
+            y = self.y_vaqtdan(daqiqa, nusxa)
             h = max(26, r["davomiylik"] / 60 * SOAT_H - 3)
             birga = bandlik.get((r["sana"], daqiqa), [r["id"]])
             n = len(birga)
@@ -727,8 +862,8 @@ class HaftaTor(QWidget):
         ustun = int((x - YONBOSH) // max(1.0, kw))
         if not 0 <= ustun < len(self.kunlar):
             return
-        daqiqa = SOAT_DAN * 60 + int(y / SOAT_H * 60)
-        daqiqa = max(0, min(23 * 60 + 30, (daqiqa // 30) * 30))
+        daqiqa = int(y / SOAT_H * 60) % KUN_DAQIQA
+        daqiqa = (daqiqa // 30) * 30
         self.bosh_joy_bosildi.emit(self.kunlar[ustun], vz._vaqt_matn(daqiqa))
 
     def paintEvent(self, hodisa):
@@ -745,11 +880,14 @@ class HaftaTor(QWidget):
                            QColor(theme.KOK_FON))
 
         p.setFont(theme.raqam_shrift(theme.O_MIKRO, 500))
-        for soat in range(SOAT_DAN, SOAT_GACHA + 1):
-            y = self.y_vaqtdan(soat * 60)
-            p.setPen(QPen(QColor(theme.CHIZIQ_OCH)))
+        for jami in range(NUSXA * 24 + 1):
+            soat = jami % 24
+            y = self.y_vaqtdan(jami * 60, 0)
+            # 00:00 — halqaning ulanish joyi, sal quyuqroq chiziladi.
+            p.setPen(QPen(QColor(theme.CHIZIQ if soat == 0
+                                 else theme.CHIZIQ_OCH)))
             p.drawLine(YONBOSH, int(y), self.width(), int(y))
-            if soat < SOAT_GACHA:
+            if jami < NUSXA * 24:
                 p.setPen(QPen(QColor(theme.KUL_OCH)))
                 p.drawText(0, int(y) - 7, YONBOSH - 10, 14,
                            Qt.AlignRight | Qt.AlignVCenter, f"{soat:02d}:00")
@@ -762,13 +900,14 @@ class HaftaTor(QWidget):
             x = YONBOSH + i * kw
             p.drawLine(int(x), 0, int(x), self.height())
 
-        if bugun in self.kunlar and SOAT_DAN <= datetime.now().hour < SOAT_GACHA:
+        if bugun in self.kunlar:
             hozir = datetime.now()
-            y = self.y_vaqtdan(hozir.hour * 60 + hozir.minute)
             i = self.kunlar.index(bugun)
             p.setPen(QPen(QColor(theme.QIZIL), 2))
-            p.drawLine(int(YONBOSH + i * kw), int(y),
-                       int(YONBOSH + (i + 1) * kw), int(y))
+            for nusxa in range(NUSXA):
+                y = self.y_vaqtdan(hozir.hour * 60 + hozir.minute, nusxa)
+                p.drawLine(int(YONBOSH + i * kw), int(y),
+                           int(YONBOSH + (i + 1) * kw), int(y))
         p.end()
 
 
@@ -828,6 +967,7 @@ class HaftaTaqvim(QWidget):
         # To'r yon tomonga surilganda bosh AYNAN shuncha suriladi.
         self.aylanma.horizontalScrollBar().valueChanged.connect(
             self._boshni_sur)
+        self.aylanma.verticalScrollBar().valueChanged.connect(self._halqa)
 
     def qoy(self, kunlar, qatorlar):
         self.bosh.qoy(kunlar, qatorlar)
@@ -864,11 +1004,28 @@ class HaftaTaqvim(QWidget):
         # izi ekranda qolib ketardi.
         self.bosh_quti.update()
 
+    def _halqa(self, qiymat: int):
+        """Aylantirgichni doim o'rtadagi sutkada ushlab turadi.
+
+        Uchala nusxa bir xil chizilgani uchun bir sutka balandligiga
+        sakrash ko'zga ko'rinmaydi — foydalanuvchi uchun 23:59 dan keyin
+        shunchaki 00:00 keladi, va aksincha.
+        """
+        sutka = 24 * SOAT_H
+        # To'r hali joylashmagan bo'lsa (diapazon kichik) sakramaymiz —
+        # aks holda qiymat chegaraga qisilib, halqa o'zini qayta chaqiradi.
+        if self.aylanma.verticalScrollBar().maximum() < 2 * sutka:
+            return
+        if qiymat < sutka // 2:
+            self.aylanma.verticalScrollBar().setValue(qiymat + sutka)
+        elif qiymat >= sutka + sutka // 2:
+            self.aylanma.verticalScrollBar().setValue(qiymat - sutka)
+
     def _vaqtga_sur(self):
         """Birinchi vazifa ko'rinadigan joyga suradi.
 
-        To'r 06:00 dan boshlanadi, uy ishlari esa odatda 09:00 dan
-        keyin — aks holda foydalanuvchi bo'sh to'rni ko'rib \"vazifam
+        To'r butun sutka (00:00 dan, halqa), uy ishlari esa odatda
+        kunduzi — aks holda foydalanuvchi bo'sh to'rni ko'rib \"vazifam
         yo'q\" deb o'ylaydi.
         """
         daqiqalar = [vz._daqiqa(r["vaqt"]) for r in self.tor.qatorlar]
@@ -1419,6 +1576,8 @@ class ShaxsiyVazifaSahifa(QWidget):
             kun = vz._sana(r["sana"])
             if r["holat"] == vz.BAJARILDI:
                 holat = "✓ Bajarildi"
+            elif r["holat"] == vz.QAZO:
+                holat = "🕌 Qazo"
             elif kun < bugun:
                 holat = "⏳ Kechikkan"
             else:
@@ -1589,7 +1748,7 @@ class _TurQator(QFrame):
             i = self.ergash.findData(tur["ergash_turi_id"])
             self.ergash.setCurrentIndex(i if i >= 0 else 0)
             self.ergash.setToolTip(
-                "Ovqatdan keyin idishni avvalgi navbatchi yuvadi. "
+                "Ovqatdan keyin idishni pishirgan odamning o'zi yuvadi. "
                 "Qaysi ish ekanini shu yerda tanlang.")
             self.ergash.currentIndexChanged.connect(
                 lambda: self.ergash_ozgardi.emit(self.tur_id,
@@ -1812,6 +1971,50 @@ class _TurQator(QFrame):
             self._yopiq_h = kerak
 
 
+class _TakrorQator(QFrame):
+    """Bitta takror qoidasi: kim, qaysi ish va qaysi kunlar."""
+
+    ochir = Signal(int)
+
+    def __init__(self, t, parent=None):
+        super().__init__(parent)
+        self.takror_id = t["id"]
+        self.setObjectName("TurQator")
+        self.setStyleSheet(
+            f"QFrame#TurQator {{ background: {theme.KARTA_ICH};"
+            f" border: 1px solid {theme.CHIZIQ_OCH};"
+            f" border-radius: {theme.R_KICHIK}px; }}")
+
+        ich = QHBoxLayout(self)
+        ich.setContentsMargins(14, 8, 10, 8)
+        ich.setSpacing(10)
+
+        nom = QLabel("🔁 " + t["nom"])
+        nom.setWordWrap(True)
+        nom.setStyleSheet(
+            f"color:{theme.MATN};background:transparent;"
+            f"font-size:{theme.O_ASOS}px;font-weight:600;")
+        ich.addWidget(nom, 1)
+
+        kim = QLabel(t["odam"])
+        kim.setStyleSheet(
+            f"color:{_rang(t['odam_id'])};background:transparent;"
+            f"font-size:{theme.O_MAYDA}px;font-weight:700;")
+        ich.addWidget(kim)
+
+        qachon = QLabel(vz.takror_tavsif(t))
+        qachon.setStyleSheet(
+            f"color:{theme.KUL};background:transparent;"
+            f"font-size:{theme.O_MAYDA}px;")
+        ich.addWidget(qachon)
+
+        o = tugma("✕", xavfli=True)
+        o.setMaximumWidth(40)
+        o.setToolTip("Takrorni to'xtatish")
+        o.clicked.connect(lambda: self.ochir.emit(self.takror_id))
+        ich.addWidget(o)
+
+
 class _StreakQator(QFrame):
     """Bitta odat: kim, qaysi ish, va nechta kun ketma-ket."""
 
@@ -1957,6 +2160,7 @@ class VazifaTurlariSahifa(Sahifa):
         self.tana.addWidget(self.bosh_matn)
 
         self._uborka_kartasi()
+        self._takror_kartasi()
         self._streak_kartasi()
         self._menyu_kartasi()
         self.tana.addStretch(1)
@@ -2050,6 +2254,55 @@ class VazifaTurlariSahifa(Sahifa):
             xato_koraset(self, str(e))
             return
         self.oyna.yangila()
+
+    # ── takroriy vazifalar ──────────────────────────────────────────
+    #
+    # Bu yerda faqat RO'YXAT va to'xtatish turadi: qoidaning o'zi
+    # «Biriktirish» (yoki «+ Yangi vazifa») oynasidagi «Takrorlansin»
+    # bilan tuziladi — ikkinchi yaratish shakli qo'yilsa ikkalasi
+    # jimgina bir-biridan ajralib ketardi.
+
+    def _takror_kartasi(self):
+        self.takror_karta = Karta("Takroriy vazifalar")
+        self.takrorlar_quti = QWidget()
+        shaffof(self.takrorlar_quti)
+        self.takrorlar_layout = QVBoxLayout(self.takrorlar_quti)
+        self.takrorlar_layout.setContentsMargins(0, 0, 0, 0)
+        self.takrorlar_layout.setSpacing(8)
+        self.takror_karta.qosh(self.takrorlar_quti)
+        self.takror_karta.qosh(izoh(
+            "Ishni har kuni takrorlash uchun «Biriktirish» oynasida "
+            "«Takrorlansin» ni belgilang. Kalendar "
+            f"{vz.TAKROR_UFQ} kunga oldindan to'ldiriladi va o'zi "
+            "davom etadi — qayta yozib chiqish shart emas."))
+        self.tana.addWidget(self.takror_karta)
+
+    def _takror_ochir(self, takror_id: int):
+        t = vz.takror_bitta(self.db, takror_id)
+        if t is None:
+            return
+        if not tasdiq(self, f"«{t['nom']}» takrori to'xtatilsinmi?\n\n"
+                            "Bugundan boshlab hali bajarilmagan kunlar "
+                            "kalendardan olib tashlanadi. O'tgan kunlar "
+                            "va bajarilganlari joyida qoladi."):
+            return
+        try:
+            vz.takror_ochir(self.db, takror_id)
+        except Exception as e:
+            xato_koraset(self, str(e))
+            return
+        self.oyna.yangila()
+
+    def _takrorlarni_chiz(self):
+        self._bosal(self.takrorlar_layout)
+        royxat = vz.takrorlar(self.db)
+        for t in royxat:
+            q = _TakrorQator(t)
+            q.ochir.connect(self._takror_ochir)
+            self.takrorlar_layout.addWidget(q)
+        if not royxat:
+            self.takrorlar_layout.addWidget(
+                izoh("Hali takroriy vazifa yo'q."))
 
     # ── odatlar (streak) ────────────────────────────────────────────
     #
@@ -2318,6 +2571,7 @@ class VazifaTurlariSahifa(Sahifa):
             self.bosh_matn.setText(
                 "Ro'yxat bo'sh — «+ Yangi vazifa turi» bilan qo'shing.")
 
+        self._takrorlarni_chiz()
         self._streaklarni_chiz(turlar)
 
         # ── general uborka

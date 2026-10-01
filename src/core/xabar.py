@@ -32,6 +32,8 @@ from core import dars
 from core import vazifa as vz
 
 API = "https://api.telegram.org/bot{token}/{metod}"
+FAYL_API = "https://api.telegram.org/file/bot{token}/{yol}"
+RASM_MAX = 1280     # Telegram bergan o'lchamlardan shundan kattasini olmaymiz
 
 # ── sozlama kalitlari ──────────────────────────────────────────────────
 K_TOKEN = "tg_token"
@@ -49,6 +51,8 @@ ALBATTA_TUGMA = "Albatta! ✅"
 # o'zgarsa eski xabarlardagi tugmalar jimgina o'lik bo'lib qolardi.
 DARS_ALBATTA_TUGMA = "Qatnashdim ✅"
 YOQ_TUGMA = "Hali yo'q ⏳"
+# Namoz o'qilmay qoldi → qazo ishi yoziladi (`vz.qazo_qil`).
+QAZO_TUGMA = "Qazo bo'ldi 🕌"
 MENYU_TUGMA = "Menyuyimizda nimalar bor 🍲"
 MENYU_SOROV = "Bugun nima pishirasiz? 🍲"
 
@@ -246,6 +250,91 @@ def _chatni_eslab_qol(db, update: dict) -> int | None:
     return r["id"]
 
 
+# ═══════════════════════════════════════════════════ telefondan mahsulot rasmi
+#
+# Dastur kompyuterda, rasm esa telefonda olinadi. Yo'l: rasmni botga
+# SHAXSIY yuborish, izohiga mahsulot nomini aynan yozish. Xabarchi har
+# daqiqada ishlaydi — rasm bir daqiqada mahsulot kartasida bo'ladi.
+#
+# Faqat uy a'zosi (odam.telegram bilan mos) yuborgani qabul qilinadi:
+# bot ochiq, uni istalgan odam topib rasm tashlashi mumkin.
+
+def _uy_azosi(db, msg: dict):
+    username = (msg.get("from") or {}).get("username")
+    if not username:
+        return None
+    return db.q1("SELECT id, nom FROM odam WHERE faol=1 AND telegram IS NOT NULL"
+                 " AND LOWER(telegram)=LOWER(?)", username)
+
+
+def _rasm_fayl_id(msg: dict) -> str | None:
+    """Rasm (siqilgan) yoki «fayl sifatida» yuborilgan rasm."""
+    olchamlar = msg.get("photo") or []
+    if olchamlar:
+        mos = [p for p in olchamlar
+               if max(p.get("width", 0), p.get("height", 0)) <= RASM_MAX]
+        return (mos[-1] if mos else olchamlar[0])["file_id"]
+    hujjat = msg.get("document") or {}
+    if str(hujjat.get("mime_type", "")).startswith("image/"):
+        return hujjat.get("file_id")
+    return None
+
+
+def _fayl_yukla(token: str, yol: str) -> bytes:
+    """Telegram serveridan fayl — testlarda almashtiriladi."""
+    url = FAYL_API.format(token=token, yol=yol)
+    try:
+        with urllib.request.urlopen(url, timeout=20) as resp:
+            return resp.read()
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"Rasmni yuklab bo'lmadi: {e}") from e
+
+
+def _rasmni_ishla(db, msg: dict, token: str) -> str | None:
+    """Shaxsiy suhbatdagi rasm → izohdagi nomli mahsulotga. Natija matni."""
+    import html
+    from pathlib import PurePosixPath
+    from core import mahsulot as mh
+
+    chat = msg.get("chat") or {}
+    if chat.get("type") != "private":
+        return None
+    fayl_id = _rasm_fayl_id(msg)
+    if not fayl_id or not _uy_azosi(db, msg):
+        return None
+
+    def javob(matn):
+        try:
+            _xabar_yubor(token, chat["id"], matn)
+        except Exception:
+            pass        # javob yetmasa ham rasm saqlangani muhimroq
+
+    izoh = (msg.get("caption") or "").strip()
+    if not izoh:
+        javob("Rasm izohiga mahsulot nomini yozing — masalan: <b>Olma</b>")
+        return "rasm: izohsiz"
+    topilgan = mh.nom_boyicha(db, izoh)
+    if not topilgan:
+        oxshash = mh.oxshashlar(db, izoh)
+        qosh = ("\nBalki: " +", ".join(html.escape(x) for x in oxshash)
+                if oxshash else "")
+        javob(f"«{html.escape(izoh)}» nomli mahsulot topilmadi. Nomni "
+              f"dasturdagidek aniq yozing.{qosh}")
+        return f"rasm: topilmadi ({izoh})"
+    m = topilgan[0]
+    try:
+        f = _sorov(token, "getFile", file_id=fayl_id) or {}
+        yol = f.get("file_path") or ""
+        bayt = _fayl_yukla(token, yol)
+        kengaytma = PurePosixPath(yol).suffix or ".jpg"
+        mh.rasm_baytdan(db, m["id"], bayt, kengaytma)
+    except Exception as e:
+        javob(f"Rasmni saqlab bo'lmadi: {html.escape(str(e))}")
+        return f"rasm: xato ({e})"
+    javob(f"✔ «{html.escape(m['nom'])}» ga rasm biriktirildi.")
+    return f"rasm: {m['nom']}"
+
+
 # ═══════════════════════════════════════════════════════════ kunlik xabar
 
 def oshpaz_vazifasi(db, sana):
@@ -271,6 +360,14 @@ def _taom_klaviatura(db, vazifa_id: int):
     taomlar = mn.royxat(db)
     tugmalar = [(t["nom"], f"taom:{vazifa_id}:{t['id']}") for t in taomlar]
     return [tugmalar[i:i + 2] for i in range(0, len(tugmalar), 2)]
+
+
+def _holat_belgi(v, ochiq_belgi: str) -> str:
+    if v["holat"] == vz.BAJARILDI:
+        return "✅"
+    if v["holat"] == vz.QAZO:
+        return "🕌 qazo —"
+    return ochiq_belgi
 
 
 def _bitta_blok(db, v, tag: str) -> str:
@@ -302,7 +399,7 @@ def _bitta_blok(db, v, tag: str) -> str:
         qatorlar += [f"   • {q}" for q in qadamlar]
         return "\n".join(qatorlar)
 
-    belgi = "✅" if v["holat"] == vz.BAJARILDI else _ish_belgi(v)
+    belgi = _holat_belgi(v, _ish_belgi(v))
     return (f"{tag}, bugun sizda 👇\n"
             f"{belgi} {v['vaqt'] or ''}  {v['nom']}").strip()
 
@@ -418,7 +515,7 @@ def shaxsiy_matn(db, sana, odam_id) -> str | None:
         return None
     qatorlar = ["🔒 Shaxsiy ro'yxatingiz:"]
     for t in tasks:
-        belgi = "✅" if t["holat"] == vz.BAJARILDI else "⏳"
+        belgi = _holat_belgi(t, "⏳")
         qator = f"{belgi} {t['vaqt'] or ''}  {t['nom']}".strip()
         qatorlar.append(qator)
         # Izoh — «qayerda va kim bilan». Dars uchun bu asosiy ma'lumot
@@ -445,7 +542,7 @@ def shaxsiy_bloklar(db, sana) -> list[dict]:
 def shaxsiy_klaviatura(db, sana, odam_id):
     shaxsiy_nomlari = vz.shaxsiy_nomlari(db)
     ochiq = [t for t in vz.kun(db, sana, odam_id)
-             if t["nom"] in shaxsiy_nomlari and t["holat"] != vz.BAJARILDI]
+             if t["nom"] in shaxsiy_nomlari and not vz.yopiqmi(t)]
     if not ochiq:
         return None
     # Tugmaga VAQT yoziladi: bir kunda uchta dars bo'lsa uchta bir xil
@@ -523,7 +620,7 @@ def kutilayotgan(db, hozir: datetime | None = None) -> list[dict]:
             # Hamma ishi allaqachon bajarilgan odamga yangi xabar ochilmaydi.
             tasks = [t for t in vz.kun(db, bugun, b["odam_id"])
                      if t["nom"] not in shaxsiy_nomlari_k]
-            if not any(t["holat"] != vz.BAJARILDI for t in tasks):
+            if all(vz.yopiqmi(t) for t in tasks):
                 continue
             natija.append({"turi": "kunlik", "kalit": kalit,
                            "matn": b["matn"], "chat": None,
@@ -541,7 +638,7 @@ def kutilayotgan(db, hozir: datetime | None = None) -> list[dict]:
     # ── eslatma: faqat BUGUNGI vazifalar, vaqti tugagan va bajarilmagan
     shaxsiy_nomlari = vz.shaxsiy_nomlari(db)
     for v in vz.kun(db, bugun):
-        if v["holat"] == vz.BAJARILDI:
+        if vz.yopiqmi(v):
             continue
         if vz.kechiktirilganmi(v, hozir):
             continue
@@ -567,7 +664,9 @@ def kutilayotgan(db, hozir: datetime | None = None) -> list[dict]:
             "chat": chat, "vazifa_id": v["id"],
             "klaviatura": [[(DARS_ALBATTA_TUGMA if dars.darsmi(v)
                              else ALBATTA_TUGMA, f"bajar:{v['id']}"),
-                            (YOQ_TUGMA, f"haliyoq:{v['id']}")]],
+                            (YOQ_TUGMA, f"haliyoq:{v['id']}")]]
+                          + ([[(QAZO_TUGMA, f"qazo:{v['id']}")]]
+                             if vz.namozmi(v) else []),
         })
 
     # ── dars ogohlantirishi: boshlanishidan `OGOH_DAQIQA` oldin
@@ -577,7 +676,7 @@ def kutilayotgan(db, hozir: datetime | None = None) -> list[dict]:
     # (`dars_ogoh:`), aks holda ogohlantirish yuborilgani davomat
     # savolini bo'g'ib qo'yardi.
     for v in vz.kun(db, bugun):
-        if not dars.darsmi(v) or v["holat"] == vz.BAJARILDI:
+        if not dars.darsmi(v) or vz.yopiqmi(v):
             continue
         if v["vaqt"] is None:
             continue
@@ -639,12 +738,15 @@ def eski_izlarni_tozala(db) -> None:
 
 def _sorov(token: str, metod: str, **maydonlar):
     """Yagona tarmoq chaqiruvi — testlarda almashtiriladi."""
+    # `_vaqt` — Telegramga ketmaydi: uzun so'rovda (getUpdates timeout=N)
+    # ulanish N soniyadan ko'proq kutishi kerak, aks holda o'zimiz uzamiz.
+    vaqt = maydonlar.pop("_vaqt", 15)
     url = API.format(token=token, metod=metod)
     data = json.dumps(maydonlar).encode("utf-8")
     req = urllib.request.Request(
         url, data=data, headers={"Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=vaqt) as resp:
             javob = json.loads(resp.read().decode("utf-8"))
     except urllib.error.URLError as e:
         raise RuntimeError(f"Telegramga ulanib bo'lmadi: {e}") from e
@@ -665,6 +767,37 @@ def _xabar_yubor(token: str, chat_id, matn: str, klaviatura=None):
     if klaviatura:
         maydonlar["reply_markup"] = _klaviatura_json(klaviatura)
     return _sorov(token, "sendMessage", **maydonlar)
+
+
+def _rasm_yubor(token: str, chat_id, yol, izoh: str = ""):
+    """Kompyuterdagi rasmni yuboradi (multipart) — testlarda almashtiriladi."""
+    import uuid
+    from pathlib import Path
+    yol = Path(yol)
+    chegara = uuid.uuid4().hex
+    qator = "\r\n"
+    qismlar = []
+    for nom, qiymat in (("chat_id", str(chat_id)), ("caption", izoh),
+                        ("parse_mode", "HTML")):
+        qismlar.append((f"--{chegara}{qator}Content-Disposition: form-data; "
+                        f'name="{nom}"{qator}{qator}{qiymat}{qator}')
+                       .encode("utf-8"))
+    qismlar.append((f"--{chegara}{qator}Content-Disposition: form-data; "
+                    f'name="photo"; filename="{yol.name}"{qator}'
+                    f"Content-Type: application/octet-stream{qator}{qator}")
+                   .encode("utf-8") + yol.read_bytes() + qator.encode())
+    qismlar.append(f"--{chegara}--{qator}".encode("utf-8"))
+    req = urllib.request.Request(
+        API.format(token=token, metod="sendPhoto"), data=b"".join(qismlar),
+        headers={"Content-Type": f"multipart/form-data; boundary={chegara}"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            javob = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"Rasm yuborilmadi: {e}") from e
+    if not javob.get("ok"):
+        raise RuntimeError(javob.get("description", "Noma'lum xato"))
+    return javob.get("result")
 
 
 def bot_haqida(token: str) -> dict:
@@ -777,6 +910,19 @@ def tugmani_ishla(db, sorov: dict, token: str, guruh: str) -> None:
         _sorov(token, "editMessageText", chat_id=chat_id, message_id=message_id,
               text=_bitta_blok(db, v, _teg(nom, tg)), parse_mode="HTML")
 
+    elif amal == "qazo" and len(qismlar) == 2:
+        vid = int(qismlar[1])
+        v = vz.bitta(db, vid)
+        if not v or not _egasimi(db, v["odam_id"], username):
+            return
+        if not vz.namozmi(v) or v["holat"] != vz.OCHIQ:
+            return
+        vz.qazo_qil(db, vid)
+        _sorov(token, "editMessageText", chat_id=chat_id, message_id=message_id,
+              text=f"🕌 {v['nom']} qazo bo'ldi. "
+                   f"«{vz.qazo_nomi(v['nom'])}» ro'yxatingizga qo'shildi.",
+              parse_mode="HTML")
+
     elif amal == "haliyoq" and len(qismlar) == 2:
         vid = int(qismlar[1])
         v = vz.bitta(db, vid)
@@ -811,27 +957,72 @@ def offsetni_sur(db, updates: list[dict]) -> None:
     db.sozlama_qoy(K_OFFSET, str(maks + 1))
 
 
-def tugmalarni_qayta_ishla(db) -> list[str]:
-    """`getUpdates` ni o'qiydi: tugma bosilishi va /start larni ishlaydi."""
+def _shaxsiy_azo(db, msg: dict):
+    """Shaxsiy chatdagi uy a'zosi (rasxod boti faqat ularga ishlaydi)."""
+    if ((msg.get("chat") or {}).get("type")) != "private":
+        return None
+    return _uy_azosi(db, msg)
+
+
+def tugmalarni_qayta_ishla(db, kutish: int = 0) -> list[str]:
+    """`getUpdates` ni o'qiydi: tugmalar, /start, rasxod suhbati, rasmlar.
+
+    `kutish` > 0 — uzun so'rov: yangi xabar kelguncha shuncha soniya
+    kutadi va kelishi bilan qaytadi (xabarchi shu bilan tez javob beradi).
+    """
+    from core import tg_rasxod
     s = sozlamalar(db)
     if not s["token"]:
         return []
     offset = int(db.sozlama(K_OFFSET, "0") or "0")
     try:
-        updates = _sorov(s["token"], "getUpdates", offset=offset, timeout=0) or []
+        updates = _sorov(s["token"], "getUpdates", offset=offset,
+                         timeout=kutish, _vaqt=kutish + 15) or []
     except Exception as e:
         return [f"Xato: {e}"]
     natija = []
     for u in updates:
-        if "callback_query" in u:
-            cb = u["callback_query"]
+        try:
+            natija += _bittasini_ishla(db, u, s, tg_rasxod)
+        except Exception as e:
+            # Bitta buzuq xabar qolganlarini to'xtatmasin — offset baribir
+            # suriladi, aks holda u har safar qayta-qayta yiqilardi.
+            natija.append(f"Xato ({u.get('update_id')}): {e}")
+    offsetni_sur(db, updates)
+    return natija
+
+
+def _bittasini_ishla(db, u: dict, s: dict, tg_rasxod) -> list[str]:
+    natija = []
+    if "callback_query" in u:
+        cb = u["callback_query"]
+        if str(cb.get("data") or "").startswith("rx:"):
+            # Rasxod suhbati — faqat uy a'zosining SHAXSIY chatida.
+            msg = dict(cb.get("message") or {}, **{"from": cb.get("from")})
+            azo = _shaxsiy_azo(db, msg)
+            if azo:
+                natija.append(tg_rasxod.tugma_bosildi(
+                    db, s["token"], cb, azo["id"]) or "rx: ?")
+        else:
             tugmani_ishla(db, cb, s["token"], s["guruh"])
             natija.append(f"tugma: {cb.get('data')}")
-        elif "message" in u:
-            oid = _chatni_eslab_qol(db, u)
-            if oid:
-                natija.append(f"chat bog'landi: odam#{oid}")
-    offsetni_sur(db, updates)
+    elif "message" in u:
+        msg = u["message"]
+        oid = _chatni_eslab_qol(db, u)
+        if oid:
+            natija.append(f"chat bog'landi: odam#{oid}")
+        azo = _shaxsiy_azo(db, msg)
+        if azo and msg.get("text"):
+            # Avval menyu (Moliya / Vazifalar): suhbat o'rtasida menyu
+            # tugmasi bosilsa u «sabab» bo'lib yozilib qolmasin.
+            from core import tg_menyu
+            r = (tg_menyu.matn_keldi(db, s["token"], msg, azo["id"])
+                 or tg_rasxod.matn_keldi(db, s["token"], msg, azo["id"])
+                 or tg_menyu.tushunmadim(db, s["token"], msg["chat"]["id"]))
+            natija.append(r)
+        r = _rasmni_ishla(db, msg, s["token"])
+        if r:
+            natija.append(r)
     return natija
 
 

@@ -100,6 +100,24 @@ class Db:
         ("vazifa", "kechiktirildi", "TEXT"),
         ("vazifa", "manba", "TEXT"),
         ("yuborilgan", "xabar_id", "INTEGER"),
+        ("turi", "rasm", "TEXT"),
+        ("turi", "ota_id", "INTEGER REFERENCES turi(id)"),
+        ("item", "rasm", "TEXT"),
+        ("item", "miqdor", "REAL"),
+        ("item", "ogirlik", "REAL"),
+        ("item", "litr", "REAL"),
+        ("item", "olchov", "TEXT"),
+        ("item", "ochirilgan", "INTEGER NOT NULL DEFAULT 0"),
+        ("tashqi_qarz", "umumiy", "INTEGER NOT NULL DEFAULT 0"),
+        # Oylik reja yozuvi — rasxod kabi sanasi bilan (2026-10-01).
+        ("reja_qator", "sana", "TEXT"),
+        # Umumiy yoki kimningdir shaxsiy rejasi (2026-10-01).
+        ("reja_qator", "umumiymi", "INTEGER NOT NULL DEFAULT 1"),
+        ("reja_qator", "odam_id", "INTEGER REFERENCES odam(id)"),
+        # «Aslida to'landi»: rejadan yozilgan haqiqiy rasxod va summalar.
+        ("reja_qator", "rasxod_id", "INTEGER REFERENCES rasxod(id)"),
+        ("reja_qator", "tolangan", "INTEGER"),
+        ("reja_mahsulot", "tolangan", "INTEGER"),
     ]
 
     def _migratsiya(self) -> None:
@@ -118,7 +136,7 @@ class Db:
         self._menyuni_ek()
 
         self.con.execute(
-            "INSERT OR REPLACE INTO meta(kalit,qiymat) VALUES('sxema_versiya','12')")
+            "INSERT OR REPLACE INTO meta(kalit,qiymat) VALUES('sxema_versiya','20')")
 
     # Excel «Vazifalar» varag'idagi tayyor uy ishlari (C17:C21).
     VAZIFA_TURLARI = [
@@ -298,7 +316,8 @@ class Db:
         return bool(r and r["holat"] == "yopilgan")
 
     def _qulfni_tekshir(self, jadval: str, data: dict, eski: dict | None) -> None:
-        if jadval not in ("kirim", "rasxod", "qarz", "hisob_kitob"):
+        if jadval not in ("kirim", "rasxod", "qarz", "hisob_kitob",
+                          "tashqi_qarz", "tashqi_tolov", "tashqi_ulush"):
             return
         for manba in (data, eski or {}):
             s = manba.get("sana")
