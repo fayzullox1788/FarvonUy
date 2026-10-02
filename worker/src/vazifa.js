@@ -468,3 +468,377 @@ export async function yutuqlarni_tekshir(db, bugun = null, { a = null, bajarilga
   }
   return yangi;
 }
+
+// ═══════════════════════════════════════ Sozlamalar → «Vazifalar» uchun portlar
+// (miniapp_sz_vazifa.js). Hammasi Python bilan parity: test/miniapp_sz_vazifa.test.js.
+
+// ───────────────────────────────────────────────────────── vazifa turi
+
+// vazifa.py:92
+export async function turlar(db) {
+  return db.q("SELECT * FROM vazifa_turi WHERE ochirilgan=0 ORDER BY tartib, id");
+}
+
+// vazifa.py:97
+export async function tur_nomlari(db) {
+  return (await turlar(db)).map((r) => r.nom);
+}
+
+// vazifa.py:106
+export async function tur_qosh(db, nom, davomiylik = 60, shaxsiy = false) {
+  nom = String(nom ?? "").trim();
+  if (!nom) throw new Error("Vazifa turi nomi bo'sh bo'lishi mumkin emas");
+  davomiylik = _int(davomiylik);
+  if (davomiylik <= 0) throw new Error("Davomiylik musbat bo'lishi kerak");
+  shaxsiy = shaxsiy ? 1 : 0;
+  // `nom` UNIQUE: o'chirilgani bor bo'lsa qayta INSERT yiqiladi — tiriltiramiz.
+  const eski = await db.q1("SELECT id, ochirilgan FROM vazifa_turi WHERE nom=?", nom);
+  if (eski && eski.ochirilgan) {
+    await db.apply("vazifa_turi", "UPDATE", { ochirilgan: 0, davomiylik, shaxsiy }, eski.id,
+      `Vazifa turi qaytarildi: ${nom}`);
+    return eski.id;
+  }
+  if (eski) throw new Error(`«${nom}» ro'yxatda bor`);
+  const tartib = await db.skalyar("SELECT COALESCE(MAX(tartib),0)+1 FROM vazifa_turi", [], 1);
+  return db.apply("vazifa_turi", "INSERT", { nom, davomiylik, tartib, shaxsiy }, null, `Vazifa turi: ${nom}`);
+}
+
+// vazifa.py:167
+export async function tur_davomiylik_qoy(db, tur_id, davomiylik) {
+  const t = await tur_bitta(db, tur_id);
+  if (!t) throw new Error("Vazifa turi topilmadi");
+  davomiylik = _int(davomiylik);
+  if (davomiylik <= 0) throw new Error("Davomiylik musbat bo'lishi kerak");
+  await db.apply("vazifa_turi", "UPDATE", { davomiylik }, tur_id,
+    `«${t.nom}» davomiyligi: ${davomiylik} daqiqa`);
+}
+
+// vazifa.py:189
+export async function tur_ochir(db, tur_id) {
+  const t = await tur_bitta(db, tur_id);
+  if (!t) throw new Error("Vazifa turi topilmadi");
+  await db.apply("vazifa_turi", "DELETE", {}, tur_id, `Vazifa turi o'chirildi: ${t.nom}`);
+}
+
+// vazifa.py:220
+export async function tur_shaxsiy_qoy(db, tur_id, shaxsiy) {
+  const t = await tur_bitta(db, tur_id);
+  if (!t) throw new Error("Vazifa turi topilmadi");
+  const holat = shaxsiy ? "shaxsiy" : "umumiy";
+  await db.apply("vazifa_turi", "UPDATE", { shaxsiy: shaxsiy ? 1 : 0 }, tur_id, `«${t.nom}» ${holat} bo'ldi`);
+}
+
+// vazifa.py:250
+export async function qadam_qosh(db, turi_id, nom) {
+  nom = String(nom ?? "").trim();
+  if (!nom) throw new Error("Qadam nomi bo'sh bo'lishi mumkin emas");
+  const t = await tur_bitta(db, turi_id);
+  if (!t) throw new Error("Vazifa turi topilmadi");
+  if ((await qadamlar(db, turi_id)).some((x) => x.nom.toLowerCase() === nom.toLowerCase())) {
+    throw new Error(`«${nom}» bu ishda allaqachon bor`);
+  }
+  const tartib = await db.skalyar("SELECT COALESCE(MAX(tartib),0)+1 FROM ish_qadam WHERE turi_id=?", [turi_id], 1);
+  return db.apply("ish_qadam", "INSERT", { turi_id, nom, tartib }, null, `«${t.nom}» ga qadam: ${nom}`);
+}
+
+// vazifa.py:267
+export async function qadam_ochir(db, qadam_id) {
+  const r = await db.q1("SELECT * FROM ish_qadam WHERE id=? AND ochirilgan=0", qadam_id);
+  if (!r) throw new Error("Qadam topilmadi");
+  await db.apply("ish_qadam", "DELETE", {}, qadam_id, `Qadam o'chirildi: ${r.nom}`);
+}
+
+// ────────────────────────────────────────────────────────────── navbat
+
+// vazifa.py:428
+export async function navbat_odamlari(db) {
+  return db.q("SELECT id, nom FROM odam WHERE faol=1 ORDER BY tartib, id");
+}
+
+// vazifa.py:432 — sanalar ISO matn
+export async function navbat_rejasi(db, tur_id, odam_id, sana, vaqt_ = null, kunlar = 7) {
+  const t = await tur_bitta(db, tur_id);
+  if (!t) throw new Error("Vazifa turi topilmadi");
+  if (!t.navbat) throw new Error(`«${t.nom}» navbatli ish emas`);
+  const odamlar = await navbat_odamlari(db);
+  if (odamlar.length < 2) throw new Error("Navbat uchun kamida ikkita faol odam kerak");
+  const idlar = odamlar.map((r) => r.id);
+  const nomlar = new Map(odamlar.map((r) => [r.id, r.nom]));
+  if (!idlar.includes(odam_id)) throw new Error("Tanlangan odam navbatda yo'q");
+  kunlar = _int(kunlar);
+  if (kunlar <= 0) throw new Error("Kunlar soni musbat bo'lishi kerak");
+  const ergash = await tur_ergash(db, tur_id);
+  const boshi = idlar.indexOf(odam_id);
+  const n = idlar.length;
+  const d0 = _sana(sana);
+  const reja = [];
+  for (let i = 0; i < kunlar; i++) {
+    const kun = vaqt.kunQosh(d0, i);
+    const oshpaz = idlar[(boshi + i) % n];
+    reja.push({ sana: kun, vaqt: vaqt_, nom: t.nom, odam_id: oshpaz, odam: nomlar.get(oshpaz), davomiylik: t.davomiylik });
+    if (ergash == null) continue;
+    let y_vaqt = null;
+    // Idish ovqatdan keyin: yarim tunni oshib ketmasin.
+    if (vaqt_) y_vaqt = _vaqt_matn(Math.min(23 * 60 + 30, _daqiqa(vaqt_) + t.davomiylik));
+    reja.push({ sana: kun, vaqt: y_vaqt, nom: ergash.nom, odam_id: oshpaz, odam: nomlar.get(oshpaz), davomiylik: ergash.davomiylik });
+  }
+  return reja;
+}
+
+/** `qosh()` ning amal ichidagi egizagi (Python'da ichki `amal` tashqisiga qo'shiladi). */
+async function _qosh_amalda(db, a, nom, odam_id, sana, vaqt_ = null, davomiylik = 60, izoh = null) {
+  let iso;
+  [nom, iso, vaqt_, davomiylik] = await _tekshir(db, nom, odam_id, sana, vaqt_, davomiylik);
+  await _odam_nom(db, odam_id);
+  return a.apply("vazifa", "INSERT", {
+    nom, odam_id, sana: iso, vaqt: vaqt_, davomiylik, holat: OCHIQ, izoh: String(izoh ?? "").trim() || null,
+  });
+}
+
+// vazifa.py:476
+export async function navbat_biriktir(db, tur_id, odam_id, sana, vaqt_ = null, kunlar = 7) {
+  const reja = await navbat_rejasi(db, tur_id, odam_id, sana, vaqt_, kunlar);
+  const a = db.amal(`Ovqat navbati: ${kunlar} kun, ${reja.length} ta vazifa`);
+  for (const x of reja) await _qosh_amalda(db, a, x.nom, x.odam_id, x.sana, x.vaqt, x.davomiylik);
+  await a.commit();
+  return reja.length;
+}
+
+// vazifa.py:508
+export async function yuvuvchi_id(db, oshpaz_id) {
+  const idlar = (await navbat_odamlari(db)).map((r) => r.id);
+  return idlar.includes(oshpaz_id) ? oshpaz_id : null;
+}
+
+// vazifa.py:516
+export async function navbatlimi(db, vazifa_id) {
+  const v = await bitta(db, vazifa_id);
+  const t = await navbat_turi(db);
+  return Boolean(v && t && v.nom === t.nom);
+}
+
+// vazifa.py:522
+export async function _ergash_vazifa(db, oshpaz_vazifa) {
+  const t = await navbat_turi(db);
+  if (!t || oshpaz_vazifa.nom !== t.nom) return null;
+  const ergash = await tur_ergash(db, t.id);
+  if (!ergash) return null;
+  return db.q1(
+    "SELECT * FROM vazifa WHERE ochirilgan=0 AND nom=? AND sana=?" +
+    " ORDER BY COALESCE(vaqt,'99:99'), id LIMIT 1", ergash.nom, oshpaz_vazifa.sana);
+}
+
+// vazifa.py:536 — JS: `v` amaldagi (navbatda turgan) holat bilan beriladi,
+// `yangilangan` — shu amalda allaqachon tuzatilgan ergash qatorlari (id → odam_id).
+async function _yuvuvchini_tugrila(db, a, v, yangilangan) {
+  if (!v) return 0;
+  const ergash = await _ergash_vazifa(db, v);
+  if (!ergash) return 0;
+  const hozirgi = yangilangan.has(ergash.id) ? yangilangan.get(ergash.id) : ergash.odam_id;
+  const kerak = await yuvuvchi_id(db, v.odam_id);
+  if (kerak == null || kerak === hozirgi) return 0;
+  await a.apply("vazifa", "UPDATE", { odam_id: kerak }, ergash.id);
+  yangilangan.set(ergash.id, kerak);
+  return 1;
+}
+
+// vazifa.py:551
+export async function keyingi_navbat(db, vazifa_id, odam_id) {
+  const v = await bitta(db, vazifa_id);
+  if (!v) return null;
+  return db.q1(
+    "SELECT * FROM vazifa WHERE ochirilgan=0 AND nom=? AND odam_id=?" +
+    " AND (sana>? OR (sana=? AND id>?))" +
+    " ORDER BY sana, COALESCE(vaqt,'99:99'), id LIMIT 1",
+    v.nom, odam_id, v.sana, v.sana, v.id);
+}
+
+// vazifa.py:563
+export async function almashtirish_rejasi(db, vazifa_id, yangi_odam_id) {
+  const v = await bitta(db, vazifa_id);
+  if (!v) throw new Error("Vazifa topilmadi");
+  yangi_odam_id = _int(yangi_odam_id);
+  if (yangi_odam_id === v.odam_id) throw new Error("Bu vazifa allaqachon o'shanikida");
+  if (!(await db.q1("SELECT 1 FROM odam WHERE id=? AND faol=1", yangi_odam_id))) {
+    throw new Error("Odam topilmadi yoki ro'yxatdan olingan");
+  }
+  const juft = await keyingi_navbat(db, vazifa_id, yangi_odam_id);
+  if (!juft) {
+    const nom = await _odam_nom(db, yangi_odam_id);
+    throw new Error(`${nom}ning bundan keyin «${v.nom}» navbati yo'q — almashtirib bo'lmaydi.\n` +
+      "«Faqat shu kunni berish» dan foydalaning.");
+  }
+  return { vazifa: v, juft, eski_odam: v.odam_id, yangi_odam: yangi_odam_id };
+}
+
+// vazifa.py:583
+export async function almashtir(db, vazifa_id, yangi_odam_id) {
+  const r = await almashtirish_rejasi(db, vazifa_id, yangi_odam_id);
+  const { vazifa: v, juft } = r;
+  const eski_nom = await _odam_nom(db, r.eski_odam);
+  const yangi_nom = await _odam_nom(db, r.yangi_odam);
+  const a = db.amal(`Navbat almashdi: ${eski_nom} ↔ ${yangi_nom} (${v.sana} / ${juft.sana})`);
+  await a.apply("vazifa", "UPDATE", { odam_id: r.yangi_odam }, v.id);
+  await a.apply("vazifa", "UPDATE", { odam_id: r.eski_odam }, juft.id);
+  const yang = new Map();
+  const tuzatildi = await _yuvuvchini_tugrila(db, a, { ...v, odam_id: r.yangi_odam }, yang) +
+    await _yuvuvchini_tugrila(db, a, { ...juft, odam_id: r.eski_odam }, yang);
+  await a.commit();
+  return { vazifa_id: v.id, juft_id: juft.id, juft_sana: juft.sana, yuvuvchi_tuzatildi: tuzatildi, eski_nom, yangi_nom };
+}
+
+// vazifa.py:604
+export async function bersin(db, vazifa_id, yangi_odam_id) {
+  const v = await bitta(db, vazifa_id);
+  if (!v) throw new Error("Vazifa topilmadi");
+  yangi_odam_id = _int(yangi_odam_id);
+  if (yangi_odam_id === v.odam_id) throw new Error("Bu vazifa allaqachon o'shanikida");
+  if (!(await db.q1("SELECT 1 FROM odam WHERE id=? AND faol=1", yangi_odam_id))) {
+    throw new Error("Odam topilmadi yoki ro'yxatdan olingan");
+  }
+  const eski_nom = await _odam_nom(db, v.odam_id);
+  const yangi_nom = await _odam_nom(db, yangi_odam_id);
+  const a = db.amal(`«${v.nom}» ${eski_nom} → ${yangi_nom} (${v.sana})`);
+  await a.apply("vazifa", "UPDATE", { odam_id: yangi_odam_id }, v.id);
+  const tuzatildi = await _yuvuvchini_tugrila(db, a, { ...v, odam_id: yangi_odam_id }, new Map());
+  await a.commit();
+  return { vazifa_id: v.id, yuvuvchi_tuzatildi: tuzatildi, eski_nom, yangi_nom };
+}
+
+// ─────────────────────────────────────────────────────────────── tahrir
+
+const TAHRIR_MAYDON = ["nom", "odam_id", "sana", "vaqt", "davomiylik", "izoh"];
+
+// vazifa.py:640 — Python **maydonlar → obyekt {nom, odam_id, sana, vaqt, davomiylik, izoh} (bori)
+export async function tahrir(db, vazifa_id, maydonlar = {}) {
+  const v = await bitta(db, vazifa_id);
+  if (!v) throw new Error("Vazifa topilmadi");
+  const yangi = {};
+  for (const k of TAHRIR_MAYDON) if (k in maydonlar) yangi[k] = maydonlar[k];
+  if (!Object.keys(yangi).length) return;
+  const b = { ...v, ...yangi };
+  const [nom, iso, vaqt_, davomiylik] = await _tekshir(db, b.nom, b.odam_id, b.sana, b.vaqt, b.davomiylik);
+  if ("nom" in yangi) yangi.nom = nom;
+  if ("sana" in yangi) yangi.sana = iso;
+  if ("vaqt" in yangi) yangi.vaqt = vaqt_;
+  if ("davomiylik" in yangi) yangi.davomiylik = davomiylik;
+  if ("izoh" in yangi) yangi.izoh = String(yangi.izoh ?? "").trim() || null;
+  await db.apply("vazifa", "UPDATE", yangi, vazifa_id, `Vazifa tahrirlandi: ${b.nom}`);
+}
+
+// ───────────────────────────────────────────────────── takroriy vazifa
+
+// vazifa.py:966
+export function _kunlar_matn(kunlar) {
+  if (typeof kunlar === "string") kunlar = kunlar.replaceAll(" ", "").split(",").filter((x) => x);
+  const toza = [...new Set((kunlar || []).map((x) => _int(x)))].sort((p, q) => p - q);
+  if (toza.some((k) => !(k >= 0 && k <= 6))) throw new Error("Hafta kuni 0 (dushanba) va 6 (yakshanba) orasida");
+  return toza.join(",");
+}
+
+// vazifa.py:981
+export async function _takrorni_tekshir(db, nom, odam_id, vaqt_, davomiylik, naqsh, kunlar, oraliq, boshlanish, tugash) {
+  let iso;
+  [nom, iso, vaqt_, davomiylik] = await _tekshir(db, nom, odam_id, boshlanish, vaqt_, davomiylik);
+  if (!Object.hasOwn(NAQSHLAR, naqsh)) throw new Error(`Noma'lum takror naqshi: ${naqsh}`);
+  let kunlar_m = "";
+  // `oraliq || 1` EMAS: 0 jimgina 1 ga aylanardi.
+  oraliq = oraliq == null ? 1 : _int(oraliq);
+  if (naqsh === NAQSH_KUNLAR) {
+    kunlar_m = _kunlar_matn(kunlar);
+    if (!kunlar_m) throw new Error("Kamida bitta hafta kuni tanlanishi kerak");
+    oraliq = 1;
+  } else if (naqsh === NAQSH_ORALIQ) {
+    if (!(oraliq >= 1 && oraliq <= 90)) throw new Error("Oraliq 1 va 90 kun orasida bo'lishi kerak");
+  } else {
+    oraliq = 1;
+  }
+  let tugash_iso = null;
+  if (tugash) {
+    tugash_iso = _sana(tugash);
+    if (tugash_iso < iso) throw new Error("Tugash sanasi boshlanishdan oldin bo'lmaydi");
+  }
+  return { nom, odam_id, vaqt: vaqt_, davomiylik, naqsh, kunlar: kunlar_m || null, oraliq, boshlanish: iso, tugash: tugash_iso };
+}
+
+// vazifa.py:1022
+export async function takror_bitta(db, takror_id) {
+  return db.q1("SELECT * FROM vazifa_takror WHERE id=? AND ochirilgan=0", takror_id);
+}
+
+// vazifa.py:1027
+export function takror_tavsif(t) {
+  let qachon;
+  if (t.naqsh === NAQSH_KUNLAR) qachon = takror_kunlari(t).map((k) => KUN_QISQA[k]).join(", ") || "—";
+  else if (t.naqsh === NAQSH_ORALIQ) qachon = t.oraliq === 1 ? "Har kuni" : `Har ${t.oraliq} kunda`;
+  else qachon = NAQSHLAR[NAQSH_KUNLIK];
+  return `${qachon} ${t.vaqt || "vaqtsiz"}`;
+}
+
+// vazifa.py:1110 — kwargs → obyekt. Qoida va undan chiqqan kunlar BITTA amal.
+export async function takror_qosh(db, nom, odam_id, {
+  vaqt: vaqt_ = null, davomiylik = 60, naqsh = NAQSH_KUNLIK, kunlar = null, oraliq = 1,
+  izoh = null, boshlanish = null, tugash = null, bugun = null,
+} = {}) {
+  const d = await _takrorni_tekshir(db, nom, odam_id, vaqt_, davomiylik, naqsh, kunlar, oraliq,
+    boshlanish || bugun || vaqt.bugun(), tugash);
+  d.izoh = String(izoh ?? "").trim() || null;
+  const a = db.amal(`Takroriy vazifa: ${d.nom}`);
+  const yar = vaqt.hozirStr();
+  const tid = await a.apply("vazifa_takror", "INSERT", { ...d, yaratilgan: yar });
+  // Navbatli yozuv: yangi qoida commit'gacha bazada ko'rinmaydi — uning kunlari
+  // shu yerda (takror_toldir bilan AYNAN bir xil shart), qolgan qoidalar o'zida.
+  const d0 = _sana(bugun || vaqt.bugun());
+  const sanalar = takror_sanalari({ ...d, id: tid }, d0, vaqt.kunQosh(d0, TAKROR_UFQ));
+  if (sanalar.length) {
+    const bor = new Set((await db.q(
+      "SELECT manba FROM vazifa WHERE manba LIKE ? AND sana BETWEEN ? AND ?",
+      `${TAKROR_BELGI}:${tid}:%`, sanalar[0], sanalar[sanalar.length - 1])).map((r) => r.manba));
+    for (const k of sanalar) {
+      const kalit = takror_kaliti(tid, k);
+      if (bor.has(kalit)) continue;
+      await a.apply("vazifa", "INSERT", {
+        nom: d.nom, odam_id: d.odam_id, sana: k, vaqt: d.vaqt, davomiylik: d.davomiylik,
+        holat: OCHIQ, izoh: d.izoh, manba: kalit, yaratilgan: yar,
+      });
+    }
+  }
+  await takror_toldir(db, bugun, TAKROR_UFQ, { a });
+  await a.commit();
+  return tid;
+}
+
+// vazifa.py:1129
+async function _takror_kelajagini_ochir(db, a, takror_id, bugun = null) {
+  const d0 = _sana(bugun || vaqt.bugun());
+  const qatorlar = await db.q(
+    "SELECT id FROM vazifa WHERE ochirilgan=0 AND holat=? AND sana>=? AND manba LIKE ?",
+    OCHIQ, d0, `${TAKROR_BELGI}:${Math.trunc(Number(takror_id))}:%`);
+  for (const r of qatorlar) await a.apply("vazifa", "DELETE", {}, r.id);
+  return qatorlar.length;
+}
+
+// vazifa.py:1170
+export async function takror_ochir(db, takror_id, bugun = null) {
+  const t = await takror_bitta(db, takror_id);
+  if (!t) throw new Error("Takroriy vazifa topilmadi");
+  const a = db.amal(`Takroriy vazifa to'xtatildi: ${t.nom}`);
+  await a.apply("vazifa_takror", "DELETE", {}, takror_id);
+  const n = await _takror_kelajagini_ochir(db, a, takror_id, bugun);
+  await a.commit();
+  return n;
+}
+
+// vazifa.py:1180
+export function takrorlimi(v) {
+  if (!v) return false;
+  return String(v.manba ?? "").startsWith(`${TAKROR_BELGI}:`);
+}
+
+// vazifa.py:1191
+export async function takror_egasi(db, v) {
+  if (!takrorlimi(v)) return null;
+  const q = String(v.manba).split(":")[1];
+  if (q == null || !/^\s*[+-]?\d+\s*$/.test(q)) return null;
+  return takror_bitta(db, _int(q));
+}

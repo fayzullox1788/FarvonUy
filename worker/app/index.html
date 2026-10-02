@@ -623,5 +623,17 @@ yukla();
   document.head.appendChild(l);
 })();
 </script>
+<script>
+// Sozlamalar bo'limlari — har biri o'z faylida (sz_<nom>.css + sz_<nom>.js) va
+// o'zini window.SozlamaBolimi[<menyu kaliti>] ga yozadi (sozlama.js chaqiradi).
+(function () {
+  var p = location.protocol === "file:" ? "" : "/app/";
+  ["sz_profil", "sz_mahsulot", "sz_tolov", "sz_reja", "sz_vazifa"].forEach(function (n) {
+    var l = document.createElement("link"); l.rel = "stylesheet"; l.href = p + n + ".css";
+    l.onload = l.onerror = function () { var s = document.createElement("script"); s.src = p + n + ".js"; document.body.appendChild(s); };
+    document.head.appendChild(l);
+  });
+})();
+</script>
 </body>
 </html>

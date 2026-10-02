@@ -18,6 +18,11 @@ import * as rasxodApi from "./miniapp_rasxod.js";
 import * as moliyaApi from "./miniapp_moliya.js";
 import * as hisobotApi from "./miniapp_hisobot.js";
 import * as sozlamaApi from "./miniapp_sozlama.js";
+import * as profilApi from "./miniapp_sz_profil.js";
+import * as szMahsulotApi from "./miniapp_sz_mahsulot.js";
+import * as tolovApi from "./miniapp_sz_tolov.js";
+import * as rejaApi from "./miniapp_sz_reja.js";
+import * as szVazifaApi from "./miniapp_sz_vazifa.js";
 
 export const TOIFALAR = ["shaxsiy", "uy", "darslar", "boshqa"];
 const IMZO_MUDDATI = 24 * 3600; // soniya
@@ -126,6 +131,21 @@ export async function ishla(req, env, db) {
   }
   if (yol === "/app/api/kategoriya" || yol.startsWith("/app/api/kategoriya/")) {
     return (await sozlamaApi.ishla(req, url, yol, db, odam)) || xato("Topilmadi", 404);
+  }
+  if (yol === "/app/api/profil" || yol.startsWith("/app/api/profil/")) {
+    return (await profilApi.ishla(req, url, yol, db, odam, user)) || xato("Topilmadi", 404);
+  }
+  if (yol === "/app/api/mahsulot" || yol.startsWith("/app/api/mahsulot/")) {
+    return (await szMahsulotApi.ishla(req, url, yol, db, odam)) || xato("Topilmadi", 404);
+  }
+  if (yol === "/app/api/tolov" || yol.startsWith("/app/api/tolov/")) {
+    return (await tolovApi.ishla(req, url, yol, db, odam)) || xato("Topilmadi", 404);
+  }
+  if (yol === "/app/api/reja" || yol.startsWith("/app/api/reja/")) {
+    return (await rejaApi.ishla(req, url, yol, db, odam)) || xato("Topilmadi", 404);
+  }
+  if (yol === szVazifaApi.YOL || yol.startsWith(szVazifaApi.YOL + "/")) {
+    return (await szVazifaApi.ishla(req, url, yol, db, odam)) || xato("Topilmadi", 404);
   }
 
   try {

@@ -8,26 +8,41 @@
 //
 // Ruxsat (Telegram initData) va ochgan odam (`odam`) — miniapp.js da.
 //
-// Kartalar — desktop bilan AYNAN bir xil manba (parity: test/miniapp_moliya.test.js):
-//   Joriy balans  = `v_balans.naqd` (naqd + kartalar; Hamyon jami shu).
+// Moliya — FAQAT ochgan odamning o'z hisoboti (foydalanuvchi: «moliyada faqat
+// o'zimni hisoboti bo'lsin»). Desktop manbalari bilan parity: test/miniapp_moliya.test.js.
+// Kartalar:
+//   Joriy balans  = qarz va rejalardan KEYIN qolgan pul:
+//                   `v_balans.naqd − band_hisob()[odam].ayirildi − Qarzim`
+//                   (Qarzim — pastdagi karta). Manfiy bo'lishi mumkin.
 //   Rejaga band   = «Shaxsiy» varag'idagi «Rejaga band» kartasi:
 //                   `plan.band_hisob()[odam].band + .qoplaydi` (sahifa_qosh.py:139).
 //                   Har doim JORIY oy (band — joriy oy rejasining sarflanmagani).
 //   Qarzim        = `plan.odam_qarzlari(odam).jami` — ichki + tashqi + rejadan qarz.
-//   Oy xarajati   = Analitika → «Reja va fakt» birlamchi ko'rinishi: UMUMIY doira,
-//                   `plan.reja_va_fakt(oy)` — fakt, reja, foiz (`money.foiz`, 100 dan
-//                   oshadi). Reja yo'q bo'lsa `reja_bor=false`, foiz null.
+//   Oy xarajati   = ochgan odamning shu oydagi rasxodi — Analitika odam filtri
+//                   «Shaxsiy + umumiy ulushi» (`ledger.turi_boyicha(odam, 'hammasi')`
+//                   = `_odam_manba`: o'z shaxsiysi + uning uchun olingani + umumiy
+//                   rasxoddagi ULUSHI, butun summasi EMAS).
+//                   Reja = shaxsiy rejasi (`reja_va_fakt(oy, odam).reja`) + umumiy rejaning
+//                   TENG ulushi (`money.bol_teng` faol odamlarga — `band_pul` bilan bir
+//                   xil bo'lish). Ikkalasi ham yo'q → `reja_bor=false`. Foiz `money.foiz`
+//                   (100 dan oshadi), reja ≤ 0 → null.
 //
 // «Bugun» — Toshkent bugungi kuni (`vaqt.bugun()`), ochgan odamga TEGADIGAN yozuvlar:
-//   rasxod       sana=bugun, o'chirilmagan; u to'lagan YOKI ulushi bor (ulush.summa≠0 —
-//                umumiy, «uning uchun» ham). Nomi — kategoriya (yo'q bo'lsa sabab),
-//                summa — rasxodning BUTUN summasi (chek), ulushlar tafsilotda.
-//   reja         `plan.kun_reja_yozuvlari(bugun)` dan umumiy + O'ZINING shaxsiysi.
+//   rasxod       sana=bugun, o'chirilmagan; summa — UNING ULUSHI (`_odam_manba` qoidasi):
+//                umumiy → ulushi, «uning uchun» → ulushi (butuni), shaxsiysi → butuni.
+//                Ulushi 0 bo'lsa (faqat boshqaga to'lagan) — chiqmaydi. Nomi — kategoriya
+//                (yo'q bo'lsa sabab); tafsilotda butun chek, ulushlar, «Sizning ulushingiz».
+//   reja         `plan.kun_reja_yozuvlari(bugun)` dan umumiy + O'ZINING shaxsiysi. Umumiysi —
+//                TENG ulushi (`bol_teng` faol odamlarga), shaxsiysi — butun; 0 → chiqmaydi.
 //   qarz         uy ichidagi qarz (`qarz`), u bergan yoki olgan.
 //   hisob-kitob  qarz to'lovi (`hisob_kitob`), u to'lagan yoki unga to'langan.
 //   tashqi qarz  `tashqi_qarz` — shaxsiysi (u olgan) butun summa, umumiysi — UNING
 //                ulushi (`tashqi_ulush`, tolov_id NULL), 0 bo'lsa chiqmaydi.
 //   tashqi to'lov `tashqi_tolov` — shaxsiy qarzniki butun summa, umumiyniki — uning ulushi.
+// Ikonka (`rasm` — belgilar/<kalit>.svg, `emoji`) — desktop kategoriya ikonkasi:
+//   kategoriya va otalari zanjirida birinchi `turi.rasm`; yo'q bo'lsa birinchi `turi.belgi`
+//   (eski kategoriyalar emojisi, mas. «Sneklar» 🍿); u ham yo'q bo'lsa neytral `BOSH_RASM[tur]`.
+//   Qarzda kategoriya yo'q — `BOSH_RASM.qarz` (finance_03, pul).
 // Vaqt — `yaratilgan` (reja_qator'da ustun yo'q — jurnaldagi INSERT vaqti).
 // Tartib — vaqt bo'yicha yangisi tepada, vaqtsizlari oxirida.
 
@@ -35,6 +50,7 @@ import * as plan from "./plan.js";
 import * as ledger from "./ledger.js";
 import * as entries from "./entries.js";
 import * as vaqt from "./vaqt.js";
+import * as money from "./money.js";
 
 const json = (d, status = 200) => new Response(JSON.stringify(d), {
   status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
@@ -97,18 +113,60 @@ export async function odam_qarzlari(db, odam_id) {
 
 /** Uchta karta — desktop qoidasi (yuqoridagi izohga qarang). */
 export async function kartalar(db, odam_id) {
-  const balans = n(await db.skalyar("SELECT naqd FROM v_balans WHERE id=?", [odam_id], 0));
+  const naqd = n(await db.skalyar("SELECT naqd FROM v_balans WHERE id=?", [odam_id], 0));
   const bh = (await plan.band_hisob(db)).get(odam_id);
   const band = bh ? bh.band + bh.qoplaydi : 0;
   const qarzim = (await odam_qarzlari(db, odam_id)).jami;
+  const balans = naqd - (bh ? bh.ayirildi : 0) - qarzim;
   return { balans, band, qarzim };
 }
 
-/** Oy xarajati kartasi — «Reja va fakt» (umumiy doira) jamisi. */
-export async function oy_xarajati(db, oy) {
-  const rf = await plan.reja_va_fakt(db, oy);
-  return { oy, reja_bor: rf.reja_bor, reja: rf.reja_bor ? rf.reja : null, fakt: rf.fakt,
-    foiz: rf.reja_bor ? foiz(rf.fakt, rf.reja) : null };
+const faol_idlar = async (db) =>
+  (await db.q("SELECT id FROM odam WHERE faol=1 ORDER BY tartib, id")).map((r) => r.id);
+
+/** `summa` dan `odam_id` ga tegadigan TENG ulush (faol odamlarga — `band_pul` kabi). */
+export function teng_ulush(summa, idlar, odam_id) {
+  if (!summa || !idlar.includes(odam_id)) return 0;
+  return money.bol_teng(summa, idlar).find((u) => u.odam_id === odam_id)?.summa || 0;
+}
+
+/** Oy xarajati kartasi — ochgan odamniki (qoida fayl boshida). */
+export async function oy_xarajati(db, oy, odam_id) {
+  const boshi = oy + "-01", oxiri = plan.oy_oxiri(boshi);
+  const fakt = (await ledger.turi_boyicha(db, boshi, oxiri, odam_id, "hammasi"))
+    .reduce((s, t) => s + n(t.summa), 0);
+  const umumiy = await plan.reja_va_fakt(db, oy);
+  const shaxsiy = await plan.reja_va_fakt(db, oy, odam_id);
+  const reja_bor = umumiy.reja_bor || shaxsiy.reja_bor;
+  const reja = (shaxsiy.reja_bor ? n(shaxsiy.reja) : 0) +
+    (umumiy.reja_bor ? teng_ulush(n(umumiy.reja), await faol_idlar(db), odam_id) : 0);
+  return { oy, reja_bor, reja: reja_bor ? reja : null, fakt,
+    foiz: reja_bor ? foiz(fakt, reja) : null };
+}
+
+// ── Ikonka ───────────────────────────────────────────────────────────
+
+/** Kategoriya ikonkasi topilmasa — neytral (desktop belgilar to'plamidan). */
+export const BOSH_RASM = { rasxod: "others_04", reja: "others_11", qarz: "finance_03" };
+
+/** (turi_id, tur) → {rasm, emoji} hal qiluvchi (qoida fayl boshida). */
+export async function ikonka_hal(db) {
+  const turi = new Map((await db.q("SELECT id, ota_id, rasm, belgi FROM turi")).map((t) => [t.id, t]));
+  return (turi_id, tur) => {
+    const zanjir = [];
+    for (let id = turi_id; id != null && turi.has(id) && zanjir.length < 32; id = turi.get(id).ota_id) {
+      zanjir.push(turi.get(id));
+    }
+    for (const t of zanjir) {
+      const r = rasm_kaliti(t.rasm);
+      if (r) return { rasm: r, emoji: null };
+    }
+    for (const t of zanjir) {
+      const b = String(t.belgi || "").trim();
+      if (b) return { rasm: null, emoji: b };
+    }
+    return { rasm: BOSH_RASM[tur] || null, emoji: null };
+  };
 }
 
 // ── «Bugun» ──────────────────────────────────────────────────────────
@@ -133,23 +191,26 @@ export async function bugungi_yozuvlar(db, odam_id, sana = vaqt.bugun()) {
   const q = [];
 
   const rasxodlar = await db.q(
-    "SELECT r.*, t.nom turi_nom, COALESCE(t.rasm, ota.rasm) rasm, k.nom karta_nom," +
+    "SELECT r.*, t.nom turi_nom, k.nom karta_nom," +
     " o.nom toladi_nom, ou.nom uchun_nom FROM rasxod r" +
     " JOIN odam o ON o.id=r.kim_toladi" +
     " LEFT JOIN odam ou ON ou.id=r.kim_uchun" +
-    " LEFT JOIN turi t ON t.id=r.turi_id LEFT JOIN turi ota ON ota.id=t.ota_id" +
+    " LEFT JOIN turi t ON t.id=r.turi_id" +
     " LEFT JOIN karta k ON k.id=r.karta_id" +
     " WHERE r.ochirilgan=0 AND r.sana=? AND (r.kim_toladi=? OR EXISTS(" +
     "  SELECT 1 FROM ulush u WHERE u.rasxod_id=r.id AND u.odam_id=? AND u.summa<>0))",
     sana, odam_id, odam_id);
+  const ikonka = await ikonka_hal(db);
   for (const r of rasxodlar) {
     const ulushlar = r.umumiymi ? await db.q(
       "SELECT u.odam_id, o.nom, u.summa FROM ulush u JOIN odam o ON o.id=u.odam_id" +
       " WHERE u.rasxod_id=? AND u.summa<>0 ORDER BY o.tartib, o.id", r.id) : [];
     const ozi = ulushlar.find((u) => u.odam_id === odam_id);
+    const ulushim = r.umumiymi ? (ozi ? n(ozi.summa) : 0) : n(r.summa);
+    if (!ulushim) continue; // faqat boshqa odam uchun to'lagan — uning hisobotiga kirmaydi
     q.push({
       tur: "rasxod", id: r.id, nom: r.turi_nom || r.nom || "Rasxod", belgi: "Xarajat",
-      ishora: "-", rang: "qizil", summa: n(r.summa), rasm: rasm_kaliti(r.rasm),
+      ishora: "-", rang: "qizil", summa: ulushim, ...ikonka(r.turi_id, "rasxod"),
       yaratilgan: r.yaratilgan, ozimi: r.kim_toladi === odam_id,
       tafsilot: {
         sabab: r.nom || "", kategoriya: r.turi_nom || null, sana: r.sana,
@@ -157,7 +218,7 @@ export async function bugungi_yozuvlar(db, odam_id, sana = vaqt.bugun()) {
         doira: r.kim_uchun != null ? `${r.uchun_nom} uchun` : r.umumiymi ? "Umumiy" : "Shaxsiy",
         joy: r.karta_nom || "Naqd",
         ulushlar: ulushlar.map((u) => ({ nom: u.nom, summa: n(u.summa) })),
-        mening_ulushim: r.umumiymi ? (ozi ? n(ozi.summa) : 0) : n(r.summa),
+        jami: n(r.summa), mening_ulushim: ulushim,
       },
     });
   }
@@ -171,18 +232,22 @@ export async function bugungi_yozuvlar(db, odam_id, sana = vaqt.bugun()) {
     " LEFT JOIN turi t ON t.id=q.turi_id LEFT JOIN odam o ON o.id=q.odam_id" +
     " WHERE r.tur='oylik' AND q.ochirilgan=0 AND q.sana=?" +
     " AND (q.umumiymi=1 OR q.odam_id=?) ORDER BY q.umumiymi DESC, q.id", sana, odam_id);
+  const idlar = rejalar.some((y) => y.umumiymi) ? await faol_idlar(db) : [];
   for (const y of rejalar) {
+    const ulushim = y.umumiymi ? teng_ulush(n(y.summa), idlar, odam_id) : n(y.summa);
+    if (!ulushim) continue;
     q.push({
       tur: "reja", id: y.id, nom: `${y.nom || y.turi_nom || "Reja"} (reja)`, belgi: "Reja",
-      ishora: "-", rang: "navy", summa: n(y.summa), rasm: null, yaratilgan: y.yaratilgan,
-      ozimi: false,
+      ishora: "-", rang: "navy", summa: ulushim, ...ikonka(y.turi_id, "reja"),
+      yaratilgan: y.yaratilgan, ozimi: false,
       tafsilot: { sabab: y.nom || "", kategoriya: y.turi_nom || null, sana: y.sana,
         doira: y.umumiymi ? "Umumiy reja" : `${y.odam_nom} — shaxsiy reja`,
+        jami: n(y.summa), mening_ulushim: ulushim,
         tolangan: y.tolangan == null ? null : n(y.tolangan) },
     });
   }
 
-  const qarz = (o) => q.push({ belgi: "Qarz", rasm: null, ozimi: false, ...o });
+  const qarz = (o) => q.push({ belgi: "Qarz", rasm: BOSH_RASM.qarz, emoji: null, ozimi: false, ...o });
 
   for (const r of await db.q(
     "SELECT q.*, a.nom berdi_nom, b.nom olgan_nom FROM qarz q" +
@@ -254,7 +319,7 @@ export async function bugungi_yozuvlar(db, odam_id, sana = vaqt.bugun()) {
 export async function moliya(db, odam, oy) {
   const bugun = vaqt.bugun();
   const joriy = bugun.slice(0, 7);
-  const [k, x, yozuvlar] = [await kartalar(db, odam.id), await oy_xarajati(db, oy || joriy),
+  const [k, x, yozuvlar] = [await kartalar(db, odam.id), await oy_xarajati(db, oy || joriy, odam.id),
     await bugungi_yozuvlar(db, odam.id, bugun)];
   return { ok: true, odam: odam.nom, bugun, joriy_oy: joriy, otgan_oy: oy_sur(joriy, -1),
     kartalar: k, xarajat: x, yozuvlar };

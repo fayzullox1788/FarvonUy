@@ -7,6 +7,7 @@ import { createHmac } from "node:crypto";
 import { ikkiBaza, pyJson, PY_RASXODLAR, jsRasxodlar } from "./moliya_yordam.js";
 import * as ma from "../src/miniapp.js";
 import * as plan from "../src/plan.js";
+import * as ledger from "../src/ledger.js";
 import { soatniQoy } from "../src/vaqt.js";
 
 const TOKEN = "123456:SINOV-token";
@@ -183,7 +184,7 @@ test("saqlash: umumiy — bugun uydagilarga teng, karta bilan (Python rasxod_kir
   const b = qur();
   const { F, O, mv, k2 } = b.idlar;
   const js = await solishtir(b,
-    { kimning: O, tur: "umumiy", kim_toladi: F, karta_id: k2, turi_id: mv, summa: 145_000, sabab: "Bozor" },
+    { tur: "umumiy", kim_toladi: F, karta_id: k2, turi_id: mv, summa: 145_000, sabab: "Bozor" },
     `kim_toladi=${F}, karta_id=${k2}, turi_id=${mv}, nom="Bozor", summa=145000, tur=rk.UMUMIY`);
   assert.equal(js.length, 1);
   assert.equal(js[0].umumiymi, 1);
@@ -193,11 +194,11 @@ test("saqlash: umumiy — bugun uydagilarga teng, karta bilan (Python rasxod_kir
   assert.equal(js[0].ulush.reduce((s, u) => s + u.summa, 0), 145_000);
 });
 
-test("saqlash: shaxsiy — o'zi to'lagan (naqd)", async () => {
+test("saqlash: shaxsiy — to'lovchining o'zi (ochgan odam emas, naqd)", async () => {
   const b = qur();
   const { O, trn } = b.idlar;
   const js = await solishtir(b,
-    { kimning: O, tur: "shaxsiy", kim_toladi: O, karta_id: null, turi_id: trn, summa: "12 000", sabab: "Avtobus" },
+    { tur: "shaxsiy", kim_toladi: O, kim_uchun: 12345, karta_id: null, turi_id: trn, summa: "12 000", sabab: "Avtobus" },
     `kim_toladi=${O}, karta_id=None, turi_id=${trn}, nom="Avtobus", summa=12000, tur=rk.SHAXSIY`);
   assert.equal(js[0].umumiymi, 0);
   assert.equal(js[0].kim_uchun, null);
@@ -205,23 +206,54 @@ test("saqlash: shaxsiy — o'zi to'lagan (naqd)", async () => {
   assert.deepEqual(js[0].ulush, []);
 });
 
-test("saqlash: shaxsiy, boshqa to'lagan — «uning uchun» (kim_uchun), to'lovchining kartasi", async () => {
-  const b = qur();
-  const { F, A, bz, k1 } = b.idlar;
-  const js = await solishtir(b,
-    { kimning: A, tur: "shaxsiy", kim_toladi: F, karta_id: k1, turi_id: bz, summa: 80_000, sabab: "Poyabzal" },
-    `kim_toladi=${F}, karta_id=${k1}, turi_id=${bz}, nom="Poyabzal", summa=80000, tur=rk.UCHUN, kim_uchun=${A}`);
-  assert.equal(js[0].kim_uchun, A);
-  assert.equal(js[0].kim_toladi, F);
-  assert.equal(js[0].umumiymi, 1);
-  assert.equal(js[0].bolish_usul, "aniq");
-  assert.deepEqual(js[0].ulush.map((u) => [u.odam_id, u.summa]), [[A, 80_000]]);
-});
+/** Netlangan juftlik qarzi: qarzdor → kreditor (teskarisi bo'lsa manfiy). */
+async function juft(db, qarzdor, kreditor) {
+  for (const j of await ledger.juft_qarzlar(db)) {
+    if (j.qarzdor_id === qarzdor && j.kreditor_id === kreditor) return j.summa;
+    if (j.qarzdor_id === kreditor && j.kreditor_id === qarzdor) return -j.summa;
+  }
+  return 0;
+}
+const PY_JUFT = `print(json.dumps(sorted([[j.qarzdor_id, j.kreditor_id, j.summa] for j in ledger.juft_qarzlar(db)])))`;
+
+for (const [nomi, tolovchi, uchun, karta] of [
+  ["ochgan odam to'laydi", "F", "A", "k1"],
+  ["boshqa odam to'laydi (to'lovchi ≠ ochgan)", "O", "A", "k3"],
+]) {
+  test(`saqlash: boshqa uchun — ${nomi}: kim_uchun, qarz v_balans da o'zi (alohida qarz yozilmaydi)`, async () => {
+    const b = qur();
+    const { bz } = b.idlar;
+    const T = b.idlar[tolovchi], U = b.idlar[uchun], K = b.idlar[karta];
+    const oldin = await juft(b.db, U, T);
+    const qarzOldin = await b.db.skalyar("SELECT COUNT(*) FROM qarz", [], 0);
+    const VJ = "SELECT COALESCE(SUM(summa),0) FROM v_juft_qarz WHERE qarzdor=? AND kreditor=?";
+    const vjOldin = await b.db.skalyar(VJ, [U, T], 0);
+    const js = await solishtir(b,
+      { tur: "uchun", kim_toladi: T, kim_uchun: U, karta_id: K, turi_id: bz, summa: 80_000, sabab: "Poyabzal" },
+      `kim_toladi=${T}, karta_id=${K}, turi_id=${bz}, nom="Poyabzal", summa=80000, tur=rk.UCHUN, kim_uchun=${U}`);
+    assert.equal(js[0].kim_uchun, U);
+    assert.equal(js[0].kim_toladi, T);
+    assert.equal(js[0].umumiymi, 1);
+    assert.equal(js[0].bolish_usul, "aniq");
+    assert.deepEqual(js[0].ulush.map((u) => [u.odam_id, u.summa]), [[U, 80_000]]);
+    // Qarz: «kim uchun» to'lovchiga aynan summa qadar ko'proq qarzdor bo'ladi
+    assert.equal(await juft(b.db, U, T) - oldin, 80_000);
+    assert.equal(await b.db.skalyar(VJ, [U, T], 0) - vjOldin, 80_000);
+    assert.equal(await b.db.skalyar("SELECT COUNT(*) FROM qarz", [], 0), qarzOldin); // qarz qatori yozilmagan
+    // Python bilan (o'sha kirish rk.saqla orqali yozilgan nusxa) — juftliklar bir xil
+    const py = pyJson(b.pyPapka, `import json
+from core import ledger
+${PY_JUFT}`);
+    const jsJ = (await ledger.juft_qarzlar(b.db)).map((j) => [j.qarzdor_id, j.kreditor_id, j.summa])
+      .sort((p, q) => p[0] - q[0] || p[1] - q[1] || p[2] - q[2]);
+    assert.deepEqual(jsJ, py);
+  });
+}
 
 test("tekshiruv: o'zbekcha xato 400, hech narsa yozilmaydi", async () => {
   const b = qur();
   const { F, O, A, bz, k3 } = b.idlar;
-  const asos = { kimning: F, tur: "umumiy", kim_toladi: F, karta_id: null, turi_id: bz, summa: 10_000, sabab: "Non" };
+  const asos = { tur: "umumiy", kim_toladi: F, karta_id: null, turi_id: bz, summa: 10_000, sabab: "Non" };
   const holatlar = [
     [{ summa: 0 }, "Summa kiritilmagan."],
     [{ summa: "abc" }, "Summa kiritilmagan."],
@@ -231,8 +263,9 @@ test("tekshiruv: o'zbekcha xato 400, hech narsa yozilmaydi", async () => {
     [{ kim_toladi: null }, "Kim to'laganini tanlang."],
     [{ karta_id: k3 }, "Bu karta to'lovchiniki emas yoki o'chirilgan — «Qayerdan» ni qayta tanlang."],
     [{ tur: "boshqa" }, "Rasxod turi noma'lum."],
-    [{ tur: "shaxsiy", kimning: null }, "Kimning rasxodi ekanini tanlang."],
-    [{ tur: "shaxsiy", kimning: 999 }, "Kimning rasxodi ekanini tanlang."],
+    [{ tur: "uchun", kim_uchun: null }, "Kim uchun olinganini tanlang."],
+    [{ tur: "uchun", kim_uchun: 999 }, "Kim uchun olinganini tanlang."],
+    [{ tur: "uchun", kim_uchun: F }, "To'lovchi va «kim uchun» bir odam bo'lsa — bu oddiy shaxsiy rasxod. «Shaxsiy» ni tanlang."],
   ];
   for (const [ozgar, xato] of holatlar) {
     const [s, j] = await jsonOl(await b.sor("/app/api/rasxod", { tana: { ...asos, ...ozgar } }));

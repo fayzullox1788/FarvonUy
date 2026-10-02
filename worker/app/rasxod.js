@@ -43,6 +43,7 @@
     yop: S('<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>', 2),
     belgi: S('<path d="m5 12.5 4.5 4.5L19 7.5"/>', 2.4),
     tur: S('<path d="M4 7.5h16M4 12h16M4 16.5h10"/>', 1.8),
+    uchun: S('<circle cx="9" cy="8" r="3.4"/><path d="M3 20c0-3.4 2.7-5.6 6-5.6 1.6 0 3 .5 4 1.4"/><path d="M15.5 17.5h6M18.8 14.6l2.8 2.9-2.8 2.9"/>', 1.8),
   };
 
   // ── Holat ────────────────────────────────────────────────────────────
@@ -59,8 +60,10 @@
 
   function boshHolat() {
     const men = F.odamlar.some((o) => o.id === F.men) ? F.men : (F.odamlar[0] || {}).id;
-    H = { kimning: men, tur: "umumiy", toladi: men, karta: null, kat: null, ichki: null, summa: 0, sabab: "" };
+    H = { tur: "umumiy", toladi: men, uchun: null, karta: null, kat: null, ichki: null, summa: 0, sabab: "" };
+    H.uchun = boshqasi(men);
     if (NAMUNA) Object.assign(H, { karta: 11, kat: 5, ichki: 51 });
+    if (NAMUNA && /uchun/.test(location.hash)) Object.assign(H, { tur: "uchun", summa: 145000, sabab: "Poyabzal" });
   }
 
   async function api(yol, tana) {
@@ -108,10 +111,18 @@
   const BOSH_IKON = `<span class="rx-yoq">${IK.tur.replace("<svg", '<svg width="16" height="16"')}</span>`;
   const ikon = (fayl) => `<span class="rx-ikon">${fayl ? `<img src="${ASOS}belgilar/${e(fayl)}" alt="">` : BOSH_IKON}</span>`;
 
-  function odamTugmalari(nom, tanlangan) {
-    return `<div class="rx-seg uch">${F.odamlar.map((o) =>
-      `<button class="rx-t${o.id === tanlangan ? " tanlangan" : ""}" data-${nom}="${o.id}">${IK.odam}<span>${e(o.nom)}</span></button>`).join("")}</div>`;
-  }
+  // «Turi»: umumiy — hammaga teng; shaxsiy — to'lovchining o'zi; uchun — boshqa odamniki (u qarz bo'ladi).
+  const TURLAR = [
+    { id: "umumiy", nom: "Umumiy" }, { id: "shaxsiy", nom: "Shaxsiy" }, { id: "uchun", nom: "Boshqa uchun" }];
+  const turIkon = (id) => ({ umumiy: IK.guruh, shaxsiy: IK.odam, uchun: IK.uchun }[id]);
+  const svgIkon = (svg) => `<span class="rx-ikon rx-svg">${svg}</span>`;
+  /** To'lovchidan boshqa birinchi odam («Kim uchun» birlamchisi). */
+  const boshqasi = (toladi) => (F.odamlar.find((o) => o.id !== toladi) || {}).id ?? null;
+
+  const tanlaMaydon = (ochish, yorliq, ikonHtml, matn, bosh = false) =>
+    `<div class="rx-kichik"><div class="rx-yorliq">${yorliq}</div>
+      <button class="rx-tanla kichik" data-ochish="${ochish}">${ikonHtml}
+        <span class="rx-nom${bosh ? " bosh" : ""}">${matn}</span>${IK.pastga.replace("<svg", '<svg width="18" height="18"')}</button></div>`;
 
   function chiz() {
     const ich = $("#rxIchi");
@@ -122,7 +133,10 @@
     const toladi = odam(H.toladi);
     const kartalar = toladi ? toladi.kartalar : [];
     const tolovlar = [{ id: null, nom: "Naqt", ikon: IK.naqd }, ...kartalar.map((x) => ({ id: x.id, nom: x.nom, ikon: IK.karta }))];
-    const b = odam(H.kimning);
+    const b = toladi;
+    const uchun = odam(H.uchun);
+    const tur = TURLAR.find((x) => x.id === H.tur);
+    const qarzMatn = uchun && b ? (H.toladi === F.men ? `${e(uchun.nom)} sizga qarz bo‘ladi` : `${e(uchun.nom)} ${e(b.nom)}ga qarz bo‘ladi`) : "";
     ich.innerHTML = `
       <div class="rx-kirit">
         <div class="rx-maydon rx-summa" id="rxSummaQ"><label for="rxSumma">Summa</label>
@@ -131,22 +145,16 @@
           <input id="rxSabab" autocomplete="off" maxlength="120" placeholder="Nima uchun?" value="${e(H.sabab)}"></div>
       </div>
 
-      <div class="rx-bolim">Kimning rasxodi?</div>
-      ${odamTugmalari("kimning", H.kimning)}
-      <div class="rx-balans">
-        <div class="rx-hamyon">${IK.hamyon.replace("<svg", '<svg width="24" height="24"')}</div>
-        <div>
-          <div class="rx-b-l">Real balans</div>
-          <div class="rx-b-q${b && b.real_balans < 0 ? " manfiy" : ""}">${b ? fmt(b.real_balans) : "—"} UZS</div>
-          <div class="rx-b-i">Qarz va rejalardan keyin</div>
-        </div>
+      <div class="rx-qator2">
+        ${tanlaMaydon("tur", "Turi", svgIkon(turIkon(H.tur)), tur.nom)}
+        ${tanlaMaydon("toladi", "Kim to‘laydi", svgIkon(IK.odam), b ? e(b.nom) : "Tanlang", !b)}
       </div>
-
-      <div class="rx-bolim">Rasxod turi</div>
-      <div class="rx-seg ikki">
-        <button class="rx-t${H.tur === "umumiy" ? " tanlangan" : ""}" data-tur="umumiy">${IK.guruh.replace("<svg", '<svg style="width:22px;height:22px"')}<span>Umumiy</span></button>
-        <button class="rx-t${H.tur === "shaxsiy" ? " tanlangan" : ""}" data-tur="shaxsiy">${IK.odam}<span>Shaxsiy</span></button>
-      </div>
+      ${H.tur === "uchun" ? `<div class="rx-qator2 bitta">
+        ${tanlaMaydon("uchun", "Kim uchun", svgIkon(IK.odam), uchun ? e(uchun.nom) : "Tanlang", !uchun)}</div>
+      <div class="rx-bolinish">
+        ${IK.info.replace("<svg", '<svg width="22" height="22"')}
+        <div class="rx-n" id="rxQarz">${qarzMatn ? `${qarzMatn}: <b>${fmt(H.summa)} UZS</b>` : "Kim uchun to‘langanini tanlang"}</div>
+      </div>` : ""}
       <div class="rx-bolinish" id="rxBolinish"${H.tur === "umumiy" ? "" : " hidden"}>
         ${IK.info.replace("<svg", '<svg width="22" height="22"')}
         <div class="rx-n">${F.qatnashchilar.length} kishiga teng bo‘linadi</div>
@@ -154,8 +162,14 @@
         <div class="rx-har"><small>Har biriga:</small><b id="rxHar">${fmt(harBiri())} UZS</b></div>
       </div>
 
-      <div class="rx-bolim">Kim to‘laydi?</div>
-      ${odamTugmalari("toladi", H.toladi)}
+      <div class="rx-balans">
+        <div class="rx-hamyon">${IK.hamyon.replace("<svg", '<svg width="24" height="24"')}</div>
+        <div>
+          <div class="rx-b-l">Real balans${b ? ` · ${e(b.nom)}` : ""}</div>
+          <div class="rx-b-q${b && b.real_balans < 0 ? " manfiy" : ""}">${b ? fmt(b.real_balans) : "—"} UZS</div>
+          <div class="rx-b-i">Qarz va rejalardan keyin</div>
+        </div>
+      </div>
 
       <div class="rx-bolim">Nimadan to‘lov qilindi?</div>
       <div class="rx-seg ${tolovlar.length > 3 ? "kop" : ""}">${tolovlar.map((t) =>
@@ -183,13 +197,7 @@
   function bosildi(ev) {
     const t = ev.target.closest("button"); if (!t) return;
     const d = t.dataset;
-    if (d.kimning) { H.kimning = Number(d.kimning); }
-    else if (d.tur) { H.tur = d.tur; }
-    else if (d.toladi) {
-      const yangi = Number(d.toladi);
-      if (yangi !== H.toladi) H.karta = null; // karta to'lovchiniki bo'lishi shart
-      H.toladi = yangi;
-    } else if (d.karta !== undefined) { H.karta = d.karta === "" ? null : Number(d.karta); }
+    if (d.karta !== undefined) { H.karta = d.karta === "" ? null : Number(d.karta); }
     else if (d.ochish) { return royxatOch(d.ochish); }
     else return;
     tebran("soft");
@@ -204,6 +212,7 @@
       t.value = raqam ? fmt(H.summa) : "";
       $("#rxSummaQ").classList.remove("xato");
       const h = $("#rxHar"); if (h) h.textContent = `${fmt(harBiri())} UZS`;
+      const q = $("#rxQarz b"); if (q) q.textContent = `${fmt(H.summa)} UZS`;
     } else if (t.id === "rxSabab") {
       H.sabab = t.value;
       $("#rxSababQ").classList.remove("xato");
@@ -214,7 +223,17 @@
   function royxatOch(qaysi) {
     const k = kat(H.kat);
     let qatorlar, sarlavha;
-    if (qaysi === "kat") {
+    const odamQator = (o, tanlangan) => ({ id: o.id, nom: o.nom, ik: svgIkon(IK.odam), chuq: 0, tanlangan });
+    if (qaysi === "tur") {
+      sarlavha = "Rasxod turi";
+      qatorlar = TURLAR.map((x) => ({ ...x, ik: svgIkon(turIkon(x.id)), chuq: 0, tanlangan: x.id === H.tur }));
+    } else if (qaysi === "toladi") {
+      sarlavha = "Kim to‘laydi?";
+      qatorlar = F.odamlar.map((o) => odamQator(o, o.id === H.toladi));
+    } else if (qaysi === "uchun") {
+      sarlavha = "Kim uchun to‘landi?";
+      qatorlar = F.odamlar.filter((o) => o.id !== H.toladi).map((o) => odamQator(o, o.id === H.uchun));
+    } else if (qaysi === "kat") {
       sarlavha = "Kategoriya";
       qatorlar = F.kategoriyalar.map((x) => ({ id: x.id, nom: x.nom, belgi: x.belgi, chuq: 0, tanlangan: x.id === H.kat }));
     } else {
@@ -224,12 +243,18 @@
     }
     const r = $("#rxRoyxat");
     r.innerHTML = `<div class="rx-tutqich"></div><h3>${sarlavha}</h3><div class="rx-qatorlar">${qatorlar.length ? qatorlar.map((x) =>
-      `<button class="rx-qator${x.tanlangan ? " tanlangan" : ""}" data-id="${x.id}" style="padding-left:${10 + 22 * (x.chuq || 0)}px">${ikon(x.belgi)}<span class="rx-nom">${e(x.nom)}</span>${x.tanlangan ? `<span class="rx-belgi">${IK.belgi.replace("<svg", '<svg width="18" height="18"')}</span>` : ""}</button>`).join("")
+      `<button class="rx-qator${x.tanlangan ? " tanlangan" : ""}" data-id="${x.id}" style="padding-left:${10 + 22 * (x.chuq || 0)}px">${x.ik || ikon(x.belgi)}<span class="rx-nom">${e(x.nom)}</span>${x.tanlangan ? `<span class="rx-belgi">${IK.belgi.replace("<svg", '<svg width="18" height="18"')}</span>` : ""}</button>`).join("")
       : `<div class="rx-qator">Kategoriya yo‘q</div>`}</div>`;
     r.onclick = (ev) => {
       const b = ev.target.closest(".rx-qator[data-id]"); if (!b) return;
-      const id = b.dataset.id === "" ? null : Number(b.dataset.id);
-      if (qaysi === "kat") { if (id !== H.kat) { H.kat = id; H.ichki = null; } }
+      const id = b.dataset.id === "" ? null : qaysi === "tur" ? b.dataset.id : Number(b.dataset.id);
+      if (qaysi === "tur") H.tur = id;
+      else if (qaysi === "toladi") {
+        if (id !== H.toladi) H.karta = null; // karta to'lovchiniki bo'lishi shart
+        H.toladi = id;
+        if (H.uchun === id || H.uchun == null) H.uchun = boshqasi(id);
+      } else if (qaysi === "uchun") H.uchun = id;
+      else if (qaysi === "kat") { if (id !== H.kat) { H.kat = id; H.ichki = null; } }
       else H.ichki = id;
       tebran("soft"); royxatYop(); chiz();
     };
@@ -272,9 +297,10 @@
     if (!F || !H) return;
     if (!H.summa) { $("#rxSummaQ").classList.add("xato"); $("#rxSumma").focus(); return xabar("Summani kiriting"); }
     if (!H.sabab.trim()) { $("#rxSababQ").classList.add("xato"); $("#rxSabab").focus(); return xabar("Sababini yozing — rasxod nima uchun?"); }
+    if (H.tur === "uchun" && H.uchun == null) { royxatOch("uchun"); return xabar("Kim uchun to‘langanini tanlang"); }
     if (H.kat == null) { royxatOch("kat"); return xabar("Kategoriyani tanlang"); }
     const tana = {
-      kimning: H.kimning, tur: H.tur, kim_toladi: H.toladi, karta_id: H.karta,
+      tur: H.tur, kim_toladi: H.toladi, kim_uchun: H.tur === "uchun" ? H.uchun : null, karta_id: H.karta,
       turi_id: H.ichki ?? H.kat, summa: H.summa, sabab: H.sabab.trim(),
     };
     const t = $("#rxSaqla"); t.disabled = true;
@@ -288,6 +314,6 @@
 
   window.rasxodOch = och;
   window.rasxodYop = yop;
-  if (location.hash === "#rasxod") (document.readyState === "loading"
+  if (/^#rasxod/.test(location.hash)) (document.readyState === "loading"
     ? document.addEventListener("DOMContentLoaded", och) : och());
 })();

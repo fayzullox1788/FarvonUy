@@ -4,7 +4,7 @@
 //                                 balansi va kartalari bilan), bugun uyda
 //                                 bo'lganlar (umumiy bo'linadiganlar),
 //                                 kategoriya daraxti (ikonka fayli bilan)
-//   POST /app/api/rasxod        — {kimning, tur: umumiy|shaxsiy, kim_toladi,
+//   POST /app/api/rasxod        — {tur: umumiy|shaxsiy|uchun, kim_toladi, kim_uchun,
 //                                  karta_id, turi_id, summa, sabab} → {ok, id}
 //
 // Ruxsat (Telegram initData) va ochgan odam (`odam`) — miniapp.js da.
@@ -77,17 +77,16 @@ const butun = (x) => (x == null || x === "" ? null : Number.isInteger(Number(x))
 /** So'rov tanasidan Qoralama — desktop `RasxodDialog.qoralama()` qoidasi. */
 export async function qoralama(db, b) {
   const kim_toladi = butun(b.kim_toladi);
-  const kimning = butun(b.kimning);
-  let tur;
-  if (b.tur === "umumiy") tur = rk.UMUMIY;
-  else if (b.tur === "shaxsiy") {
-    if (kimning == null || Number.isNaN(kimning) ||
-        !await db.q1("SELECT 1 FROM odam WHERE id=? AND faol=1", kimning)) {
-      throw new Error("Kimning rasxodi ekanini tanlang.");
-    }
-    // Boshqa odam to'lasa — «uning uchun olingan» (CLAUDE.md «kim_uchun»).
-    tur = kim_toladi === kimning ? rk.SHAXSIY : rk.UCHUN;
-  } else throw new Error("Rasxod turi noma'lum.");
+  // «Boshqa uchun» — pulni to'lovchi chiqardi, rasxod butunlay `kim_uchun` niki;
+  // qarz v_balans da o'zi paydo bo'ladi (CLAUDE.md «kim_uchun»), alohida qarz yozilmaydi.
+  const TURLAR = { umumiy: rk.UMUMIY, shaxsiy: rk.SHAXSIY, uchun: rk.UCHUN };
+  const tur = TURLAR[b.tur];
+  if (!tur) throw new Error("Rasxod turi noma'lum.");
+  let kim_uchun = null;
+  if (tur === rk.UCHUN) {
+    const k = butun(b.kim_uchun);
+    if (k != null && !Number.isNaN(k) && await db.q1("SELECT 1 FROM odam WHERE id=? AND faol=1", k)) kim_uchun = k;
+  }
   const summa = Number(String(b.summa ?? "").replace(/[\s ]/g, ""));
   return new rk.Qoralama({
     sana: vaqt.bugun(),
@@ -97,7 +96,7 @@ export async function qoralama(db, b) {
     nom: String(b.sabab ?? "").trim(),
     summa: Number.isInteger(summa) ? summa : 0,
     tur,
-    kim_uchun: tur === rk.UCHUN ? kimning : null,
+    kim_uchun,
     parametrlar: null,           // umumiy — bugun uydagilarga teng
     manba: "miniapp",
   });

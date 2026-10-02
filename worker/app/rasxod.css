@@ -167,3 +167,24 @@
   .rx-seg.uch .rx-t { padding: 0 3px; gap: 5px; font-size: 13.5px; letter-spacing: -.25px; }
   .rx-seg.uch .rx-t svg { width: 16px; height: 16px; }
 }
+
+/* Turi | Kim to'laydi — ixcham tanlagichlar bir qatorda; «Kim uchun» ostida */
+.rx-qator2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+.rx-qator2.bitta { grid-template-columns: 1fr; margin-top: 10px; }
+.rx-kichik { min-width: 0; }
+.rx-yorliq { font-size: 13px; font-weight: 600; color: #3d4757; margin: 0 2px 6px; }
+.rx-tanla.kichik { height: 44px; padding: 0 10px 0 10px; gap: 9px; border-radius: 11px; }
+.rx-tanla.kichik .rx-nom { font-size: 14.5px; font-weight: 500; }
+.rx-tanla.kichik > svg:last-child { width: 18px; height: 18px; }
+.rx-svg { width: 22px; height: 22px; color: var(--kok, #2f6ff5); }
+.rx-svg svg { width: 20px; height: 20px; }
+.rx-qator .rx-svg { width: 26px; height: 26px; }
+.rx-bolinish .rx-n b { font-weight: 700; color: #0f1b2d; white-space: nowrap; }
+.rx-qator2 + .rx-bolinish, .rx-bolinish + .rx-balans { margin-top: 10px; }
+.rx-qator2:not(.bitta) .rx-tanla.kichik { padding: 0 8px; gap: 6px; }
+.rx-qator2:not(.bitta) .rx-tanla.kichik .rx-svg { width: 18px; }
+.rx-qator2:not(.bitta) .rx-tanla.kichik .rx-svg svg { width: 18px; height: 18px; }
+.rx-qator2:not(.bitta) .rx-tanla.kichik > svg:last-child { width: 16px; height: 16px; }
+@media (max-width: 420px) {
+  .rx-qator2:not(.bitta) .rx-tanla.kichik .rx-nom { font-size: 13.5px; letter-spacing: -.2px; }
+}

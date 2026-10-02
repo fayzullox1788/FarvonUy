@@ -260,3 +260,141 @@ export async function kategoriya_ochir(db, turi_id) {
   await a.apply("turi", "UPDATE", { faol: 0 }, turi_id);
   await a.commit();
 }
+
+// ═══════════════════════════════════════════════════════════ mahsulot (katalog)
+// Mini App «Sozlamalar → Mahsulotlar» uchun — desktop «Kategoriyalar» varag'idagi
+// mahsulot kartalari (sahifa_mahsulot.MahsulotSahifa / MahsulotDialog) bilan bir xil.
+
+// mahsulot.py:26
+export const OLCHOVLAR = ["dona", "kg", "gramm", "litr", "millilitr", "qadoq", "bog'",
+  "metr", "juft"];
+
+// mahsulot.py:51
+/** Daraxt — tanlagich uchun tekis ro'yxat: [kategoriya, chuqurlik]. */
+export async function tekis(db) {
+  const natija = [];
+  const yur = (tugunlar, chuq) => {
+    for (const t of tugunlar) { natija.push([t, chuq]); yur(t.bolalar, chuq + 1); }
+  };
+  yur(await daraxt(db), 0);
+  return natija;
+}
+
+/** Python `float(str)` sintaksisi (bo'shliqlar `_son` da olib tashlangan). */
+const _FLOAT = /^[+-]?(?:\d(?:_?\d)*(?:\.(?:\d(?:_?\d)*)?)?|\.\d(?:_?\d)*)(?:[eE][+-]?\d(?:_?\d)*)?$/;
+const _MAXSUS = /^([+-]?)(inf|infinity|nan)$/i;
+
+// mahsulot.py:221
+/** Bo'sh → null. Manfiy yoki son emas → tushunarli xato. */
+export function _son(x, nom) {
+  if (x == null) return null;
+  let v;
+  if (typeof x === "string") {
+    const s = x.trim().replaceAll(",", ".").replaceAll(" ", "");
+    if (!s) return null;
+    const m = s.match(_MAXSUS);
+    if (_FLOAT.test(s)) v = Number(s.replaceAll("_", ""));
+    else if (m) v = m[2].toLowerCase() === "nan" ? NaN : (m[1] === "-" ? -Infinity : Infinity);
+    else throw new Error(`${nom} son bo'lishi kerak`);
+  } else if (typeof x === "number" || typeof x === "boolean") {
+    v = Number(x);
+  } else {
+    throw new Error(`${nom} son bo'lishi kerak`);
+  }
+  if (v < 0) throw new Error(`${nom} manfiy bo'lmasin`);
+  return Number.isNaN(v) ? null : v; // SQLite NaN ni NULL qilib yozadi — natija bir xil
+}
+
+/** Python `int(x)` — `saqla` dagi narx uchun. */
+function _butun(x) {
+  const xato = () => new Error("Narx butun son bo'lishi kerak");
+  if (typeof x === "boolean") return Number(x);
+  if (typeof x === "number") {
+    if (!Number.isFinite(x)) throw xato();
+    return Math.trunc(x);
+  }
+  if (typeof x === "string") {
+    const s = x.trim();
+    if (!/^[+-]?\d(?:_?\d)*$/.test(s)) throw xato();
+    return Number(s.replaceAll("_", ""));
+  }
+  throw xato();
+}
+
+// mahsulot.py:238
+/** O'chirilmagan mahsulotlar. `turi_id` — shu kategoriya VA hamma ichkilari;
+ *  `qidiruv` — nomi yoki izohida (harf farqsiz); `faollar` — faqat faollari. */
+export async function mahsulotlar(db, turi_id = null, qidiruv = "", faollar = false) {
+  const shart = ["i.ochirilgan=0"], args = [];
+  if (faollar) shart.push("i.faol=1");
+  if (turi_id != null) {
+    const idlar = await avlodlar(db, turi_id);
+    shart.push(`i.turi_id IN (${idlar.map(() => "?").join(",")})`);
+    args.push(...idlar);
+  }
+  let qatorlar = await db.q(
+    "SELECT i.*, t.nom turi_nom FROM item i LEFT JOIN turi t ON t.id=i.turi_id" +
+    ` WHERE ${shart.join(" AND ")} ORDER BY i.faol DESC, i.nom COLLATE NOCASE`, ...args);
+  const q = _casefold(String(qidiruv ?? "").trim());
+  if (q) {
+    qatorlar = qatorlar.filter((r) => _casefold(r.nom ?? "").includes(q) ||
+      _casefold(r.izoh ?? "").includes(q));
+  }
+  const yollar = new Map(); // bir kategoriya yo'li bir marta o'qiladi
+  for (const r of qatorlar) {
+    if (!yollar.has(r.turi_id)) yollar.set(r.turi_id, await yol_nomi(db, r.turi_id));
+    r.kategoriya = yollar.get(r.turi_id);
+  }
+  return qatorlar;
+}
+
+// mahsulot.py:267
+/** Mahsulot qo'shadi yoki tahrirlaydi. Bo'sh maydonlar — NULL, xato emas. → item.id */
+export async function saqla(db, item_id = null, { nom, turi_id, narx = 0, miqdor = null, ogirlik = null,
+  litr = null, olchov = null, izoh = null, faol = true } = {}) {
+  nom = String(nom ?? "").trim();
+  if (!nom) throw new Error("Mahsulot nomi yozilmagan");
+  if (turi_id == null) throw new Error("Kategoriya tanlanmagan");
+  if (!(await db.q1("SELECT 1 FROM turi WHERE id=? AND faol=1", turi_id))) {
+    throw new Error("Bu kategoriya endi yo'q — boshqasini tanlang");
+  }
+  narx = _butun(narx || 0);
+  if (narx < 0) throw new Error("Narx manfiy bo'lmasin");
+  const maydonlar = {
+    nom, turi_id, narx,
+    miqdor: _son(miqdor, "Miqdor"), ogirlik: _son(ogirlik, "Og'irlik"),
+    litr: _son(litr, "Litr"),
+    olchov: String(olchov || "").trim() || null,
+    izoh: String(izoh || "").trim() || null, faol: faol ? 1 : 0,
+  };
+  if (item_id == null) {
+    const a = db.amal(`Mahsulot qo'shildi: ${nom}`);
+    const id = await a.apply("item", "INSERT", maydonlar);
+    await a.commit();
+    return id;
+  }
+  const a = db.amal(`Mahsulot tahrirlandi: ${nom}`);
+  await a.apply("item", "UPDATE", maydonlar, item_id);
+  await a.commit();
+  return item_id;
+}
+
+// mahsulot.py:299
+/** `ochirilgan=1`. Unga bog'langan eski rasxodlar joyida qoladi. */
+export async function ochir(db, item_id) {
+  const r = await db.q1("SELECT nom FROM item WHERE id=?", item_id);
+  const a = db.amal(`Mahsulot o'chirildi: ${r ? r.nom : "?"}`);
+  await a.apply("item", "DELETE", {}, item_id);
+  await a.commit();
+}
+
+// mahsulot.py:306
+export async function faol_almashtir(db, item_id) {
+  const r = await db.q1("SELECT nom, faol FROM item WHERE id=?", item_id);
+  if (!r) throw new Error("Mahsulot topilmadi");
+  const yangi = r.faol ? 0 : 1;
+  const a = db.amal(`${r.nom}: ${yangi ? "faol" : "faol emas"}`);
+  await a.apply("item", "UPDATE", { faol: yangi }, item_id);
+  await a.commit();
+  return !!yangi;
+}

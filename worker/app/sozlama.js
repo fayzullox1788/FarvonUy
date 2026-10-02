@@ -61,6 +61,7 @@
     ["profil", "Profil", ikon(`<circle cx="12" cy="8" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/>`)],
     ["azolar", "Uy a’zolari", ikon(`<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20v-.5a5 5 0 0 1 5-5h3a5 5 0 0 1 5 5v.5"/><path d="M15.5 4.7a3.5 3.5 0 0 1 0 6.6M18.5 14.4a5 5 0 0 1 3 4.6v1"/>`)],
     ["kategoriyalar", "Kategoriyalar", ikon(`<rect x="3.5" y="3.5" width="17" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/><path d="M7 7h.01M17 7h-6"/>`)],
+    ["vazifalar", "Vazifalar", ikon(`<rect x="4.5" y="4" width="15" height="17" rx="2.5"/><path d="M9 3v2.5h6V3M8.5 12.5l2.3 2.3 4.7-4.8"/>`)],
     ["mahsulotlar", "Mahsulotlar", ikon(`<path d="M3.5 8.5h17v10a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-10Z"/><path d="M3.5 8.5 5.5 4h13l2 4.5M12 4v4.5M9.5 12.5h5"/>`)],
     ["tolov", "To‘lov usullari", ikon(`<rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19M6.5 15h4"/>`)],
     ["reja", "Reja (budget)", ikon(`<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M8 3v4M16 3v4M3.5 10h17"/><path d="M12 13v2.5l1.6 1"/>`)],
@@ -395,6 +396,10 @@
     const t = ev.target.closest("button"); if (!t) return;
     if (t.dataset.menyu) {
       if (t.dataset.menyu === "kategoriyalar") { stek.push({ t: "royxat" }); chiz(); tebran("soft"); if (!daraxt) yukla(); return; }
+      // Boshqa bo'limlar o'z faylida: window.SozlamaBolimi[<kalit>] = () => ochish.
+      // Kalitlar — MENYU dagi: profil, azolar, vazifalar, mahsulotlar, tolov, reja, bildirishnoma, ilova.
+      const bolim = window.SozlamaBolimi && window.SozlamaBolimi[t.dataset.menyu];
+      if (typeof bolim === "function") { tebran("soft"); return bolim(); }
       return xabar("Tez orada");
     }
     if (t.dataset.kat) { stek.push({ t: "kat", id: Number(t.dataset.kat) }); chiz(); window.scrollTo(0, 0); tebran("soft"); return; }

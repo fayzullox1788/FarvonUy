@@ -1,0 +1,125 @@
+/* Sozlamalar → «To‘lov usullari» — sz_tolov.js. sozlama.css klasslari (sz-bosh, sz-royxat,
+   sz-q, sz-oyna, sz-kok-tugma …) ustida; tokenlar index.html :root dan. */
+
+/* ── To‘liq sahifa: Sozlamalar ustida, 430px ustun ichida ── */
+.szt-sahifa {
+  --sz-kok-fon: #eaf1ff; --sz-kok-chiziq: #c9dafd; --sz-kulrang-fon: #f2f4f8;
+  position: fixed; top: 0; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 430px; z-index: 15;
+  background: var(--fon); overflow-y: auto; overscroll-behavior: contain;
+  padding: calc(14px + env(safe-area-inset-top)) 14px calc(28px + env(safe-area-inset-bottom));
+  animation: szt-kir .22s cubic-bezier(.2, .8, .2, 1) both;
+}
+@keyframes szt-kir { from { transform: translateX(-50%) translateX(28px); opacity: 0; } to { transform: translateX(-50%); opacity: 1; } }
+.szt-bosh { position: sticky; top: calc(-14px - env(safe-area-inset-top)); z-index: 2; margin: -14px -14px 0; padding: 14px 12px 8px 16px; background: var(--fon); }
+.szt-bosh h1 { flex: 1; }
+
+/* ── Jami pul kartasi ─────────────────────── */
+.szt-jami {
+  margin-top: 8px; padding: 16px 16px 14px; border-radius: 16px; color: #fff;
+  background: radial-gradient(120% 140% at 100% 0, #34506f 0, rgba(52, 80, 111, 0) 60%), linear-gradient(150deg, #24364b, #1a2736);
+  box-shadow: 0 6px 18px rgba(20, 35, 60, .16);
+}
+.szt-jami .yorliq { font-size: 13px; color: rgba(255, 255, 255, .72); }
+.szt-jami .summa {
+  margin-top: 4px; font-size: 29px; font-weight: 700; letter-spacing: -.6px; font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.szt-jami .summa span { font-size: 15px; font-weight: 500; letter-spacing: 0; color: rgba(255, 255, 255, .72); }
+.szt-jami .summa.manfiy { color: #ffb4b4; }
+.szt-chiziq { display: flex; gap: 3px; height: 7px; margin-top: 14px; border-radius: 4px; overflow: hidden; }
+.szt-chiziq i { display: block; min-width: 4px; border-radius: 2px; }
+.szt-jami .taqsim { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.szt-jami .taqsim span { display: flex; flex-wrap: wrap; align-items: center; gap: 0 7px; font-size: 12.5px; color: rgba(255, 255, 255, .72); min-width: 0; }
+.szt-jami .taqsim b { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.szt-jami .taqsim em {
+  flex-basis: 100%; padding-left: 15px; margin-top: 2px; font-style: normal; font-size: 14px; font-weight: 600; color: #fff;
+  font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.szt-skelet-jami { height: 158px; background: linear-gradient(90deg, #e6ebf2 0, #f1f4f8 40%, #e6ebf2 80%); background-size: 300% 100%; animation: sz-yaltira 1.2s linear infinite; box-shadow: none; }
+
+/* ── Ro‘yxat qatorlari ────────────────────── */
+.szt-bolim { display: flex; align-items: baseline; justify-content: space-between; }
+.szt-bolim small { font-size: 12.5px; font-weight: 500; color: var(--kulrang); }
+.szt-q { min-height: 58px; padding: 9px 10px 9px 12px; gap: 12px; }
+.szt-q + .szt-q::before { left: 60px; }
+div.szt-q { cursor: default; }
+div.szt-q:active { background: none; }
+.szt-belgi { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; }
+.szt-matn { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.szt-matn b { font-size: 14.5px; font-weight: 600; color: var(--matn); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.szt-matn small { font-size: 12px; color: var(--kulrang); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.szt-matn small.ogoh { color: #b4690e; white-space: normal; }
+.szt-qoldiq { flex: none; font-size: 14.5px; font-weight: 600; color: var(--matn); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.szt-qoldiq.manfiy { color: var(--qizil); }
+.szt-q .ong { color: #9aa3b0; margin-left: -4px; }
+.szt-naqd .szt-qoldiq { margin-right: 26px; }
+
+.szt-tugmalar { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.szt-tugmalar.bitta { grid-template-columns: 1fr; }
+.szt-och { height: 44px; }
+.szt-izoh { margin: 14px 6px 0; font-size: 12.5px; line-height: 1.5; color: var(--kulrang); }
+.szt-izoh.markaz { text-align: center; margin-top: 12px; }
+
+/* ── Karta tafsiloti ──────────────────────── */
+.szt-plastik {
+  position: relative; overflow: hidden; margin-top: 8px; padding: 16px 18px 18px; border-radius: 18px; color: #fff;
+  aspect-ratio: 1.75; max-height: 210px; display: flex; flex-direction: column;
+  box-shadow: 0 10px 24px rgba(31, 79, 201, .22);
+}
+.szt-plastik::before, .szt-plastik::after {
+  content: ""; position: absolute; border-radius: 50%; background: rgba(255, 255, 255, .09); pointer-events: none;
+}
+.szt-plastik::before { width: 220px; height: 220px; right: -70px; top: -90px; }
+.szt-plastik::after { width: 160px; height: 160px; right: 40px; bottom: -110px; background: rgba(255, 255, 255, .06); }
+.szt-plastik .ust { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.szt-plastik .tur { font-size: 15px; font-weight: 700; letter-spacing: .2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.szt-plastik .yorliq { margin-top: auto; font-size: 12.5px; color: rgba(255, 255, 255, .78); }
+.szt-plastik .summa {
+  margin-top: 3px; font-size: 27px; font-weight: 700; letter-spacing: -.5px; font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.szt-plastik .summa span { font-size: 14px; font-weight: 500; letter-spacing: 0; color: rgba(255, 255, 255, .8); }
+.szt-skelet-plastik { background: linear-gradient(90deg, #e6ebf2 0, #f1f4f8 40%, #e6ebf2 80%); background-size: 300% 100%; animation: sz-yaltira 1.2s linear infinite; box-shadow: none; }
+
+.szt-amallar { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.szt-amallar button {
+  display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 12px; border-radius: 12px;
+  background: var(--karta); box-shadow: var(--soya); font-size: 13.5px; font-weight: 600; color: var(--matn); text-align: left; line-height: 1.2;
+}
+.szt-amallar button span { flex: none; width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; background: var(--sz-kok-fon); color: var(--kok); }
+.szt-amallar button:active { background: #f6f8fb; }
+
+.szt-sana { margin: 14px 6px 7px; font-size: 12.5px; font-weight: 600; color: var(--kulrang); }
+.szt-sana + .szt-tarix, .szt-tarix { margin-top: 0; }
+.szt-h { min-height: 54px; }
+.szt-h-belgi { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; }
+.szt-h-belgi.kir { background: #e3f7ee; color: #1d9d63; }
+.szt-h-belgi.ras { background: #fff0f0; color: #e0393a; }
+.szt-h-belgi.otk { background: var(--sz-kok-fon); color: var(--kok); }
+.szt-summa { flex: none; font-size: 14px; font-weight: 600; color: var(--matn); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.szt-summa.musbat { color: #16a36a; }
+
+/* ── Pastdan oynalar ──────────────────────── */
+.szt-oyna { --sz-kok-fon: #eaf1ff; --sz-kulrang-fon: #f2f4f8; }
+.szt-oyna .sz-matn { margin-top: -6px; }
+.szt-oyna-izoh { margin: -6px 2px 18px; line-height: 1.45; }
+.szt-pul { position: relative; display: block; }
+.szt-pul .sz-kirit { padding-right: 52px; font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.szt-pul span { position: absolute; right: 14px; top: 11px; font-size: 14px; color: var(--kulrang); pointer-events: none; }
+.sz-yorliq .ixtiyoriy { font-weight: 400; color: var(--kulrang); }
+.szt-joylar { display: flex; flex-wrap: wrap; gap: 8px; }
+.szt-joy { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 13px 0 10px; max-width: 100%; }
+.szt-joy svg { width: 17px; height: 17px; flex: none; opacity: .8; }
+.szt-mavjud { margin: 7px 2px 16px; font-size: 12.5px; color: var(--kulrang); font-variant-numeric: tabular-nums; }
+.szt-ogoh-kichik { margin: -10px 2px 16px; font-size: 12.5px; color: #b4690e; }
+.szt-ogoh-kichik[hidden] { display: none; }
+.szt-hozir {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 16px; padding: 12px 14px;
+  border-radius: 10px; background: var(--sz-kulrang-fon); font-size: 13.5px; color: #4a5464;
+}
+.szt-hozir span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.szt-hozir b { flex: none; color: var(--matn); font-variant-numeric: tabular-nums; }
+.szt-farq { margin: -8px 2px 18px; min-height: 18px; font-size: 13px; color: #4a5464; }
+.szt-farq b { color: var(--matn); font-variant-numeric: tabular-nums; }
+.szt-farq b.musbat { color: #16a36a; }

@@ -1,0 +1,105 @@
+/* Sozlamalar → Profil / Uy a’zolari / Bildirishnomalar / Ilova sozlamalari —
+   sz_profil.js. Tokenlar index.html :root dan, tugma/sarlavha uslubi sozlama.css dan. */
+
+/* To'liq ekran — 430px ustun ichida, Sozlamalar ustida (pastki menyu ham yopiladi;
+   xabar() toast'i (z 20) va pastdan oyna (z 30) ustida qoladi). */
+.szp-ekran {
+  --sz-kok-fon: #eaf1ff; --sz-kulrang-fon: #f2f4f8;
+  position: fixed; top: 0; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 430px; z-index: 15; background: var(--fon);
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: calc(16px + env(safe-area-inset-top)) 14px calc(28px + env(safe-area-inset-bottom));
+}
+.szp-ekran[hidden] { display: none; }
+.szp-ekran.kir { animation: szp-kir .24s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes szp-kir { from { opacity: 0; transform: translate(-46%, 0); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* ── Guruh sarlavhasi va karta ───────────── */
+.szp-sar { margin: 22px 4px 8px; font-size: 13px; font-weight: 600; color: var(--kulrang); text-transform: uppercase; letter-spacing: .4px; display: flex; justify-content: space-between; }
+.szp-sar span { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.szp-karta { background: var(--karta); border-radius: 12px; box-shadow: var(--soya); overflow: hidden; }
+
+/* Qator: chapda yorliq, o'ngda qiymat */
+.szp-q {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 50px; padding: 8px 14px;
+  position: relative; text-align: left; font-size: 14.5px; color: var(--matn);
+}
+.szp-q + .szp-q::before { content: ""; position: absolute; top: 0; left: 14px; right: 0; height: 1px; background: #eff2f6; }
+.szp-q > .yor { flex: 1; min-width: 0; }
+.szp-q > .yor small { display: block; margin-top: 2px; font-size: 12.5px; color: var(--kulrang); }
+.szp-q > .qiy { color: #5b6576; font-size: 14px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 58%; font-variant-numeric: tabular-nums; }
+button.szp-q:active { background: #f6f8fb; }
+.szp-q .ong { color: #9aa3b0; flex: none; margin-right: -4px; }
+.szp-q .qalam { color: var(--kok); flex: none; }
+
+/* Chip (holat) */
+.szp-chip {
+  display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 12px;
+  font-size: 12.5px; font-weight: 600; white-space: nowrap; flex: none;
+  background: var(--sz-kulrang-fon); color: #6b7585;
+}
+.szp-chip i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.szp-chip.yashil { background: #e3f7ec; color: #1f9d5c; }
+.szp-chip.sariq { background: #fff3e0; color: #b26a00; }
+.szp-chip.kok { background: var(--sz-kok-fon); color: var(--kok); }
+.szp-chip.binafsha { background: #ebe5fd; color: #6a3fd6; }
+.szp-chiplar { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+
+/* ── Profil boshi ─────────────────────────── */
+.szp-kim { margin-top: 14px; padding: 22px 16px 18px; background: var(--karta); border-radius: 14px; box-shadow: var(--soya); text-align: center; }
+.szp-avatar {
+  width: 76px; height: 76px; border-radius: 50%; margin: 0 auto; display: grid; place-items: center;
+  color: #fff; font-size: 31px; font-weight: 700; letter-spacing: -.5px;
+  box-shadow: 0 0 0 4px #fff, 0 0 0 5px var(--chiziq), 0 6px 16px rgba(20, 35, 60, .12);
+}
+.szp-kim b { display: block; margin-top: 14px; font-size: 20px; font-weight: 700; letter-spacing: -.3px; }
+.szp-kim .tg { display: block; margin-top: 3px; font-size: 14px; color: var(--kulrang); }
+.szp-kim .szp-chiplar { justify-content: center; margin-top: 12px; }
+
+/* ── A'zolar ro'yxati ─────────────────────── */
+.szp-azo { display: flex; align-items: center; gap: 12px; min-height: 62px; padding: 9px 14px; position: relative; }
+.szp-azo + .szp-azo::before { content: ""; position: absolute; top: 0; left: 64px; right: 0; height: 1px; background: #eff2f6; }
+.szp-azo .av { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 16px; flex: none; }
+.szp-azo .ich { flex: 1; min-width: 0; }
+.szp-azo .ich b { display: flex; align-items: center; gap: 6px; font-size: 14.5px; font-weight: 600; white-space: nowrap; }
+.szp-azo .ich b span { overflow: hidden; text-overflow: ellipsis; }
+.szp-azo .ich small { display: flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 12.5px; color: var(--kulrang); white-space: nowrap; overflow: hidden; }
+.szp-azo .ich small .nuq { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+.szp-azo .siz { font-style: normal; flex: none; font-size: 11px; font-weight: 600; color: var(--kok); background: var(--sz-kok-fon); padding: 2px 6px; border-radius: 6px; }
+.szp-azo .siz.asos { color: #6a3fd6; background: #ebe5fd; }
+.szp-azo.nofaol .av { filter: grayscale(1); opacity: .55; }
+.szp-azo.nofaol .ich b { color: #6b7585; }
+
+/* ── Holat kartasi (bildirishnoma, ilova) ─── */
+.szp-holat { display: flex; align-items: center; gap: 14px; margin-top: 14px; padding: 16px; background: var(--karta); border-radius: 14px; box-shadow: var(--soya); }
+.szp-holat .ik { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; flex: none; background: var(--sz-kok-fon); color: var(--kok); }
+.szp-holat .ik.yashil { background: #e3f7ec; color: #1f9d5c; }
+.szp-holat .ik.sariq { background: #fff3e0; color: #b26a00; }
+.szp-holat .ik.kul { background: var(--sz-kulrang-fon); color: #6b7585; }
+.szp-holat .ik.navy { background: var(--navy); color: #fff; }
+.szp-holat b { display: block; font-size: 16px; font-weight: 700; letter-spacing: -.2px; }
+.szp-holat small { display: block; margin-top: 3px; font-size: 13px; color: var(--kulrang); line-height: 1.35; }
+
+/* ── Izoh / qulf ──────────────────────────── */
+.szp-izoh {
+  display: flex; gap: 10px; margin-top: 12px; padding: 12px 13px; border-radius: 11px;
+  background: #eef2f8; color: #4a5464; font-size: 13px; line-height: 1.45;
+}
+.szp-izoh svg { flex: none; margin-top: 1px; color: #6b7585; }
+.szp-izoh b { color: var(--matn); font-weight: 600; }
+.szp-izoh.sariq { background: #fff6e8; color: #8a5a12; }
+.szp-izoh.sariq svg { color: #b26a00; }
+.szp-matn { padding: 13px 14px; font-size: 13.5px; line-height: 1.5; color: #4a5464; }
+.szp-matn p { margin: 0; }
+.szp-matn p + p { margin-top: 8px; }
+
+/* Ichki tugma (qator ichida) */
+.szp-kichik-tugma { height: 30px; padding: 0 12px; border-radius: 9px; background: var(--sz-kok-fon); color: var(--kok); font-size: 13px; font-weight: 600; flex: none; }
+.szp-kichik-tugma:active { background: #dde8fe; }
+.szp-kichik-tugma:disabled { opacity: .5; }
+
+.szp-rang { width: 22px; height: 22px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .08); }
+.szp-sanoq { font-size: 12px; color: var(--kulrang); }
+.szp-skelet { margin-top: 14px; }
+.szp-skelet .sz-skelet { height: 50px; }
+.szp-skelet .katta { height: 150px; border-radius: 14px; margin-bottom: 22px; }
