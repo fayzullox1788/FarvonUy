@@ -4,6 +4,7 @@
 //
 //   fetch:     POST /tg/<TG_MAXFIY>  — Telegram webhook (har doim 200)
 //              /sinx/*               — desktop sinxroni (sinx.js)
+//              /app, /app/api/*      — Telegram Mini App (miniapp.js, app/)
 //              GET /                 — "ok"
 //   scheduled: har daqiqa — kutilayotgan xabarlar;
 //              Toshkent daqiqasi %10==0 — takroriy vazifa + dars jadvali.
@@ -11,6 +12,7 @@
 import { Db } from "./db.js";
 import * as vaqt from "./vaqt.js";
 import * as sinx from "./sinx.js";
+import * as miniapp from "./miniapp.js";
 import { tengmi } from "./sinx.js";
 
 export const K_GURUHLAR = "tg_korilgan_guruhlar";
@@ -76,6 +78,22 @@ export function ilova(m) {
         return matn("topilmadi", 404);
       }
       return telegram(req, env, db);
+    }
+    if (url.pathname === "/app" || url.pathname === "/app/") {
+      if (!env.ASSETS) return matn("topilmadi", 404);
+      const r = await env.ASSETS.fetch(new Request(new URL("/index.html", url), req));
+      const h = new Headers(r.headers);
+      h.set("cache-control", "no-cache");
+      return new Response(r.body, { status: r.status, headers: h });
+    }
+    if (url.pathname.startsWith("/app/api/")) {
+      try {
+        return (await miniapp.ishla(req, env, db)) || matn("topilmadi", 404);
+      } catch (e) {
+        console.error("miniapp xato:", e?.stack || e);
+        return new Response(JSON.stringify({ ok: false, xato: "Server xatosi" }),
+          { status: 500, headers: { "content-type": "application/json; charset=utf-8" } });
+      }
     }
     if (url.pathname.startsWith("/sinx/")) {
       try {

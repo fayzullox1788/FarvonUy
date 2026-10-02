@@ -116,6 +116,57 @@ export async function kun(db, sana, odam_id = null, shaxsiysiz = false) {
 
 // ─────────────────────────────────────────────────────────────── yozish
 
+// vazifa.py:55
+export async function _odam_nom(db, odam_id) {
+  const r = await db.q1("SELECT nom FROM odam WHERE id=?", odam_id);
+  if (!r) throw new Error(`Odam topilmadi: ${odam_id}`);
+  return r.nom;
+}
+
+// vazifa.py:62
+export async function _tekshir(db, nom, odam_id, sana, vaqt_, davomiylik) {
+  nom = String(nom ?? "").trim();
+  if (!nom) throw new Error("Vazifa nomi bo'sh bo'lishi mumkin emas");
+  const r = await db.q1("SELECT faol FROM odam WHERE id=?", odam_id);
+  if (!r) throw new Error(`Odam topilmadi: ${odam_id}`);
+  if (!r.faol) throw new Error("Ro'yxatdan olingan odamga vazifa biriktirilmaydi");
+  const iso = _sana(sana);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) throw new Error(`Sana noto'g'ri: ${sana}`);
+  if (vaqt_) {
+    const d = _daqiqa(vaqt_);
+    if (d == null || Number.isNaN(d) || !(d >= 0 && d < 24 * 60)) throw new Error(`Vaqt noto'g'ri: ${vaqt_}`);
+    vaqt_ = _vaqt_matn(d);
+  } else {
+    vaqt_ = null;
+  }
+  davomiylik = _int(davomiylik);
+  if (davomiylik <= 0) throw new Error("Davomiylik musbat bo'lishi kerak");
+  return [nom, iso, vaqt_, davomiylik];
+}
+
+// vazifa.py:628 (+ Mini App: ixtiyoriy `toifa`)
+export async function qosh(db, nom, odam_id, sana, vaqt_ = null, davomiylik = 60, izoh = null, toifa = null) {
+  let iso;
+  [nom, iso, vaqt_, davomiylik] = await _tekshir(db, nom, odam_id, sana, vaqt_, davomiylik);
+  const kim = await _odam_nom(db, odam_id);
+  const data = {
+    nom, odam_id, sana: iso, vaqt: vaqt_, davomiylik, holat: OCHIQ,
+    izoh: String(izoh ?? "").trim() || null,
+  };
+  if (toifa) data.toifa = toifa;
+  const a = db.amal(`Vazifa: ${nom} — ${kim}, ${iso}`);
+  const id = await a.apply("vazifa", "INSERT", data);
+  await a.commit();
+  return id;
+}
+
+// vazifa.py:815
+export async function ochir(db, vazifa_id) {
+  const v = await bitta(db, vazifa_id);
+  if (!v) throw new Error("Vazifa topilmadi");
+  await db.apply("vazifa", "DELETE", {}, vazifa_id, `Vazifa o'chirildi: ${v.nom}`);
+}
+
 // vazifa.py:668
 export async function bajar(db, vazifa_id, bajarildi = true, { a = null } = {}) {
   const v = await bitta(db, vazifa_id);

@@ -126,6 +126,9 @@ class Db:
         ("kirim", "karta_id", "INTEGER REFERENCES karta(id)"),
         # Serverga (Cloudflare D1) yuborildimi: 1 — yuborilgan (`sinx.py`).
         ("ozgarishlar", "sinx", "INTEGER NOT NULL DEFAULT 0"),
+        # Mini App'da tanlangan kategoriya (shaxsiy/uy/darslar/boshqa).
+        # NULL — nomidan va manbasidan aniqlanadi (worker/src/miniapp.js).
+        ("vazifa", "toifa", "TEXT"),
     ]
 
     def _migratsiya(self) -> None:

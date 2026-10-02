@@ -2,6 +2,13 @@ name = "farvonuy-bot"
 main = "src/index.js"
 compatibility_date = "2026-09-01"
 
+# Mini App sahifasi. Worker har doim birinchi: "/" va "/tg/…" o'z
+# marshrutlarida qoladi, /app esa ASSETS dan index.html ni oladi.
+[assets]
+directory = "./app"
+binding = "ASSETS"
+run_worker_first = true
+
 [triggers]
 crons = ["* * * * *"]
 
