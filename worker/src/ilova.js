@@ -86,6 +86,18 @@ export function ilova(m) {
       h.set("cache-control", "no-cache");
       return new Response(r.body, { status: r.status, headers: h });
     }
+    // Mini App statik fayllari: /app/rasxod.js → app/rasxod.js, /app/belgilar/x.svg …
+    if (url.pathname.startsWith("/app/") && !url.pathname.startsWith("/app/api/") &&
+        (req.method === "GET" || req.method === "HEAD")) {
+      if (!env.ASSETS) return matn("topilmadi", 404);
+      const ichki = url.pathname.slice(4); // "/rasxod.js"
+      if (ichki.includes("..") || ichki === "/index.html") return matn("topilmadi", 404);
+      const r = await env.ASSETS.fetch(new Request(new URL(ichki, url), req));
+      if (!/\.(js|css)$/.test(ichki)) return r;
+      const h = new Headers(r.headers);
+      h.set("cache-control", "no-cache"); // yangi deploy darhol ko'rinsin
+      return new Response(r.body, { status: r.status, headers: h });
+    }
     if (url.pathname.startsWith("/app/api/")) {
       try {
         return (await miniapp.ishla(req, env, db)) || matn("topilmadi", 404);

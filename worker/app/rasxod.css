@@ -1,0 +1,169 @@
+/* «Yangi rasxod» — pastdan chiqadigan oyna (rasxod.js). Ranglar index.html :root dan. */
+.rx-parda {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(12, 20, 32, .55);
+  opacity: 0; pointer-events: none; transition: opacity .22s;
+}
+.rx-parda.ochiq { opacity: 1; pointer-events: auto; }
+
+.rx-oyna {
+  position: fixed; left: 50%; bottom: 0; z-index: 41;
+  width: 100%; max-width: 430px; height: calc(100dvh - 18px); max-height: 860px;
+  transform: translate(-50%, 104%);
+  transition: transform .28s cubic-bezier(.2, .8, .2, 1);
+  background: #fff; border-radius: 22px 22px 0 0;
+  display: flex; flex-direction: column;
+  box-shadow: 0 -8px 30px rgba(10, 20, 35, .18);
+  color: #0f1b2d;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.rx-oyna.ochiq { transform: translate(-50%, 0); }
+.rx-tutqich { flex: none; width: 40px; height: 4px; border-radius: 2px; background: #d5dae2; margin: 9px auto 0; }
+.rx-yop {
+  flex: none;
+  width: 34px; height: 34px; border-radius: 50%;
+  background: #eef1f5; color: #3b4555; display: grid; place-items: center;
+}
+.rx-yop:active { background: #e2e7ee; }
+
+.rx-ichi {
+  flex: 1; overflow-y: auto; overscroll-behavior: contain;
+  padding: 2px 16px 14px;
+  scrollbar-width: none;
+}
+.rx-ichi::-webkit-scrollbar { display: none; }
+.rx-bosh { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 12px 16px; }
+.rx-bosh h2 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -.5px; color: #0f1b2d; }
+.rx-ichi h2 { margin: 2px 0 14px; font-size: 26px; font-weight: 700; letter-spacing: -.5px; color: #0f1b2d; }
+
+/* Summa va sabab — rasmda yo'q, lekin rasxod ularsiz saqlanmaydi */
+.rx-kirit { display: grid; grid-template-columns: 1.3fr 1fr; gap: 8px; }
+.rx-maydon {
+  position: relative; height: 54px; border: 1px solid #e3e8ef; border-radius: 12px;
+  background: #fff; display: flex; flex-direction: column; justify-content: center;
+  padding: 0 12px; transition: border-color .15s, background .15s;
+}
+.rx-maydon:focus-within { border-color: var(--kok, #2f6ff5); background: #f7faff; }
+.rx-maydon label { font-size: 11.5px; color: #8a94a6; font-weight: 500; line-height: 1; }
+.rx-maydon input {
+  border: 0; outline: 0; background: transparent; padding: 0; margin-top: 5px; min-width: 0; width: 100%;
+  font: inherit; font-size: 15px; color: #0f1b2d; height: 24px; line-height: 24px;
+}
+.rx-maydon input::placeholder { color: #b3bbc7; }
+.rx-summa input { font-size: 19px; font-weight: 700; letter-spacing: -.2px; padding-right: 34px; font-variant-numeric: tabular-nums; }
+.rx-summa .rx-val { position: absolute; right: 12px; bottom: 11px; font-size: 13px; font-weight: 600; color: #8a94a6; }
+.rx-maydon.xato { border-color: var(--qizil, #ef2b2a); background: #fff7f7; }
+
+.rx-bolim { margin: 18px 0 10px; font-size: 16.5px; font-weight: 700; letter-spacing: -.2px; color: #0f1b2d; }
+
+/* Segment tugmalar */
+.rx-seg { display: grid; grid-auto-columns: 1fr; grid-auto-flow: column; gap: 8px; }
+.rx-seg.ikki { gap: 8px; }
+.rx-t {
+  height: 46px; min-width: 0; padding: 0 8px; border-radius: 11px;
+  border: 1px solid #e3e8ef; background: #fff; color: #3d4757;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  font-size: 14.5px; font-weight: 500; letter-spacing: -.1px;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.rx-t svg { flex: none; width: 19px; height: 19px; color: #5b6575; }
+.rx-t span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rx-t.tanlangan {
+  border: 1.5px solid var(--kok, #2f6ff5); background: #eef4ff; color: var(--kok, #2f6ff5); font-weight: 600;
+}
+.rx-t.tanlangan svg { color: var(--kok, #2f6ff5); }
+.rx-t:active { transform: scale(.98); }
+.rx-seg.uch .rx-t { padding: 0 6px; gap: 7px; }
+.rx-seg.uch .rx-t svg { width: 18px; height: 18px; }
+.rx-seg.kop { grid-auto-flow: row; grid-template-columns: repeat(3, 1fr); }
+
+/* Real balans kartasi */
+.rx-balans {
+  margin-top: 10px; display: flex; align-items: center; gap: 14px;
+  padding: 13px 14px; border-radius: 14px; background: #f2f6fc;
+}
+.rx-balans .rx-hamyon {
+  flex: none; width: 46px; height: 46px; border-radius: 13px; background: #e2ebf9;
+  display: grid; place-items: center; color: var(--kok, #2f6ff5);
+}
+.rx-balans .rx-b-l { font-size: 13px; color: #4a5465; font-weight: 500; }
+.rx-balans .rx-b-q { font-size: 21px; font-weight: 700; letter-spacing: -.4px; margin: 2px 0 2px; color: #0f1b2d; font-variant-numeric: tabular-nums; }
+.rx-balans .rx-b-q.manfiy { color: var(--qizil, #ef2b2a); }
+.rx-balans .rx-b-i { font-size: 12.5px; color: #7d8798; }
+
+/* Umumiy — necha kishiga bo'linadi */
+.rx-bolinish {
+  margin-top: 8px; display: flex; align-items: center; gap: 10px;
+  padding: 11px 12px; border-radius: 13px; background: #f3f6fa;
+}
+.rx-bolinish svg { flex: none; color: #4a5465; }
+.rx-bolinish .rx-n { flex: 1; font-size: 13.5px; font-weight: 500; color: #2b3443; line-height: 1.3; }
+.rx-bolinish .rx-chiziq { flex: none; width: 1px; align-self: stretch; background: #dfe4eb; margin: 2px 2px; }
+.rx-bolinish .rx-har { flex: none; text-align: left; min-width: 96px; }
+.rx-bolinish .rx-har small { display: block; font-size: 11.5px; color: #6b7585; }
+.rx-bolinish .rx-har b { display: block; font-size: 15px; font-weight: 700; color: #0f1b2d; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.rx-bolinish[hidden] { display: none; }
+
+/* Kategoriya tanlagichi */
+.rx-tanla {
+  width: 100%; height: 52px; padding: 0 14px 0 12px; border-radius: 12px;
+  border: 1px solid #e3e8ef; background: #fff;
+  display: flex; align-items: center; gap: 12px; text-align: left;
+}
+.rx-tanla:active { background: #f7f9fc; }
+.rx-tanla .rx-nom { flex: 1; min-width: 0; font-size: 15px; color: #0f1b2d; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rx-tanla .rx-nom.bosh { color: #9aa3b0; }
+.rx-tanla > svg:last-child { flex: none; color: #4a5465; }
+.rx-tanla:disabled { opacity: .5; }
+.rx-ikon { flex: none; width: 26px; height: 26px; display: grid; place-items: center; }
+.rx-ikon img { width: 26px; height: 26px; display: block; }
+.rx-ikon .rx-yoq { width: 26px; height: 26px; border-radius: 8px; background: #eef1f5; color: #8a94a6; display: grid; place-items: center; }
+
+/* Pastki tugma */
+.rx-pas { flex: none; padding: 10px 16px calc(14px + env(safe-area-inset-bottom)); background: #fff; }
+.rx-saqla {
+  width: 100%; height: 52px; border-radius: 13px; background: var(--kok, #2f6ff5); color: #fff;
+  font-size: 16.5px; font-weight: 600; letter-spacing: -.1px;
+  box-shadow: 0 6px 16px rgba(47, 111, 245, .22);
+}
+.rx-saqla:active { filter: brightness(.95); }
+.rx-saqla:disabled { opacity: .6; }
+
+/* Ro'yxat oynasi (kategoriya tanlash) */
+.rx-royxat-parda { position: fixed; inset: 0; z-index: 42; background: rgba(12, 20, 32, .3); opacity: 0; pointer-events: none; transition: opacity .2s; }
+.rx-royxat-parda.ochiq { opacity: 1; pointer-events: auto; }
+.rx-royxat {
+  position: fixed; left: 50%; bottom: 0; z-index: 43;
+  width: 100%; max-width: 430px; max-height: 70dvh;
+  transform: translate(-50%, 104%); transition: transform .24s cubic-bezier(.2, .8, .2, 1);
+  background: #fff; border-radius: 20px 20px 0 0;
+  display: flex; flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom);
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.rx-royxat.ochiq { transform: translate(-50%, 0); }
+.rx-royxat h3 { margin: 12px 18px 8px; font-size: 17px; font-weight: 700; color: #0f1b2d; }
+.rx-royxat .rx-qatorlar { overflow-y: auto; padding: 0 10px 12px; }
+.rx-qator {
+  width: 100%; display: flex; align-items: center; gap: 12px;
+  padding: 10px 10px; border-radius: 11px; text-align: left; font-size: 15px; color: #0f1b2d;
+}
+.rx-qator:active { background: #f3f6fa; }
+.rx-qator.tanlangan { background: #eef4ff; color: var(--kok, #2f6ff5); font-weight: 600; }
+.rx-qator .rx-nom { flex: 1; min-width: 0; }
+.rx-qator .rx-belgi { flex: none; color: var(--kok, #2f6ff5); }
+
+.rx-xabar {
+  position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom)); transform: translate(-50%, 20px);
+  background: var(--navy, #1f2e3f); color: #fff; font-size: 13.5px; padding: 10px 14px; border-radius: 10px;
+  opacity: 0; transition: .2s; pointer-events: none; z-index: 60; max-width: 90%;
+}
+.rx-xabar.kor { opacity: 1; transform: translate(-50%, 0); }
+
+/* Tor telefon (≤ 380px): uch ism bir qatorga sig'sin — «Fayzulloxon» qirqilmasin */
+@media (max-width: 420px) {
+  .rx-ichi, .rx-pas { padding-left: 14px; padding-right: 14px; }
+  .rx-seg.uch { gap: 6px; }
+  .rx-seg.uch .rx-t { padding: 0 3px; gap: 5px; font-size: 13.5px; letter-spacing: -.25px; }
+  .rx-seg.uch .rx-t svg { width: 16px; height: 16px; }
+}

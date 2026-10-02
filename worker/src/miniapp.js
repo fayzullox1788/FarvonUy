@@ -14,6 +14,10 @@
 
 import * as vz from "./vazifa.js";
 import * as vaqt from "./vaqt.js";
+import * as rasxodApi from "./miniapp_rasxod.js";
+import * as moliyaApi from "./miniapp_moliya.js";
+import * as hisobotApi from "./miniapp_hisobot.js";
+import * as sozlamaApi from "./miniapp_sozlama.js";
 
 export const TOIFALAR = ["shaxsiy", "uy", "darslar", "boshqa"];
 const IMZO_MUDDATI = 24 * 3600; // soniya
@@ -111,6 +115,18 @@ export async function ishla(req, env, db) {
   if (!user) return xato("Telegram orqali oching", 401);
   const odam = await odamTop(db, user);
   if (!odam) return xato("Siz uy a'zolari ro'yxatida yo'qsiz. Avval botga /start yozing.", 403);
+  if (yol === "/app/api/rasxod" || yol.startsWith("/app/api/rasxod/")) {
+    return (await rasxodApi.ishla(req, db, odam, yol)) || xato("Topilmadi", 404);
+  }
+  if (yol === "/app/api/moliya" || yol.startsWith("/app/api/moliya/")) {
+    return (await moliyaApi.ishla(req, url, yol, db, odam)) || xato("Topilmadi", 404);
+  }
+  if (yol === "/app/api/hisobot" || yol.startsWith("/app/api/hisobot/")) {
+    return (await hisobotApi.ishla(req, url, yol, db, odam)) || xato("Topilmadi", 404);
+  }
+  if (yol === "/app/api/kategoriya" || yol.startsWith("/app/api/kategoriya/")) {
+    return (await sozlamaApi.ishla(req, url, yol, db, odam)) || xato("Topilmadi", 404);
+  }
 
   try {
     if (req.method === "GET" && yol === "/app/api/vazifalar") {

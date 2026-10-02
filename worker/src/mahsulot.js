@@ -5,6 +5,7 @@
 // Nom qoidasi bir xil (`{item_id}-{sha1[:16]}{ext}`) — `item.rasm` ikki
 // tomonda ham bir xil kalitni ko'rsatadi.
 import * as money from "./money.js";
+import * as kat from "./kategoriya.js";
 
 export const RASM_TURLARI = [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"];
 export const RASM_MAX_BAYT = 25 * 1024 * 1024;
@@ -138,4 +139,124 @@ export async function oxshashlar(db, matn, n = 5) {
 /** str.casefold() taqribi (PORT.md). */
 export function _casefold(s) {
   return String(s).toLowerCase().replaceAll("ß", "ss");
+}
+
+// ═══════════════════════════════════════════════════ kategoriya daraxti (yozish)
+// Mini App «Sozlamalar → Kategoriyalar» uchun. Qoidalar desktopniki bilan bir xil
+// (sahifa_mahsulot.py «Kategoriyalar» varag'i, IchkiKategoriyaDialog).
+
+// mahsulot.py:61
+/** Kategoriyaning o'zi + hamma ichki kategoriyalari (har chuqurlikda). */
+export async function avlodlar(db, turi_id) {
+  return (await db.q(
+    "WITH RECURSIVE a(id) AS (SELECT ? UNION SELECT t.id FROM turi t JOIN a ON t.ota_id=a.id)" +
+    " SELECT id FROM a", turi_id)).map((r) => r.id);
+}
+
+// mahsulot.py:84
+/** Hali hech bir FAOL kategoriyada ishlatilmagan ikonkalar (bitta ikonka — bitta kategoriya). */
+export async function bosh_belgilar(db) {
+  const band = await kat.nomlanganlar(db);
+  return kat.belgilar().filter((f) => !band.has(f));
+}
+
+// mahsulot.py:97
+export async function _rasm_tekshir(db, rasm, ozi = null) {
+  if (!kat.belgilar().includes(rasm)) throw new Error("Bunday rasm yo'q — ro'yxatdan tanlang.");
+  const egasi = await db.q1("SELECT nom FROM turi WHERE faol=1 AND rasm=? AND id<>?",
+    rasm, ozi == null ? -1 : ozi);
+  if (egasi) throw new Error(`Bu rasm «${egasi.nom}» kategoriyasida band — boshqasini tanlang.`);
+}
+
+// mahsulot.py:108
+/** Yangi kategoriya. ICHKI (`ota_id` berilgan) uchun bo'sh ikonka MAJBURIY.
+ *  Shu nomli o'chirilgan (faol=0) qator bo'lsa — o'sha tiriladi. → turi.id */
+export async function kategoriya_qosh(db, nom, ota_id = null, rasm = null) {
+  nom = String(nom ?? "").trim();
+  if (!nom) throw new Error("Kategoriya nomi bo'sh bo'lmasin");
+  if (ota_id != null && !(await db.q1("SELECT 1 FROM turi WHERE id=? AND faol=1", ota_id))) {
+    throw new Error("Asosiy kategoriya topilmadi");
+  }
+  if (ota_id != null && !rasm) throw new Error("Ichki kategoriya uchun rasm tanlang.");
+  const band = await db.q1("SELECT id, faol FROM turi WHERE nom=?", nom);
+  if (band && band.faol) throw new Error(`«${nom}» nomli kategoriya allaqachon bor`);
+  if (rasm) await _rasm_tekshir(db, rasm, band ? band.id : null);
+  if (band) {
+    // Oldin o'chirilgan — o'sha qatorni tiriltiramiz, eski rasxodlari qaytadi.
+    const yangi = { faol: 1, ota_id };
+    if (rasm) yangi.rasm = rasm;
+    const a = db.amal(`Kategoriya qaytdi: ${nom}`);
+    await a.apply("turi", "UPDATE", yangi, band.id);
+    await a.commit();
+    return band.id;
+  }
+  const n = await db.skalyar("SELECT COALESCE(MAX(tartib),-1)+1 FROM turi");
+  const tavsif = ota_id ? `Ichki kategoriya: ${await yol_nomi(db, ota_id)} › ${nom}` : `Kategoriya: ${nom}`;
+  const a = db.amal(tavsif);
+  const id = await a.apply("turi", "INSERT", {
+    nom, belgi: "", tartib: n, ota_id, rasm: rasm || null });
+  await a.commit();
+  return id;
+}
+
+// mahsulot.py:142
+export async function kategoriya_nomla(db, turi_id, nom) {
+  nom = String(nom ?? "").trim();
+  if (!nom) throw new Error("Kategoriya nomi bo'sh bo'lmasin");
+  if (await db.q1("SELECT id FROM turi WHERE nom=? AND id<>?", nom, turi_id)) {
+    throw new Error(`«${nom}» nomli kategoriya allaqachon bor`);
+  }
+  const a = db.amal(`Kategoriya nomi: ${nom}`);
+  await a.apply("turi", "UPDATE", { nom }, turi_id);
+  await a.commit();
+}
+
+/** Mini App «Tahrirlash»: nom (`kategoriya_nomla` qoidasi) va ikonka
+ *  (`_rasm_tekshir(ozi=turi_id)` — o'z ikonkasi band hisoblanmaydi) — BITTA undo.
+ *  Desktopda ikonka almashtirish funksiyasi yo'q; qoidalar o'sha ikkisidan.
+ *  O'zgarmagan maydon yozilmaydi; hech narsa o'zgarmasa — yozuv yo'q. */
+export async function kategoriya_tahrirla(db, turi_id, { nom, rasm } = {}) {
+  const t = await db.q1("SELECT nom, rasm, ota_id FROM turi WHERE id=? AND faol=1", turi_id);
+  if (!t) throw new Error("Kategoriya topilmadi");
+  const yangi = {};
+  if (nom !== undefined) {
+    nom = String(nom ?? "").trim();
+    if (!nom) throw new Error("Kategoriya nomi bo'sh bo'lmasin");
+    if (nom !== t.nom) {
+      if (await db.q1("SELECT id FROM turi WHERE nom=? AND id<>?", nom, turi_id)) {
+        throw new Error(`«${nom}» nomli kategoriya allaqachon bor`);
+      }
+      yangi.nom = nom;
+    }
+  }
+  if (rasm !== undefined && (rasm || null) !== (t.rasm || null)) {
+    if (!rasm) {
+      if (t.ota_id != null) throw new Error("Ichki kategoriya uchun rasm tanlang.");
+    } else {
+      await _rasm_tekshir(db, rasm, turi_id);
+    }
+    yangi.rasm = rasm || null;
+  }
+  if (!Object.keys(yangi).length) return false;
+  const a = db.amal(yangi.nom ? `Kategoriya nomi: ${yangi.nom}` : `Kategoriya rasmi: ${t.nom}`);
+  await a.apply("turi", "UPDATE", yangi, turi_id);
+  await a.commit();
+  return true;
+}
+
+// mahsulot.py:197
+/** `faol=0`. Ichida faol ichki kategoriya yoki mahsulot bo'lsa — rad. */
+export async function kategoriya_ochir(db, turi_id) {
+  const t = await db.q1("SELECT nom FROM turi WHERE id=?", turi_id);
+  if (!t) throw new Error("Kategoriya topilmadi");
+  let n = await db.skalyar("SELECT COUNT(*) FROM turi WHERE ota_id=? AND faol=1", [turi_id]);
+  if (n) throw new Error(`«${t.nom}» ichida ${n} ta ichki kategoriya bor — avval ularni o'chiring.`);
+  n = await db.skalyar("SELECT COUNT(*) FROM item WHERE turi_id=? AND ochirilgan=0", [turi_id]);
+  if (n) {
+    throw new Error(`«${t.nom}» ichida ${n} ta mahsulot bor — avval ` +
+      "ularni boshqa kategoriyaga o'tkazing yoki o'chiring.");
+  }
+  const a = db.amal(`Kategoriya o'chirildi: ${t.nom}`);
+  await a.apply("turi", "UPDATE", { faol: 0 }, turi_id);
+  await a.commit();
 }

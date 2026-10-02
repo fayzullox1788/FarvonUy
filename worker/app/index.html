@@ -176,6 +176,9 @@
   }
   .m-tugma svg { width: 23px; height: 23px; }
   .m-tugma.faol { color: var(--kok); font-weight: 600; }
+  /* Faol sahifa — to'la ikonka, qolgani — kontur (ikkalasi bo'lgan tugmalarda) */
+  .m-tugma .ik-faol, .m-tugma.faol .ik-ochiq { display: none; }
+  .m-tugma.faol .ik-faol { display: block; }
   .m-plyus {
     justify-self: center; width: 56px; height: 56px; border-radius: 50%;
     background: var(--navy); color: #fff; display: grid; place-items: center;
@@ -241,6 +244,15 @@
   }
   .xabar.kor { opacity: 1; transform: translate(-50%, 0); }
 </style>
+<script>
+// «Yangi rasxod» oynasi (rasxod.css/js). Sahifa /app da (oxirida «/» siz) ochiladi —
+// nisbiy yo'l /rasxod.js ga ketardi, shuning uchun prefiks bilan.
+(function () {
+  var p = location.protocol === "file:" ? "" : "/app/";
+  var l = document.createElement("link"); l.rel = "stylesheet"; l.href = p + "rasxod.css"; document.head.appendChild(l);
+  var s = document.createElement("script"); s.src = p + "rasxod.js"; s.defer = true; document.head.appendChild(s);
+})();
+</script>
 </head>
 <body>
 <div class="ilova">
@@ -253,7 +265,7 @@
     </button>
   </header>
 
-  <main class="varaq">
+  <main class="varaq" id="sahifa-vazifalar">
     <div class="sarlavha">
       <h1>Vazifalar</h1>
       <button class="taqvim-tugma" id="taqvimTugma" aria-label="Taqvim">
@@ -273,13 +285,24 @@
     </button>
   </main>
 
+  <!-- «Moliya» — moliya.js chizadi -->
+  <main id="sahifa-moliya" class="varaq" hidden></main>
+
+  <!-- «Hisobotlar» — hisobot.js chizadi -->
+  <main id="sahifa-hisobotlar" class="varaq" hidden></main>
+
+  <!-- «Sozlamalar» — sozlama.js chizadi -->
+  <main id="sahifa-sozlamalar" class="varaq" hidden></main>
+
   <nav class="menyu">
     <button class="m-tugma faol" data-sahifa="vazifalar">
-      <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4.5" width="16" height="17" rx="3" fill="currentColor"/><rect x="8.5" y="2.5" width="7" height="4" rx="1.4" fill="currentColor" stroke="#fff" stroke-width="1.4"/><path d="m8.5 13.5 2.4 2.4 4.8-5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <svg class="ik-ochiq" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="4.5" width="15" height="17" rx="2.5"/><rect x="8.5" y="2.8" width="7" height="3.6" rx="1.2"/><path d="m8.7 13.6 2.3 2.3 4.4-4.6"/></svg>
+      <svg class="ik-faol" viewBox="0 0 24 24" fill="none"><rect x="4" y="4.5" width="16" height="17" rx="3" fill="currentColor"/><rect x="8.5" y="2.5" width="7" height="4" rx="1.4" fill="currentColor" stroke="#fff" stroke-width="1.4"/><path d="m8.5 13.5 2.4 2.4 4.8-5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Vazifalar
     </button>
     <button class="m-tugma" data-sahifa="moliya">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M18 7.5V5.5a1.5 1.5 0 0 0-1.5-1.5h-11A2.5 2.5 0 0 0 3 6.5v11A2.5 2.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 18.5 8H5.5A2.5 2.5 0 0 1 3 6.5"/><path d="M15.5 12h4.5v4h-4.5a2 2 0 0 1 0-4Z"/></svg>
+      <svg class="ik-ochiq" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M18 7.5V5.5a1.5 1.5 0 0 0-1.5-1.5h-11A2.5 2.5 0 0 0 3 6.5v11A2.5 2.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 18.5 8H5.5A2.5 2.5 0 0 1 3 6.5"/><path d="M15.5 12h4.5v4h-4.5a2 2 0 0 1 0-4Z"/></svg>
+      <svg class="ik-faol" viewBox="0 0 24 24" fill="none"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h11A1.5 1.5 0 0 1 18 5.5V8h.5A1.5 1.5 0 0 1 20 9.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A2.5 2.5 0 0 1 3 17.5Z" fill="currentColor"/><path d="M5.5 8A1.5 1.5 0 0 1 4 6.5" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/><path d="M15.5 11.6h4.9v4.8h-4.9a2.4 2.4 0 0 1 0-4.8Z" fill="#fff"/><circle cx="16" cy="14" r="1" fill="currentColor"/></svg>
       Moliya
     </button>
     <button class="m-plyus" id="rasxodTugma" aria-label="Yangi xarajat qo‘shish">
@@ -535,15 +558,70 @@ $("royxat").onclick = (ev) => {
 };
 $("taqvimTugma").onclick = () => taqvimOyna();
 $("qoshish").onclick = yangiVazifaOyna;
-$("rasxodTugma").onclick = () => xabar("Yangi xarajat — keyingi bosqichda");
+$("rasxodTugma").onclick = () => { tebran(); if (window.rasxodOch) window.rasxodOch(); };
+// ── Sahifalar (router) ────────────────────────────────────────────────
+// Shartnoma: pastki menyudagi `data-sahifa="<nom>"` tugmasi `<main id="sahifa-<nom>"
+// class="varaq" hidden>` ni ko'rsatadi (qolganlari yashirinadi), tugma `.faol` bo'ladi,
+// manzil `#<nom>` (vazifalar — xeshsiz, birlamchi) va `window` ga
+// `new CustomEvent("sahifa", {detail: {nom}})` yuboriladi — sahifa moduli shunda
+// yuklanadi (kech yuklangan modul `!$("sahifa-<nom>").hidden` ni o'zi tekshirsin).
+// Konteyneri hali yo'q sahifa — «keyingi bosqichda» xabari. Boshlang'ich xesh
+// (#moliya, #hisobotlar) o'sha sahifani ochadi. Yangi sahifa uchun shu yerga
+// tegilmaydi: faqat <main> va o'z link/script teglari qo'shiladi.
+function sahifaga(nom, { xesh = true } = {}) {
+  nom = String(nom).split("/")[0]; // «#sozlamalar/kat/5» — ichki yo'lni sahifa moduli o'zi o'qiydi
+  if (!document.getElementById("sahifa-" + nom)) return false;
+  document.querySelectorAll("main.varaq[id^='sahifa-']").forEach((s) => { s.hidden = s.id !== "sahifa-" + nom; });
+  document.querySelectorAll(".m-tugma").forEach((b) => b.classList.toggle("faol", b.dataset.sahifa === nom));
+  if (xesh) {
+    const yangi = nom === "vazifalar" ? "" : "#" + nom;
+    if (location.hash !== yangi) {
+      try { history.replaceState(null, "", yangi || location.pathname + location.search); } catch (err) {}
+    }
+  }
+  window.scrollTo(0, 0);
+  window.dispatchEvent(new CustomEvent("sahifa", { detail: { nom } }));
+  return true;
+}
+window.sahifaga = sahifaga;
 document.querySelectorAll(".m-tugma").forEach((b) => b.onclick = () => {
-  if (b.dataset.sahifa !== "vazifalar") xabar(`${b.textContent.trim()} — keyingi bosqichda`);
+  if (sahifaga(b.dataset.sahifa)) tebran("soft");
+  else xabar(`${b.textContent.trim()} — keyingi bosqichda`);
 });
+window.addEventListener("hashchange", () => sahifaga(location.hash.slice(1) || "vazifalar", { xesh: false }));
+if (location.hash.length > 1) sahifaga(location.hash.slice(1), { xesh: false });
 // Ilovaga qaytilganda yangilanadi — bot yoki desktopda o'zgargan bo'lishi mumkin
 document.addEventListener("visibilitychange", () => { if (!document.hidden && !NAMUNA && INIT) yukla(); });
 
 hammasi();
 yukla();
+</script>
+<script>
+// «Moliya» sahifasi (moliya.css/js) — yuqoridagi yordamchilardan keyin, prefiks bilan (/app).
+(function () {
+  var p = location.protocol === "file:" ? "" : "/app/";
+  var l = document.createElement("link"); l.rel = "stylesheet"; l.href = p + "moliya.css";
+  l.onload = l.onerror = function () { var s = document.createElement("script"); s.src = p + "moliya.js"; document.body.appendChild(s); };
+  document.head.appendChild(l);
+})();
+</script>
+<script>
+// «Hisobotlar» sahifasi (hisobot.css/js) — xuddi shunday, prefiks bilan (/app).
+(function () {
+  var p = location.protocol === "file:" ? "" : "/app/";
+  var l = document.createElement("link"); l.rel = "stylesheet"; l.href = p + "hisobot.css";
+  l.onload = l.onerror = function () { var s = document.createElement("script"); s.src = p + "hisobot.js"; document.body.appendChild(s); };
+  document.head.appendChild(l);
+})();
+</script>
+<script>
+// «Sozlamalar» sahifasi (sozlama.css/js) — xuddi shunday, prefiks bilan (/app).
+(function () {
+  var p = location.protocol === "file:" ? "" : "/app/";
+  var l = document.createElement("link"); l.rel = "stylesheet"; l.href = p + "sozlama.css";
+  l.onload = l.onerror = function () { var s = document.createElement("script"); s.src = p + "sozlama.js"; document.body.appendChild(s); };
+  document.head.appendChild(l);
+})();
 </script>
 </body>
 </html>

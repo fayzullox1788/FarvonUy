@@ -1,0 +1,211 @@
+/* «Hisobotlar» sahifasi — index.html tokenlari (:root) ustida. Hammasi #sahifa-hisobotlar
+   ichida yoki .hs- prefiksli (davr oynasi body'da). */
+#sahifa-hisobotlar {
+  --hs-kok: #1f6ff2; --hs-kok-fon: #eaf1fe; --hs-kok-chiz: #8db4f7;
+  --hs-qizil: #f04646; --hs-yashil: #1fb76c;
+  --hs-kul: #7d8696; --hs-kul-fon: #eef1f6; --hs-chiziq: #e8ecf2;
+}
+#sahifa-hisobotlar .hs-hidden { display: none !important; }
+.hs-num { font-variant-numeric: tabular-nums; }
+
+/* ── Sarlavha ─────────────────────────────── */
+.hs-bosh { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 2px; min-height: 38px; }
+.hs-bosh h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -.4px; color: var(--matn); white-space: nowrap; }
+.hs-bosh .hs-ort { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.hs-bosh .hs-ort h1 { font-size: 21px; overflow: hidden; text-overflow: ellipsis; }
+.hs-orqa { width: 32px; height: 32px; margin-left: -6px; border-radius: 10px; display: grid; place-items: center; flex: none; color: var(--matn); }
+.hs-orqa:active { background: var(--hs-kul-fon); }
+.hs-davr {
+  flex: none; height: 36px; padding: 0 10px 0 11px; border-radius: 10px;
+  background: var(--hs-kul-fon); color: var(--matn);
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 500; white-space: nowrap;
+}
+.hs-davr:active { background: #e2e8f0; }
+.hs-davr svg { color: #3b4657; }
+
+/* ── Umumiy | Shaxsiy ─────────────────────── */
+.hs-seg { display: flex; gap: 8px; margin: 14px 0 0; }
+.hs-seg button {
+  height: 36px; min-width: 104px; padding: 0 18px; border-radius: 18px;
+  background: var(--hs-kul-fon); color: var(--matn); font-size: 14px; font-weight: 500;
+}
+.hs-seg button.faol { background: var(--hs-kok); color: #fff; font-weight: 600; }
+.hs-kim h3 { margin: 16px 2px 9px; font-size: 15px; font-weight: 600; }
+.hs-odamlar { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 -14px; padding: 0 14px 2px; }
+.hs-odamlar::-webkit-scrollbar { display: none; }
+.hs-odamlar button {
+  flex: 1 1 auto; min-width: 0; height: 40px; padding: 0 10px; white-space: nowrap; overflow: hidden; border-radius: 10px;
+  border: 1px solid var(--hs-chiziq); background: #fff; color: #3b4657;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 13.5px; font-weight: 500;
+}
+.hs-odamlar button.faol { border-color: var(--hs-kok-chiz); background: var(--hs-kok-fon); color: var(--hs-kok); }
+
+/* ── Kartalar ─────────────────────────────── */
+.hs-karta {
+  background: var(--karta); border: 1px solid var(--hs-chiziq); border-radius: 12px;
+  box-shadow: var(--soya);
+}
+.hs-xulosa { margin-top: 14px; padding: 14px 16px 12px; }
+.hs-xulosa .hs-q { display: flex; align-items: flex-start; gap: 12px; }
+.hs-xulosa .hs-ik { margin-top: 2px; }
+.hs-xulosa .hs-chap { flex: 1; min-width: 0; }
+.hs-xulosa .hs-yorliq { font-size: 13.5px; color: var(--hs-kul); }
+.hs-xulosa .hs-summa { font-size: 19px; font-weight: 700; margin-top: 4px; letter-spacing: -.2px; white-space: nowrap; }
+.hs-xulosa .hs-ong { text-align: right; flex: none; }
+.hs-xulosa .hs-ong .hs-yorliq { font-size: 13px; }
+.hs-xulosa .hs-reja { font-size: 13.5px; color: var(--hs-kul); margin-top: 6px; white-space: nowrap; }
+.hs-chiziqcha { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.hs-chiziqcha .hs-yol { flex: 1; height: 8px; border-radius: 4px; background: var(--hs-kul-fon); overflow: hidden; }
+.hs-chiziqcha .hs-yol i { display: block; height: 100%; border-radius: 4px; background: var(--hs-kok); transition: width .3s; }
+.hs-chiziqcha.qizil .hs-yol i { background: var(--hs-qizil); }
+.hs-chiziqcha.yashil .hs-yol i { background: var(--hs-yashil); }
+.hs-chiziqcha b { font-size: 13.5px; min-width: 34px; text-align: right; }
+
+/* ── Bo'lim sarlavhasi ────────────────────── */
+.hs-bolim { display: flex; align-items: center; justify-content: space-between; margin: 20px 2px 10px; }
+.hs-bolim h2 { margin: 0; font-size: 16px; font-weight: 700; }
+.hs-bolim a, .hs-bolim .hs-havola { color: var(--hs-kok); font-size: 13.5px; font-weight: 500; }
+
+/* ── Doira ────────────────────────────────── */
+.hs-doira { display: grid; grid-template-columns: 172px 1fr; gap: 8px; align-items: center; }
+.hs-doira > svg { width: 172px; height: 172px; overflow: visible; }
+.hs-doira > svg path { cursor: pointer; transition: opacity .15s; }
+.hs-doira > svg path:active { opacity: .8; }
+.hs-doira > svg text { font-family: inherit; }
+.hs-afsona { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.hs-afsona button { display: flex; align-items: center; gap: 10px; padding: 3px 2px; text-align: left; border-radius: 8px; }
+.hs-afsona button:active { background: var(--hs-kul-fon); }
+.hs-afsona .hs-m { min-width: 0; }
+.hs-afsona .hs-m b { display: block; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hs-afsona .hs-m span { display: block; font-size: 12.5px; color: var(--hs-kul); white-space: nowrap; }
+
+/* Ikonka doirasi: rang — bo'lak rangi (inline), fon — ochiq */
+.hs-ik {
+  flex: none; width: 32px; height: 32px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--hs-kul-fon); color: #5b6474; position: relative;
+}
+.hs-ik img { width: 20px; height: 20px; }
+.hs-ik.k { width: 38px; height: 38px; }
+.hs-ik.k img { width: 23px; height: 23px; }
+.hs-ik.xl { width: 50px; height: 50px; }
+.hs-ik.xl img { width: 29px; height: 29px; }
+.hs-ik.s { width: 26px; height: 26px; }
+.hs-ik.s img { width: 17px; height: 17px; }
+
+/* ── Jadval ───────────────────────────────── */
+.hs-jadval { margin-top: 16px; padding: 12px 12px 4px; }
+.hs-jadval h2 { margin: 0 2px 8px; font-size: 15px; font-weight: 700; }
+.hs-jq { display: grid; grid-template-columns: minmax(0, 1fr) 62px 62px 38px 14px; align-items: center; gap: 4px; }
+.hs-jq.sar { font-size: 11px; color: var(--hs-kul); padding: 2px 4px 6px; border-bottom: 1px solid var(--hs-chiziq); }
+.hs-jq.sar span:nth-child(n+2) { text-align: right; }
+button.hs-jq { width: 100%; padding: 8px 4px; border-bottom: 1px solid #f1f3f7; font-size: 12.5px; text-align: left; }
+button.hs-jq:last-child { border-bottom: 0; }
+button.hs-jq:active { background: #f7f9fc; }
+.hs-jq .hs-nom { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; }
+.hs-jq .hs-nom span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hs-jq .r { text-align: right; white-space: nowrap; }
+.hs-jq .kul { color: #5f6878; }
+.hs-jq svg, .hs-qator svg.hs-ong-ok { color: #a3abb8; }
+
+/* ── Ro'yxat qatorlari ────────────────────── */
+.hs-royxat { padding: 0 12px; }
+.hs-qator { width: 100%; display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid #f1f3f7; text-align: left; }
+.hs-qator:last-child { border-bottom: 0; }
+button.hs-qator:active { background: #f7f9fc; }
+.hs-qator .hs-nom { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hs-qator .hs-sum { font-size: 13px; color: #3b4657; white-space: nowrap; }
+.hs-qator .hs-foiz { width: 34px; text-align: right; font-size: 12.5px; font-weight: 600; color: #3b4657; }
+
+.hs-rasxod { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid #f1f3f7; }
+.hs-rasxod:last-child { border-bottom: 0; }
+.hs-rasxod .hs-m { flex: 1; min-width: 0; }
+.hs-rasxod .hs-m b { display: block; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hs-rasxod .hs-m span { display: block; margin-top: 3px; font-size: 12px; color: var(--hs-kul); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hs-rasxod .hs-minus { font-size: 13.5px; font-weight: 600; color: var(--hs-qizil); white-space: nowrap; }
+.hs-kebab { width: 26px; height: 34px; margin-right: -6px; display: grid; place-items: center; color: #6b7585; border-radius: 8px; flex: none; }
+.hs-kebab:active { background: rgba(0,0,0,.05); }
+
+/* Kun bo'yicha guruh */
+.hs-kun { margin-top: 10px; overflow: hidden; }
+.hs-kun-bosh { display: flex; justify-content: space-between; padding: 9px 14px; background: #f1f4f8; font-size: 13px; color: #4b5565; font-weight: 500; }
+.hs-kun .hs-royxat { padding: 0 14px; }
+.hs-bosh-holat { text-align: center; color: var(--kulrang); font-size: 13.5px; padding: 22px 0; }
+.hs-yuklanmoqda { opacity: .55; pointer-events: none; transition: opacity .15s; }
+
+/* Tafsilot oynasi (umumiy .oyna ichida) */
+.hs-taf { font-size: 14px; }
+.hs-taf .hs-t-summa { font-size: 24px; font-weight: 700; color: var(--hs-qizil, #f04646); margin: -2px 0 12px; }
+.hs-taf dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 9px 14px; }
+.hs-taf dt { color: #7d8696; }
+.hs-taf dd { margin: 0; text-align: right; font-weight: 500; }
+.hs-taf h4 { margin: 16px 0 6px; font-size: 13px; color: #7d8696; font-weight: 600; }
+.hs-taf .hs-t-q { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #f1f3f7; }
+.hs-taf .hs-t-q:last-child { border-bottom: 0; }
+
+/* ── «Davrni tanlang» oynasi ──────────────── */
+.hs-parda {
+  position: fixed; inset: 0; z-index: 30; background: rgba(15, 23, 35, .45);
+  display: flex; justify-content: center; align-items: flex-start;
+  padding: calc(56px + env(safe-area-inset-top)) 10px 0;
+  opacity: 0; transition: opacity .18s;
+}
+.hs-parda.ochiq { opacity: 1; }
+.hs-modal {
+  width: 100%; max-width: 410px; background: #fff; border-radius: 16px; padding: 16px 12px 14px;
+  box-shadow: 0 16px 40px rgba(15, 23, 35, .25);
+  transform: translateY(-8px); transition: transform .18s;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #18222f;
+}
+.hs-parda.ochiq .hs-modal { transform: none; }
+.hs-modal-bosh { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 12px; }
+.hs-modal-bosh h3 { margin: 0; font-size: 17px; font-weight: 700; }
+.hs-x { width: 30px; height: 30px; border-radius: 50%; background: #f1f4f8; display: grid; place-items: center; color: #4b5565; }
+.hs-modal-ich { display: grid; grid-template-columns: 104px 1fr; gap: 8px; }
+.hs-tez { display: flex; flex-direction: column; gap: 2px; }
+.hs-tez button { height: 36px; padding: 0 9px; border-radius: 8px; text-align: left; font-size: 13px; color: #2b3443; white-space: nowrap; }
+.hs-tez button.faol { background: #eaf1fe; color: #1f6ff2; font-weight: 600; }
+.hs-taqvim { border: 1px solid #edf0f4; border-radius: 12px; padding: 8px 4px 6px; min-width: 0; }
+.hs-taqvim .hs-oy { display: flex; align-items: center; justify-content: space-between; padding: 0 2px 6px; }
+.hs-taqvim .hs-oy b { font-size: 13.5px; font-weight: 600; }
+.hs-taqvim .hs-oy button { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: #2b3443; }
+.hs-taqvim .hs-oy button:active { background: #f1f4f8; }
+.hs-kunlar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); row-gap: 3px; text-align: center; }
+.hs-kunlar .hk { font-size: 10.5px; color: #8a94a6; padding: 3px 0 5px; }
+.hs-kunlar button { display: flex; align-items: center; justify-content: center; min-width: 0; height: 30px; font-size: 12.5px; color: #2b3443; position: relative; z-index: 0; }
+.hs-kunlar button span { display: grid; place-items: center; width: 27px; height: 27px; flex: none; border-radius: 50%; }
+.hs-kunlar button.ora, .hs-kunlar button.hs-b0, .hs-kunlar button.hs-b1 { background-repeat: no-repeat; background-position: center; background-size: 100% 28px; }
+.hs-kunlar button.ora { background-image: linear-gradient(#eaf1fe, #eaf1fe); }
+.hs-kunlar button.hs-b0 { background-image: linear-gradient(to right, transparent 50%, #eaf1fe 50%); }
+.hs-kunlar button.hs-b1 { background-image: linear-gradient(to left, transparent 50%, #eaf1fe 50%); }
+.hs-kunlar button.hs-b0.oxir { background-image: none; }
+.hs-kunlar button.ora span { color: #1f6ff2; }
+.hs-kunlar button.hs-b0 span, .hs-kunlar button.hs-b1 span { background: #1f6ff2; color: #fff; font-weight: 600; }
+.hs-kunlar button.bugun span { box-shadow: inset 0 0 0 1px #8db4f7; }
+.hs-kunlar button:disabled { visibility: hidden; }
+.hs-kunlar button.kelajak { color: #c3c9d3; }
+.hs-modal-past { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.hs-modal-past button { height: 44px; border-radius: 10px; font-size: 14.5px; font-weight: 600; }
+.hs-bekor { background: #eef1f6; color: #2b3443; }
+.hs-qollash { background: #1f6ff2; color: #fff; }
+.hs-modal-izoh { font-size: 12px; color: #7d8696; margin: 8px 4px 0; min-height: 15px; }
+@media (max-width: 360px) {
+  .hs-modal-ich { grid-template-columns: 92px 1fr; }
+  .hs-tez button { font-size: 12.5px; padding: 0 6px; }
+  .hs-doira { grid-template-columns: 150px 1fr; }
+  .hs-doira > svg { width: 150px; height: 150px; }
+}
+
+/* Tor ekran (≤ 400 px) — zichroq, matn kesilmasin */
+@media (max-width: 400px) {
+  .hs-bosh .hs-ort h1 { font-size: 19px; }
+  .hs-davr { height: 34px; padding: 0 8px 0 9px; gap: 6px; font-size: 12.5px; }
+  .hs-qator { gap: 9px; }
+  .hs-qator .hs-sum { font-size: 12.5px; }
+  .hs-rasxod { gap: 10px; }
+  .hs-rasxod .hs-minus { font-size: 13px; }
+  .hs-rasxod .hs-m span { font-size: 11.5px; }
+  .hs-ik.k { width: 34px; height: 34px; }
+  .hs-ik.k img { width: 21px; height: 21px; }
+}
+.hs-odamlar button svg { flex: none; }
