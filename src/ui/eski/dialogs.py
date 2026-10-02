@@ -17,7 +17,7 @@ import money
 from core import entries, ledger, plan, receipts, splitting
 from core import rasxod_kirit as rk
 from ui.eski import theme
-from ui.eski.widgets import (Jadval, Karta, KategoriyaTanla, OdamTanla,
+from ui.eski.widgets import (HamyonTanla, Jadval, Karta, KategoriyaTanla, OdamTanla,
                         PulEdit, SanaEdit, TuriTanla, Xabar, bolim, izoh, qator, sarlavha,
                         tugma,
                         yorliq)
@@ -342,6 +342,11 @@ class RasxodDialog(QDialog):
         # Ikki bosqich: katta kategoriya + uning ichkisi.
         self.turi = KategoriyaTanla(db)
         self.kim = OdamTanla(db)
+        # Naqd yoki to'lovchining qaysi kartasi (2026-10-01).
+        self.joy = HamyonTanla(db)
+        self.joy.odam_qoy(self.kim.odam_id())
+        self.kim.currentIndexChanged.connect(
+            lambda: self.joy.odam_qoy(self.kim.odam_id()))
 
         # Kategoriya ichidan bir nechta mahsulot (2026-10-01).
         self.mahsulotlar = MahsulotRoyxat(db)
@@ -353,6 +358,7 @@ class RasxodDialog(QDialog):
         f.addRow("Nomi / sabab *", self.nom)
         f.addRow("Summa", self.summa)
         f.addRow("Kim to'ladi", self.kim)
+        f.addRow("Qayerdan to'landi", self.joy)
         v.addLayout(f)
 
         # ── umumiy / shaxsiy ─────────────────────────────────────────
@@ -629,6 +635,8 @@ class RasxodDialog(QDialog):
         self.nom.setText(r["nom"] or "")
         self.summa.qoy(r["summa"])
         self.kim.tanla(r["kim_toladi"])
+        self.joy.odam_qoy(r["kim_toladi"])
+        self.joy.tanla(r["karta_id"])
         self.turi.tanla(r["turi_id"])
         # Mahsulot qatorlari qayta qo'yiladi — aks holda saqlashda
         # `item_id` jimgina bo'shab qolardi. Eski (qatorsiz) rasxodning
@@ -669,6 +677,7 @@ class RasxodDialog(QDialog):
         mahsulotlar = self.mahsulotlar.qatorlar()
         return rk.Qoralama(
             sana=self.sana.iso(), kim_toladi=self.kim.odam_id(),
+            karta_id=self.joy.karta_id(),
             turi_id=self.turi.turi_id(), mahsulotlar=mahsulotlar,
             item_id=(mahsulotlar[0]["item_id"] if len(mahsulotlar) == 1
                      else None),
@@ -723,10 +732,15 @@ class KirimDialog(QDialog):
         self.summa = PulEdit()
         self.sabab = QLineEdit()
         self.sabab.setPlaceholderText("masalan: Oylik")
+        self.joy = HamyonTanla(db)
+        self.joy.odam_qoy(self.kim.odam_id())
+        self.kim.currentIndexChanged.connect(
+            lambda: self.joy.odam_qoy(self.kim.odam_id()))
         f.addRow("Sana", self.sana)
         f.addRow("Kim oldi", self.kim)
         f.addRow("Summa", self.summa)
         f.addRow("Qayerdan", self.sabab)
+        f.addRow("Qayerga tushdi", self.joy)
         v.addLayout(f)
 
         t = QDialogButtonBox()
@@ -741,6 +755,8 @@ class KirimDialog(QDialog):
             if r:
                 self.sana.qoy(r["sana"])
                 self.kim.tanla(r["odam_id"])
+                self.joy.odam_qoy(r["odam_id"])
+                self.joy.tanla(r["karta_id"])
                 self.summa.qoy(r["summa"])
                 self.sabab.setText(r["sabab"] or "")
 
@@ -753,11 +769,13 @@ class KirimDialog(QDialog):
                 entries.kirim_tahrir(
                     self.db, self.kirim_id, sana=self.sana.iso(),
                     odam_id=self.kim.odam_id(), summa=self.summa.qiymat(),
-                    sabab=self.sabab.text().strip() or None)
+                    sabab=self.sabab.text().strip() or None,
+                    karta_id=self.joy.karta_id())
             else:
                 entries.kirim_qosh(self.db, self.sana.iso(), self.kim.odam_id(),
                                    self.summa.qiymat(),
-                                   self.sabab.text().strip() or None)
+                                   self.sabab.text().strip() or None,
+                                   karta_id=self.joy.karta_id())
         except Exception as e:
             xato_koraset(self, str(e))
             return

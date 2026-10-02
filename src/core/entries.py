@@ -7,7 +7,7 @@ hech narsa chaqirmaydi.
 from __future__ import annotations
 
 import money
-from core import splitting
+from core import hamyon, splitting
 
 # "berilmagan" ni "None qilib qo'y" dan ajratish uchun.
 # kim_uchun=None — "endi boshqa uchun emas" degani, shuning uchun
@@ -18,18 +18,26 @@ _TEGMA = object()
 # ────────────────────────────────────────────────────────────── kirim
 
 def kirim_qosh(db, sana: str, odam_id: int, summa: int,
-               sabab: str | None = None) -> int:
+               sabab: str | None = None, karta_id: int | None = None) -> int:
+    """`karta_id` — pul qaysi kartaga tushdi (None — naqd)."""
     summa = int(summa)
     if summa <= 0:
         raise ValueError("Kirim summasi musbat bo'lishi kerak")
+    hamyon.tekshir_karta(db, karta_id, odam_id)
     nom = _odam_nom(db, odam_id)
     with db.amal(f"Kirim: {nom} +{money.fmt(summa)}"):
         return db.apply("kirim", "INSERT", {
             "sana": sana, "odam_id": odam_id, "summa": summa,
-            "sabab": sabab or None})
+            "sabab": sabab or None, "karta_id": karta_id})
 
 
 def kirim_tahrir(db, kirim_id: int, **maydonlar) -> None:
+    if "karta_id" in maydonlar or "odam_id" in maydonlar:
+        eski = db.q1("SELECT odam_id, karta_id FROM kirim WHERE id=?", kirim_id)
+        if eski:
+            hamyon.tekshir_karta(
+                db, maydonlar.get("karta_id", eski["karta_id"]),
+                maydonlar.get("odam_id", eski["odam_id"]))
     with db.amal("Kirim tahrirlandi"):
         db.apply("kirim", "UPDATE", maydonlar, kirim_id)
 
@@ -62,8 +70,11 @@ def rasxod_qosh(db, sana: str, nom: str, summa: int, kim_toladi: int,
                 parametrlar: dict[int, float] | None = None,
                 izoh: str | None = None, item_id: int | None = None,
                 reja_id: int | None = None, takror_id: int | None = None,
-                kim_uchun: int | None = None) -> int:
+                kim_uchun: int | None = None,
+                karta_id: int | None = None) -> int:
     """Rasxod + (umumiy bo'lsa) ulushlar. Bitta undo qadami.
+
+    `karta_id` — pul qaysi kartadan chiqdi (None — naqd, `core/hamyon.py`).
 
     `kim_uchun` berilsa — bu BOSHQA ODAM UCHUN qilingan xarid:
     pulni `kim_toladi` chiqaradi, lekin rasxod butunlay `kim_uchun`
@@ -77,6 +88,7 @@ def rasxod_qosh(db, sana: str, nom: str, summa: int, kim_toladi: int,
     summa = int(summa)
     if summa <= 0:
         raise ValueError("Rasxod summasi musbat bo'lishi kerak")
+    hamyon.tekshir_karta(db, karta_id, kim_toladi)
 
     if kim_uchun is not None:
         # 100% bitta odamga — bo'lish shart emas, qoldiq ham yo'q.
@@ -99,7 +111,7 @@ def rasxod_qosh(db, sana: str, nom: str, summa: int, kim_toladi: int,
             "kim_toladi": kim_toladi, "umumiymi": 1 if umumiymi else 0,
             "bolish_usul": usul, "item_id": item_id, "reja_id": reja_id,
             "takror_id": takror_id, "kim_uchun": kim_uchun,
-            "izoh": izoh or None})
+            "izoh": izoh or None, "karta_id": karta_id})
         for u in ulushlar:
             db.apply("ulush", "INSERT", {
                 "rasxod_id": rid, "odam_id": u.odam_id,
@@ -110,7 +122,8 @@ def rasxod_qosh(db, sana: str, nom: str, summa: int, kim_toladi: int,
 def rasxod_tahrir(db, rasxod_id: int, *, sana=None, nom=None, summa=None,
                   kim_toladi=None, umumiymi=None, turi_id=None,
                   usul=None, parametrlar=None, izoh=None,
-                  kim_uchun=_TEGMA, item_id=_TEGMA) -> None:
+                  kim_uchun=_TEGMA, item_id=_TEGMA,
+                  karta_id=_TEGMA) -> None:
     """Rasxodni o'zgartiradi va kerak bo'lsa ulushlarni QAYTA hisoblaydi."""
     eski = db.q1("SELECT * FROM rasxod WHERE id=?", rasxod_id)
     if not eski:
@@ -127,9 +140,17 @@ def rasxod_tahrir(db, rasxod_id: int, *, sana=None, nom=None, summa=None,
         "izoh": izoh if izoh is not None else eski["izoh"],
         "kim_uchun": (eski["kim_uchun"] if kim_uchun is _TEGMA else kim_uchun),
         "item_id": (eski["item_id"] if item_id is _TEGMA else item_id),
+        "karta_id": (eski["karta_id"] if karta_id is _TEGMA else karta_id),
     }
     if yangi["summa"] <= 0:
         raise ValueError("Rasxod summasi musbat bo'lishi kerak")
+    if karta_id is not _TEGMA or yangi["kim_toladi"] != eski["kim_toladi"]:
+        # To'lovchi almashsa eski kartasi unga tegishli emas — naqdga.
+        if (karta_id is _TEGMA and yangi["karta_id"] is not None
+                and not db.q1("SELECT 1 FROM karta WHERE id=? AND odam_id=?",
+                              yangi["karta_id"], yangi["kim_toladi"])):
+            yangi["karta_id"] = None
+        hamyon.tekshir_karta(db, yangi["karta_id"], yangi["kim_toladi"])
 
     # "Boshqa uchun" rasxod har doim 100% bitta odamga tegishli.
     if yangi["kim_uchun"] is not None:

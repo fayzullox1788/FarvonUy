@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 
 import money
-from core import entries, splitting
+from core import entries, hamyon, splitting
 
 UMUMIY, SHAXSIY, UCHUN = "umumiy", "shaxsiy", "uchun"
 
@@ -41,6 +41,9 @@ class Qoralama:
     # summa}]. Bo'sh — oddiy rasxod (bot, «Bugun», eski yozuvlar).
     # To'ldirilgan bo'lsa `summa` — ularning yig'indisi (`tekshir`).
     mahsulotlar: list[dict] = field(default_factory=list)
+    # Pul qayerdan chiqdi: None — naqd, aks holda to'lovchining kartasi
+    # (`core/hamyon.py`). Bot hozircha har doim naqd yozadi.
+    karta_id: int | None = None
 
     def lugat(self) -> dict:
         d = asdict(self)
@@ -232,6 +235,7 @@ def tekshir(db, q: Qoralama) -> None:
     if q.kim_toladi is None or not db.q1(
             "SELECT 1 FROM odam WHERE id=? AND faol=1", q.kim_toladi):
         raise ValueError("Kim to'laganini tanlang.")
+    hamyon.tekshir_karta(db, q.karta_id, q.kim_toladi)
     if q.tur not in (UMUMIY, SHAXSIY, UCHUN):
         raise ValueError("Rasxod turi noma'lum.")
     if q.tur == UCHUN:
@@ -286,7 +290,8 @@ def _yoz(db, q: Qoralama, umumiy: bool) -> int:
         umumiymi=umumiy, turi_id=q.turi_id, usul=q.usul,
         parametrlar=q.parametrlar if umumiy else None,
         izoh=q.izoh, item_id=q.item_id,
-        kim_uchun=q.kim_uchun if q.tur == UCHUN else None)
+        kim_uchun=q.kim_uchun if q.tur == UCHUN else None,
+        karta_id=q.karta_id)
 
 
 def tahrirla(db, rasxod_id: int, q: Qoralama) -> None:
@@ -304,6 +309,6 @@ def tahrirla(db, rasxod_id: int, q: Qoralama) -> None:
             umumiymi=q.tur == UMUMIY, turi_id=q.turi_id, usul=q.usul,
             parametrlar=q.parametrlar or None,
             kim_uchun=q.kim_uchun if q.tur == UCHUN else None,
-            item_id=q.item_id)
+            item_id=q.item_id, karta_id=q.karta_id)
         qatorlarni_yoz(db, "rasxod_mahsulot", "rasxod_id", rasxod_id,
                        q.mahsulotlar)

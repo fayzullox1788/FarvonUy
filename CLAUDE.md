@@ -457,6 +457,25 @@ bosilsa `dialogs.RejagaBandOyna` (`plan.band_tafsilot`).
 Reja ro'yxatidan nusxa — `plan.reja_yozuv_nusxa` (keyingi kunga, oydan
 chiqmaydi; to'langani va rasxodi ko'chmaydi).
 
+## Hamyon — pulim qayerda: naqd va kartalar (2026-10-01)
+
+`core/hamyon.py`, varaq `sahifa_hamyon.HamyonSahifa` («Hamyon»). Jadvallar:
+`karta` (odamniki) va `karta_otkazma` (bitta odamning naqdi/kartalari
+orasida; NULL = naqd). `rasxod.karta_id` / `kirim.karta_id` — pul
+qayerdan chiqdi / qayerga tushdi (NULL = naqd).
+
+**Naqd SAQLANMAYDI — u qolgani:** `naqd = v_balans.naqd − kartalar`.
+Shuning uchun `naqd + kartalar = v_balans.naqd` har doim, `v_balans` va
+audit O'ZGARMAGAN, belgisiz yozuvlar (import, bot, qarz, hisob-kitob,
+tashqi qarz) o'z-o'zidan naqdda. Karta qoldig'iga faqat EGASINING yozuvi
+kiradi (`kim_toladi`/`odam_id` = `karta.odam_id`). Yangi karta qoldig'i va
+«Qoldiqni to'g'irlash» — naqd bilan O'TKAZMA (jami pul o'zgarmaydi).
+Karta o'chirilsa qoldig'i naqdga qaytadi (o'tkazmasiz, undo bilan).
+`rasxod_tahrir` da to'lovchi almashsa eski karta bog'lanishi NULL bo'ladi.
+
+Tanlagich — `widgets.HamyonTanla` (RasxodDialog, Bugun tezkor qo'shish,
+KirimDialog); odam almashsa `odam_qoy()`. Bot hozircha har doim naqd.
+
 ## Varaqlar nomi (2026-09-30)
 
 Menyuda `MahsulotSahifa` — **«Kategoriyalar»** (kategoriya daraxti +

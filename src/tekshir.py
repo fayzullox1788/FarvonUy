@@ -3509,6 +3509,114 @@ for _yomon in (None, 999_999):
 dAn.yop()
 
 
+# ═════════════════════════════════════════════ hamyon: naqd va kartalar
+
+print("\n── hamyon: naqd va kartalar ─────────────────────────────────")
+from core import hamyon as hy  # noqa: E402
+from core import rasxod_kirit as _rkh  # noqa: E402
+
+dH = dbm.Db(_TMP / "bH.db", zaxirasiz=True)
+hF = entries.odam_qosh(dH, "Fayzulloxon")
+hO = entries.odam_qosh(dH, "Otabek")
+_hturi = dH.skalyar("SELECT id FROM turi WHERE faol=1 ORDER BY id")
+entries.kirim_qosh(dH, "2026-10-01", hF, 1_000_000, "Oylik")
+
+
+def _hjami(oid):
+    return dH.skalyar("SELECT naqd FROM v_balans WHERE id=?", oid)
+
+
+_h0 = hy.hamyon(dH, hF)
+teng("hamyon: karta yo'q — hammasi naqd", (1_000_000, 0),
+     (_h0["naqd"], _h0["karta"]))
+hHumo = hy.karta_qosh(dH, hF, "Humo", 600_000, "2026-10-01")
+_h1 = hy.hamyon(dH, hF)
+teng("hamyon: karta qoldig'i naqddan ko'chdi", (400_000, 600_000, 1_000_000),
+     (_h1["naqd"], _h1["karta"], _h1["jami"]))
+tekshir("hamyon: bir odamda bir xil nomli karta rad etiladi",
+        _yiqiladimi(lambda: hy.karta_qosh(dH, hF, "humo")))
+hUz = hy.karta_qosh(dH, hF, "Uzcard")
+teng("hamyon: bo'sh karta 0", 0,
+     next(k["qoldiq"] for k in hy.kartalar(dH, hF) if k["id"] == hUz))
+
+# Rasxod kartadan — karta kamayadi, jami (naqd) v_balans bilan bir xil.
+_hr = _rkh.saqla(dH, _rkh.Qoralama(
+    sana="2026-10-01", kim_toladi=hF, turi_id=_hturi, nom="Bozor",
+    summa=150_000, tur=_rkh.UMUMIY, karta_id=hHumo))
+_h2 = hy.hamyon(dH, hF)
+teng("hamyon: kartadan rasxod kartani kamaytirdi", 450_000,
+     next(k["qoldiq"] for k in _h2["kartalar"] if k["id"] == hHumo))
+teng("hamyon: naqd tegmadi", 400_000, _h2["naqd"])
+teng("hamyon: naqd + kartalar = v_balans.naqd", _hjami(hF),
+     _h2["naqd"] + _h2["karta"])
+tekshir("audit toza (kartadan rasxod)", ledger.audit(dH).toza)
+
+# Boshqa odamning kartasi bilan rasxod/kirim rad etiladi.
+tekshir("hamyon: o'zganing kartasidan to'lov rad etiladi", _yiqiladimi(
+    lambda: _rkh.saqla(dH, _rkh.Qoralama(
+        sana="2026-10-01", kim_toladi=hO, turi_id=_hturi, nom="X",
+        summa=1_000, tur=_rkh.SHAXSIY, karta_id=hHumo))))
+tekshir("hamyon: o'zganing kartasiga kirim rad etiladi", _yiqiladimi(
+    lambda: entries.kirim_qosh(dH, "2026-10-01", hO, 5, karta_id=hHumo)))
+
+# Kirim kartaga.
+_hk = entries.kirim_qosh(dH, "2026-10-02", hF, 200_000, "Bonus",
+                         karta_id=hUz)
+teng("hamyon: kartaga kirim", 200_000,
+     next(k["qoldiq"] for k in hy.kartalar(dH, hF) if k["id"] == hUz))
+
+# To'lovchi almashsa eski karta bog'lanishi naqdga tushadi.
+entries.rasxod_tahrir(dH, _hr, kim_toladi=hO)
+teng("hamyon: to'lovchi almashdi — karta bo'shatildi", None,
+     dH.skalyar("SELECT karta_id FROM rasxod WHERE id=?", _hr,
+                birlamchi=None))
+dH.undo()
+teng("hamyon: undo karta bog'lanishini qaytardi", hHumo,
+     dH.skalyar("SELECT karta_id FROM rasxod WHERE id=?", _hr))
+
+# O'tkazma: bankomatdan yechish (karta → naqd).
+hy.otkazma(dH, "2026-10-02", hF, hHumo, None, 50_000, "bankomat")
+_h3 = hy.hamyon(dH, hF)
+teng("hamyon: bankomat — karta kamaydi, naqd oshdi",
+     (400_000, 450_000),
+     (next(k["qoldiq"] for k in _h3["kartalar"] if k["id"] == hHumo),
+      _h3["naqd"]))
+teng("hamyon: o'tkazma jami pulni o'zgartirmadi", _h2["jami"] + 200_000,
+     _h3["jami"])
+tekshir("hamyon: o'ziga o'tkazma rad etiladi",
+        _yiqiladimi(lambda: hy.otkazma(dH, "2026-10-02", hF, hUz, hUz, 5)))
+tekshir("hamyon: o'zganing kartasiga o'tkazma rad etiladi",
+        _yiqiladimi(lambda: hy.otkazma(dH, "2026-10-02", hO, None, hUz, 5)))
+
+# Qoldiqni to'g'irlash — farq naqd bilan.
+hy.qoldiq_togirla(dH, hHumo, 380_000, "2026-10-02")
+_h4 = hy.hamyon(dH, hF)
+teng("hamyon: to'g'irlangan qoldiq", 380_000,
+     next(k["qoldiq"] for k in _h4["kartalar"] if k["id"] == hHumo))
+teng("hamyon: to'g'irlash jami pulni o'zgartirmadi", _h3["jami"],
+     _h4["jami"])
+teng("hamyon: farq yo'q — yozuv yo'q", None,
+     hy.qoldiq_togirla(dH, hHumo, 380_000, "2026-10-02"))
+
+# Karta o'chirilsa qoldig'i naqdga qaytadi, undo qaytaradi.
+hy.karta_ochir(dH, hUz)
+_h5 = hy.hamyon(dH, hF)
+teng("hamyon: o'chirilgan karta qoldig'i naqdga", _h4["naqd"] + 200_000,
+     _h5["naqd"])
+teng("hamyon: o'chirilgan karta ro'yxatda yo'q", [hHumo],
+     [k["id"] for k in _h5["kartalar"]])
+dH.undo()
+teng("hamyon: undo kartani qaytardi", 2, len(hy.kartalar(dH, hF)))
+
+# Tarix: rasxod minus, kirim plus, yig'indi = qoldiq.
+_hh = hy.harakatlar(dH, hHumo)
+teng("hamyon: tarix yig'indisi = karta qoldig'i", 380_000,
+     sum(x["summa"] for x in _hh))
+teng("hamyon: tarix turlari", {"rasxod", "otkazma"},
+     {x["tur"] for x in _hh})
+tekshir("audit toza (hamyon oxirida)", ledger.audit(dH).toza)
+dH.yop()
+
 # ═════════════════════════════════════════════════════════ yakun
 
 dG.yop(); dS.yop(); dR.yop(); dK.yop(); dO.yop(); d.yop(); d2.yop(); d3.yop(); dU.yop(); d8.yop(); d9.yop(); dA.yop(); dB.yop(); dC.yop(); dD.yop(); dT.yop(); dT2.yop()

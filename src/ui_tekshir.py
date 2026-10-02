@@ -865,6 +865,38 @@ def main() -> int:
         s._shu_oy()
         _tasdiq((s.dan.iso(), s.gacha.iso()) == pl.oy_bugungacha(),
                 "«Shu oy» oy boshidan bugungacha emas")
+        _tasdiq(s.davr() == "oy", "«Shu oy» faol tugma emas")
+
+        # «Custom»: taqvimda ikki bosish → oraliq (teskari bosilsa ham)
+        from PySide6.QtCore import QDate
+        from ui.eski.sahifa_analitika import OraliqOyna
+        _tasdiq(not s.dan.isVisible() and not s.gacha.isVisible(),
+                "Dan/Gacha maydonlari hali ekranda")
+        hisoblandi = []
+        dl = OraliqOyna(s.dan.iso(), s.gacha.iso(),
+                        lambda a, b: hisoblandi.append((a, b)) or 12345,
+                        parent=s)
+        dl._bosildi(QDate(2026, 3, 20))
+        _tasdiq(dl.oxiri is None, "birinchi bosish oraliqni yopib qo'ydi")
+        _tasdiq(dl.oraliq() == ("2026-03-20", "2026-03-20"),
+                "bitta kun tanlanganda oraliq o'sha kun emas")
+        dl._bosildi(QDate(2026, 3, 5))
+        _tasdiq(dl.oraliq() == ("2026-03-05", "2026-03-20"),
+                f"custom oraliq noto'g'ri: {dl.oraliq()}")
+        _tasdiq(hisoblandi[-1] == ("2026-03-05", "2026-03-20")
+                and "12 345" in dl.summa.text().replace("\xa0", " "),
+                f"oraliq summasi ko'rinmadi: {dl.summa.text()!r}")
+        olindi = []
+        dl.tanlandi.connect(lambda a, b: olindi.append((a, b)))
+        dl._qolla()
+        _tasdiq(olindi == [("2026-03-05", "2026-03-20")],
+                "«Qo'llash» oraliqni bermadi")
+        s._oraliq(*dl.oraliq())
+        _tasdiq(s.davr() == "custom" and s.dan.iso() == "2026-03-05",
+                "custom oraliq sahifaga tushmadi")
+        s._oraliq(pl.hafta_boshi(), pl.hafta_oxiri())
+        _tasdiq(s.davr() == "hafta", "«Shu hafta» faol tugma emas")
+        s._shu_oy()
 
     bosqich("analitika: joriy oy va hamma kategoriya", _analitika)
 

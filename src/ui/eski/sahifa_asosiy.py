@@ -16,7 +16,7 @@ from ui.eski.dialogs import (JuftTafsilot, KirimDialog, QarzDialog,
                         RasxodDialog, RasxodTafsilot, TashqiQarzOyna,
                         mahsulotlarni_toldir, TolovDialog, tasdiq,
                         xato_koraset)
-from ui.eski.widgets import (Holat, Jadval, Karta, KategoriyaTanla, OdamTanla,
+from ui.eski.widgets import (HamyonTanla, Holat, Jadval, Karta, KategoriyaTanla, OdamTanla,
                         PulEdit, RaqamKarta, SanaEdit, TuriTanla, Xabar, izoh,
                         qator, sarlavha, tugma, yorliq)
 
@@ -142,12 +142,16 @@ class BugunSahifa(Sahifa):
         quti.qosh(qator(self.t_sana, self.t_nom, self.t_summa))
 
         self.t_kim = OdamTanla(self.db)
+        self.t_joy = HamyonTanla(self.db)
+        self.t_joy.odam_qoy(self.t_kim.odam_id())
+        self.t_kim.currentIndexChanged.connect(
+            lambda: self.t_joy.odam_qoy(self.t_kim.odam_id()))
         self.t_turi = KategoriyaTanla(self.db)
         self.t_item = QComboBox()
         self.t_item.setMinimumWidth(180)
         self.t_turi.ozgardi.connect(self._itemlarni_yukla)
         self.t_item.currentIndexChanged.connect(self._item_tanlandi)
-        quti.qosh(qator("Kim to'ladi:", self.t_kim,
+        quti.qosh(qator("Kim to'ladi:", self.t_kim, self.t_joy,
                         "Kategoriya:", self.t_turi,
                         "Mahsulot:", self.t_item, None))
 
@@ -280,6 +284,7 @@ class BugunSahifa(Sahifa):
         # bilan bitta joyda). Katalog narxi shu yerda yangilanadi.
         q = rk.Qoralama(
             sana=self.t_sana.iso(), kim_toladi=self.t_kim.odam_id(),
+            karta_id=self.t_joy.karta_id(),
             turi_id=self.t_turi.turi_id(), item_id=self.t_item.currentData(),
             nom=nom, summa=summa,
             tur=(rk.UCHUN if uchunmi else
@@ -351,6 +356,8 @@ class BugunSahifa(Sahifa):
             self.t_kim.yangila()
             self.t_uchun_kim.yangila()
             self.t_turi.yangila()
+        # Karta qo'shilgan/o'chirilgan bo'lishi mumkin — ro'yxat yangilansin.
+        self.t_joy.odam_qoy(self.t_kim.odam_id())
         self._itemlarni_yukla()
 
         a = ledger.audit(self.db)

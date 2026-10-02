@@ -118,6 +118,9 @@ class Db:
         ("reja_qator", "rasxod_id", "INTEGER REFERENCES rasxod(id)"),
         ("reja_qator", "tolangan", "INTEGER"),
         ("reja_mahsulot", "tolangan", "INTEGER"),
+        # Pul qayerdan chiqdi / qayerga tushdi: NULL — naqd (2026-10-01).
+        ("rasxod", "karta_id", "INTEGER REFERENCES karta(id)"),
+        ("kirim", "karta_id", "INTEGER REFERENCES karta(id)"),
     ]
 
     def _migratsiya(self) -> None:
@@ -136,7 +139,7 @@ class Db:
         self._menyuni_ek()
 
         self.con.execute(
-            "INSERT OR REPLACE INTO meta(kalit,qiymat) VALUES('sxema_versiya','20')")
+            "INSERT OR REPLACE INTO meta(kalit,qiymat) VALUES('sxema_versiya','21')")
 
     # Excel «Vazifalar» varag'idagi tayyor uy ishlari (C17:C21).
     VAZIFA_TURLARI = [
@@ -317,7 +320,8 @@ class Db:
 
     def _qulfni_tekshir(self, jadval: str, data: dict, eski: dict | None) -> None:
         if jadval not in ("kirim", "rasxod", "qarz", "hisob_kitob",
-                          "tashqi_qarz", "tashqi_tolov", "tashqi_ulush"):
+                          "tashqi_qarz", "tashqi_tolov", "tashqi_ulush",
+                          "karta_otkazma"):
             return
         for manba in (data, eski or {}):
             s = manba.get("sana")

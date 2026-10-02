@@ -32,6 +32,7 @@ from ui.eski import theme
 from ui.eski.sahifa_asosiy import (BugunSahifa, KirimSahifa, QarzSahifa,
                               RasxodSahifa)
 from ui.eski.sahifa_analitika import AnalitikaSahifa
+from ui.eski.sahifa_hamyon import HamyonSahifa
 from ui.eski.sahifa_kategoriya import KategoriyaSahifa
 from ui.eski.sahifa_mahsulot import MahsulotSahifa
 from ui.eski.sahifa_qosh import (HisobotSahifa, OdamSahifa,  # noqa: F401
@@ -50,6 +51,8 @@ MOLIYA_SAHIFALAR = [
     ("Kirim",       "▲", KirimSahifa),
     ("Qarz",        "⇄", QarzSahifa),
     ("Shaxsiy",     "◉", OdamSahifa),
+    # Pulim qayerda: naqd va kartalar (2026-10-01, foydalanuvchi so'ragan).
+    ("Hamyon",      "▭", HamyonSahifa),
     # «Reja» va «Hisobot» varaqlari foydalanuvchi so'rovi bilan menyudan
     # olindi (2026-09-30). Sinflar joyida — qaytarish uchun qatorni ochish
     # kifoya. (Oylik reja/fakt Analitika → «Reja va fakt» da qoladi.)

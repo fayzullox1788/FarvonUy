@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import math
 
-from PySide6.QtCore import QPointF, QRectF, QSignalBlocker, QSize, Qt, Signal
+from PySide6.QtCore import (QDate, QPoint, QPointF, QRectF, QSignalBlocker,
+                            QSize, Qt, Signal)
 from PySide6.QtGui import QBrush, QColor, QIcon, QPainter, QPen, QPixmap
-from PySide6.QtWidgets import (QButtonGroup, QSizePolicy, QTableWidgetItem,
-                               QToolTip, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QButtonGroup, QFrame, QLabel, QSizePolicy,
+                               QTableWidgetItem, QToolTip, QVBoxLayout,
+                               QWidget)
 
 import money
 from core import kategoriya, ledger, plan
@@ -20,7 +22,7 @@ from ui.eski.dialogs import KategoriyaRasxodlari
 from ui.eski.sahifa_asosiy import Sahifa, shaffof
 from ui.eski.sahifa_reja_fakt import RejaFaktPanel
 from ui.eski.widgets import (Jadval, Karta, OdamTanla, RaqamKarta, SanaEdit,
-                             belgi_ikon, izoh, qator, sarlavha, tugma)
+                             Taqvim, belgi_ikon, izoh, qator, sarlavha, tugma)
 
 TOLIQ_DOIRA = 360 * 16      # Qt burchagi gradusning 1/16 qismida
 
@@ -370,6 +372,171 @@ class DoiraDiagramma(QWidget):
         super().leaveEvent(hodisa)
 
 
+# ═══════════════════════════════════════════════════════════ CUSTOM ORALIQ
+
+def _qd(iso: str) -> QDate:
+    return QDate.fromString(iso, "yyyy-MM-dd")
+
+
+def _uz(iso: str) -> str:
+    return _qd(iso).toString("dd.MM.yyyy")
+
+
+class OraliqTaqvim(Taqvim):
+    """Tanlangan oraliqni o'zi bo'yaydigan taqvim.
+
+    `setDateTextFormat` foni bu yerda ishlamaydi: `TAQVIM_STIL` dagi
+    `::item` qoidasi katak fonini QSS'dan chizadi va formatni yutadi.
+    Shuning uchun oraliq kunlari `paintCell` da qo'lda chiziladi.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.boshi: QDate | None = None
+        self.oxiri: QDate | None = None
+
+    def oraliq_qoy(self, boshi: QDate, oxiri: QDate) -> None:
+        self.boshi, self.oxiri = boshi, oxiri
+        self.updateCells()
+
+    def paintCell(self, p: QPainter, rect, sana: QDate):
+        if self.boshi is None or not (self.boshi <= sana <= self.oxiri):
+            super().paintCell(p, rect, sana)
+            return
+        chet = sana in (self.boshi, self.oxiri)
+        p.save()
+        p.setRenderHint(QPainter.Antialiasing)
+        p.fillRect(rect, QColor(theme.KOK_FON))
+        if chet:
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(theme.KOK))
+            p.drawRoundedRect(QRectF(rect).adjusted(2, 2, -2, -2), 8, 8)
+        f = p.font()
+        f.setBold(chet)
+        p.setFont(f)
+        boshqa_oy = sana.month() != self.monthShown()
+        p.setPen(QColor(theme.KOK_MATN if chet
+                        else theme.KUL_OCH if boshqa_oy else theme.MATN))
+        p.drawText(rect, Qt.AlignCenter, str(sana.day()))
+        p.restore()
+
+
+def taqvim_ikon(rang: str, olcham: int = 18) -> QIcon:
+    """Kichik taqvim belgisi — QPainter bilan, ekran pikselida aniq."""
+    ikon = QIcon()
+    for dpr in (1.0, 1.25, 1.5, 2.0):
+        px = QPixmap(round(olcham * dpr), round(olcham * dpr))
+        px.setDevicePixelRatio(dpr)
+        px.fill(Qt.transparent)
+        p = QPainter(px)
+        p.setRenderHint(QPainter.Antialiasing)
+        n = olcham
+        qalam = QPen(QColor(rang), max(1.4, n / 11))
+        qalam.setCapStyle(Qt.RoundCap)
+        p.setPen(qalam)
+        p.setBrush(Qt.NoBrush)
+        quti = QRectF(n * .12, n * .2, n * .76, n * .68)
+        p.drawRoundedRect(quti, n * .12, n * .12)
+        p.drawLine(QPointF(quti.left(), n * .4), QPointF(quti.right(), n * .4))
+        p.drawLine(QPointF(n * .34, n * .1), QPointF(n * .34, n * .28))
+        p.drawLine(QPointF(n * .66, n * .1), QPointF(n * .66, n * .28))
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(rang))
+        r = n * .055
+        for x in (.34, .5, .66):
+            for y in (.56, .73):
+                p.drawEllipse(QPointF(n * x, n * y), r, r)
+        p.end()
+        ikon.addPixmap(px)
+    return ikon
+
+
+class OraliqOyna(QFrame):
+    """Taqvim tugmasi ostida ochiladigan kichik oyna (popup).
+
+    Ochilganda hozir ko'rsatilayotgan oraliq bo'yalgan turadi. Birinchi
+    bosish — boshlanish kuni, ikkinchisi — tugash kuni (teskari bosilsa
+    o'zi almashtiradi). Har bosishda shu oraliqdagi rasxod summasi
+    (`hisob(boshi, oxiri)`) darhol ko'rinadi. «Qo'llash» — 1 yoki 2 kun
+    tanlanganda; bitta kun bo'lsa o'sha kunning o'zi.
+    """
+
+    tanlandi = Signal(str, str)
+
+    def __init__(self, boshi: str, oxiri: str, hisob=None, parent=None):
+        super().__init__(parent, Qt.Popup)
+        self.setObjectName("OraliqOyna")
+        self.setStyleSheet(
+            f"QFrame#OraliqOyna {{ background:{theme.KARTA};"
+            f" border:1px solid {theme.CHIZIQ_TUQ}; border-radius:10px; }}")
+        self.hisob = hisob
+        self.boshi: str = boshi
+        self.oxiri: str | None = oxiri
+        v = QVBoxLayout(self)
+        v.setContentsMargins(12, 12, 12, 12)
+        v.setSpacing(10)
+
+        self.taqvim = OraliqTaqvim(self)
+        self.taqvim.clicked.connect(self._bosildi)
+        v.addWidget(self.taqvim)
+
+        self.matn = QLabel()
+        self.matn.setStyleSheet(
+            f"color:{theme.KUL};background:transparent;"
+            f"font-size:{theme.O_KICHIK}px;")
+        v.addWidget(self.matn)
+        self.summa = QLabel()
+        self.summa.setStyleSheet(
+            f"color:{theme.MATN};background:transparent;"
+            f"font-family:{theme.RAQAM_OILA};"
+            f"font-size:{theme.O_KATTA}px;font-weight:700;")
+        v.addWidget(self.summa)
+
+        bekor = tugma("Bekor")
+        bekor.clicked.connect(self.close)
+        self.ok = tugma("Qo'llash", asosiy=True)
+        self.ok.clicked.connect(self._qolla)
+        v.addWidget(qator(None, bekor, self.ok))
+        self._qoy(boshi, oxiri)
+
+    def oraliq(self) -> tuple[str, str]:
+        return self.boshi, self.oxiri or self.boshi
+
+    def _qolla(self):
+        self.tanlandi.emit(*self.oraliq())
+        self.close()
+
+    def _qoy(self, boshi: str, oxiri: str | None):
+        self.boshi, self.oxiri = boshi, oxiri
+        if oxiri:
+            q = _qd(oxiri)
+            self.taqvim.setCurrentPage(q.year(), q.month())
+        self._boya()
+
+    def _bosildi(self, q: QDate):
+        kun = q.toString("yyyy-MM-dd")
+        if self.oxiri is not None:          # yangi oraliq boshlanadi
+            self._qoy(kun, None)
+        elif kun < self.boshi:
+            self._qoy(kun, self.boshi)
+        else:
+            self._qoy(self.boshi, kun)
+
+    def _boya(self):
+        a, b = self.oraliq()
+        self.taqvim.oraliq_qoy(_qd(a), _qd(b))
+        if self.oxiri:                      # bugun emas, oraliq «tanlangan»
+            self.taqvim.setSelectedDate(_qd(b))
+        kunlar = _qd(a).daysTo(_qd(b)) + 1
+        if self.oxiri is None:
+            self.matn.setText(f"{_uz(a)} · 1 kun  —  ikkinchi kunni "
+                              f"bosing yoki «Qo'llash»")
+        else:
+            self.matn.setText(f"{_uz(a)} — {_uz(b)}  ·  {kunlar} kun")
+        if self.hisob is not None:
+            self.summa.setText(f"Rasxod: {money.fmt(self.hisob(a, b))} so'm")
+
+
 # ═══════════════════════════════════════════════════════════ ANALITIKA
 
 class AnalitikaSahifa(Sahifa):
@@ -389,15 +556,31 @@ class AnalitikaSahifa(Sahifa):
         super().__init__(oyna)
         dan, gacha = plan.oy_bugungacha()
         self._qolda = False
-        self.dan = SanaEdit(dan)
-        self.gacha = SanaEdit(gacha)
+        # Oraliq shu ikki maydonda SAQLANADI, lekin ekranda yo'q
+        # (foydalanuvchi so'rovi bilan) — tanlash taqvim tugmasidan.
+        self.dan = SanaEdit(dan, self)
+        self.gacha = SanaEdit(gacha, self)
+        self.dan.setVisible(False)
+        self.gacha.setVisible(False)
         self.dan.dateChanged.connect(self._qolda_ozgardi)
         self.gacha.dateChanged.connect(self._qolda_ozgardi)
-        oy = tugma("Shu oy")
+        # Oraliq rejimi: «Shu hafta» / «Shu oy» / taqvim — faoli
+        # «Asosiy» bo'lib turadi (`_davr_boya`).
         hafta = tugma("Shu hafta")
+        oy = tugma("Shu oy")
+        self.t_taqvim = tugma("")
+        self.t_taqvim.setFixedSize(40, 36)
+        self.t_taqvim.setIconSize(QSize(18, 18))
+        self.t_taqvim.setToolTip("Oraliqni tanlash")
+        self.davr_tugmalar = {"hafta": hafta, "oy": oy,
+                              "custom": self.t_taqvim}
         oy.clicked.connect(self._shu_oy)
         hafta.clicked.connect(lambda: self._oraliq(plan.hafta_boshi(),
                                                    plan.hafta_oxiri()))
+        self.t_taqvim.clicked.connect(self._custom)
+        self.oraliq_izoh = izoh("")
+        self.oraliq_izoh.setWordWrap(False)
+        self._jadval_turlar = []
 
         # Ichki ko'rinishlar — yon menyuda alohida varaq EMAS.
         self.korinish = QButtonGroup(self)
@@ -417,8 +600,7 @@ class AnalitikaSahifa(Sahifa):
         kv = QVBoxLayout(self.kategoriyalar)
         kv.setContentsMargins(0, 0, 0, 0)
         kv.setSpacing(16)
-        kv.addWidget(qator(hafta, oy, None,
-                           "Dan:", self.dan, "Gacha:", self.gacha))
+        kv.addWidget(qator(hafta, oy, self.t_taqvim, self.oraliq_izoh, None))
 
         # Odam filtri. «Hammasi» — uyning butun rasxodi; odam tanlansa —
         # uning shaxsiy rasxodi va umumiy rasxoddagi ULUSHI (butun
@@ -594,6 +776,42 @@ class AnalitikaSahifa(Sahifa):
         self._qolda = False
         self.yangila()
 
+    def _custom(self):
+        odam_id, qism = self.filtr()
+
+        def hisob(a, b):
+            return sum(t["summa"] for t in
+                       ledger.turi_boyicha(self.db, a, b, odam_id, qism))
+
+        o = OraliqOyna(self.dan.iso(), self.gacha.iso(), hisob, parent=self)
+        o.setAttribute(Qt.WA_DeleteOnClose)
+        o.tanlandi.connect(self._oraliq)
+        o.adjustSize()
+        o.move(self.t_taqvim.mapToGlobal(
+            QPoint(0, self.t_taqvim.height() + 4)))
+        o.show()
+        self._oraliq_oyna = o
+
+    def davr(self) -> str:
+        """Hozirgi oraliq qaysi tugmaga mos: 'oy' / 'hafta' / 'custom'."""
+        if not self._qolda:
+            return "oy"
+        if (self.dan.iso(), self.gacha.iso()) == (plan.hafta_boshi(),
+                                                  plan.hafta_oxiri()):
+            return "hafta"
+        return "custom"
+
+    def _davr_boya(self):
+        faol = self.davr()
+        for kalit, b in self.davr_tugmalar.items():
+            b.setObjectName("Asosiy" if kalit == faol else "")
+            b.style().unpolish(b)
+            b.style().polish(b)
+        self.t_taqvim.setIcon(taqvim_ikon(
+            theme.KOK_MATN if faol == "custom" else theme.MATN))
+        self.oraliq_izoh.setText(f"{_uz(self.dan.iso())} — "
+                                 f"{_uz(self.gacha.iso())}")
+
     def _qolda_ozgardi(self):
         self._qolda = True
         self.yangila()
@@ -609,6 +827,7 @@ class AnalitikaSahifa(Sahifa):
                 self.dan.qoy(dan)
                 self.gacha.qoy(gacha)
         dan, gacha = self.dan.iso(), self.gacha.iso()
+        self._davr_boya()
 
         # Odamlar ro'yxati o'zgargan bo'lishi mumkin. Signal to'sig'i
         # SHART: `OdamTanla.yangila()` `currentIndexChanged` ni uyg'otadi

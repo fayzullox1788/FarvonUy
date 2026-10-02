@@ -738,6 +738,36 @@ class OdamTanla(QComboBox):
             self.setCurrentIndex(i)
 
 
+class HamyonTanla(QComboBox):
+    """Pul qayerdan chiqdi / qayerga tushdi: «💵 Naqd» yoki odamning
+    kartalari (`core/hamyon.py`). Odam almashganda `odam_qoy()` bilan
+    qayta to'ldiriladi; tanlangan karta o'sha odamniki bo'lsa joyida
+    qoladi, aks holda naqdga qaytadi."""
+
+    def __init__(self, db, parent=None):
+        super().__init__(parent)
+        self.db = db
+        _stil(self, "ICHKI_STIL")
+        self.setMinimumWidth(150)
+        self.odam_qoy(None)
+
+    def odam_qoy(self, odam_id):
+        from core import hamyon
+        joriy = self.karta_id()
+        with QSignalBlocker(self):
+            self.clear()
+            for kid, nom in hamyon.tanlov(self.db, odam_id):
+                self.addItem(("💵 " if kid is None else "💳 ") + nom, kid)
+            self.tanla(joriy)
+
+    def karta_id(self):
+        return self.currentData()
+
+    def tanla(self, karta_id):
+        i = self.findData(karta_id)
+        self.setCurrentIndex(i if i >= 0 else 0)
+
+
 # ─────────────────────────────────────────────── kategoriya ikonkasi
 #
 # Ekran masshtabi 125–150% bo'lsa, mantiqiy o'lchamda (26 px) tayyorlangan

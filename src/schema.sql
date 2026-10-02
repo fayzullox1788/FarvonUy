@@ -331,6 +331,39 @@ CREATE TABLE IF NOT EXISTS reja_mahsulot (
 );
 CREATE INDEX IF NOT EXISTS ix_reja_mahsulot ON reja_mahsulot(qator_id);
 
+-- ───────────────────────────────────────────────── hamyon: naqd va kartalar
+-- (2026-10-01) «Pulim qayerda?» — odamning qo'lidagi puli (`v_balans.naqd`)
+-- naqd va kartalarga BO'LINADI. Kartaning qoldig'i — unga bog'langan kirim
+-- (`kirim.karta_id`) − undan to'langan rasxod (`rasxod.karta_id`) ±
+-- o'tkazmalar. NAQD alohida saqlanmaydi: naqd = v_balans.naqd − kartalar.
+-- Shuning uchun naqd + kartalar = v_balans.naqd HAR DOIM, va bu bo'lim
+-- balans/audit matematikasiga umuman tegmaydi (`core/hamyon.py`).
+
+CREATE TABLE IF NOT EXISTS karta (
+  id         INTEGER PRIMARY KEY,
+  odam_id    INTEGER NOT NULL REFERENCES odam(id),
+  nom        TEXT    NOT NULL,
+  tartib     INTEGER NOT NULL DEFAULT 0,
+  ochirilgan INTEGER NOT NULL DEFAULT 0,
+  yaratilgan TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
+-- Bitta odamning naqdi va kartalari orasida pul ko'chishi (bankomatdan
+-- yechish, kartaga solish, karta → karta). NULL — naqd. Odamlar orasidagi
+-- pul — bu yerda EMAS (qarz / hisob-kitob).
+CREATE TABLE IF NOT EXISTS karta_otkazma (
+  id           INTEGER PRIMARY KEY,
+  sana         TEXT    NOT NULL,
+  odam_id      INTEGER NOT NULL REFERENCES odam(id),
+  dan_karta_id INTEGER REFERENCES karta(id),
+  ga_karta_id  INTEGER REFERENCES karta(id),
+  summa        INTEGER NOT NULL CHECK (summa > 0),
+  izoh         TEXT,
+  ochirilgan   INTEGER NOT NULL DEFAULT 0,
+  yaratilgan   TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+  CHECK (dan_karta_id IS NOT ga_karta_id)
+);
+
 CREATE TABLE IF NOT EXISTS budjet (
   id      INTEGER PRIMARY KEY,
   turi_id INTEGER NOT NULL REFERENCES turi(id),
