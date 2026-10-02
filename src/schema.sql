@@ -388,7 +388,9 @@ CREATE TABLE IF NOT EXISTS ozgarishlar (
   -- Undo'dan keyin yangi yozuv kiritilsa, qaytarilgan guruhlar shu yerda
   -- "bekor" bo'ladi: tarix shoxlanmasligi uchun ular endi redo ro'yxatiga
   -- tushmaydi. O'chirilmaydi — 3-qoida.
-  bekor       INTEGER NOT NULL DEFAULT 0
+  bekor       INTEGER NOT NULL DEFAULT 0,
+  -- 1 — Cloudflare D1 serveriga yuborilgan yoki serverdan kelgan (sinx.py).
+  sinx        INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS ix_ozg_guruh ON ozgarishlar(guruh_id);
 CREATE INDEX IF NOT EXISTS ix_ozg_vaqt  ON ozgarishlar(vaqt);

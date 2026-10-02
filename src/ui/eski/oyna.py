@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QHBoxLayout,
                                QLabel, QMainWindow, QPushButton,
@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QHBoxLayout,
 
 import config
 import money
+import sinx
 from core import ledger, plan
 from core import vazifa as vz
 from ui.eski import theme
@@ -82,10 +83,17 @@ BOLIMLAR = {
 }
 
 
+class _SinxSignal(QObject):
+    """Fon oqimidagi sinxron natijasini bosh (UI) oqimga o'tkazadi."""
+    tayyor = Signal(object)
+
+
 class Oyna(QMainWindow):
     def __init__(self, db):
         super().__init__()
         self.db = db
+        self._sinxronchi = None
+        self._sinx_yangila_kerak = False
         self.bolim = "moliya"
         self.setWindowTitle(f"{config.APP_NOM} {config.VERSIYA}")
         self.resize(1280, 860)
@@ -149,6 +157,12 @@ class Oyna(QMainWindow):
         self.yon_holat = QLabel()
         self.yon_holat.setWordWrap(True)
         yv.addWidget(self.yon_holat)
+
+        # Server (D1) bilan sinxron holati — sozlanmagan bo'lsa yashirin.
+        self.sinx_holat = QLabel()
+        self.sinx_holat.setObjectName("SinxHolat")
+        yv.addWidget(self.sinx_holat)
+        self.sinx_holat.setVisible(False)
 
         tashqi.addWidget(yon)
 
@@ -285,7 +299,87 @@ class Oyna(QMainWindow):
             f"<span style='color:{rang}'>{holat}</span>")
         self.statusBar().showMessage("Moliya")
 
+    # ── server bilan sinxron ─────────────────────────────────────────
+
+    def sinx_boshla(self):
+        """Fon sinxronini ishga tushiradi (faqat `main.py` dan).
+
+        Uch tetik: ochilganda, har COMMIT dan keyin (`db.commitdan_keyin`)
+        va har 30 soniyada. Ketma-ket tetiklar `sinx.Sinxronchi` ichida
+        birlashadi — bir vaqtda faqat bitta sinxron.
+        """
+        if self._sinxronchi is not None:
+            return
+        self._sinx_signal = _SinxSignal(self)
+        self._sinx_signal.tayyor.connect(self._sinx_natija)
+        self._sinxronchi = sinx.Sinxronchi(
+            self.db.yol, natija_fn=self._sinx_signal.tayyor.emit)
+        # COMMIT tugma ishlovchisi ICHIDA bo'ladi — hodisalar navbatiga
+        # qoldiramiz, ishlovchi tugaguncha hech narsa qilinmaydi.
+        self.db.commitdan_keyin.append(
+            lambda: QTimer.singleShot(0, self._sinx_tetikla))
+        self._sinx_taymer = QTimer(self)
+        self._sinx_taymer.setInterval(30_000)
+        self._sinx_taymer.timeout.connect(self._sinx_davriy)
+        self._sinx_taymer.start()
+        self._sinx_tetikla()
+
+    def _sinx_davriy(self):
+        # Dialog ochiq bo'lgani uchun qoldirilgan yangilash.
+        if self._sinx_yangila_kerak:
+            self._sinx_yangila()
+        self._sinx_tetikla()
+
+    def _sinx_tetikla(self):
+        if self._sinxronchi is None:
+            return
+        if sinx.sozlamalar(self.db) is None:
+            self.sinx_holat.setVisible(False)
+            return
+        self._sinx_holat_qoy("⏳")
+        self._sinxronchi.tetikla()
+
+    def _sinx_holat_qoy(self, matn: str, rang: str | None = None):
+        self.sinx_holat.setStyleSheet(
+            f"QLabel#SinxHolat{{color:{rang or theme.YON_KUL};"
+            f"font-size:11px;padding:0 18px;background:transparent;}}")
+        self.sinx_holat.setText(f"Sinxron: {matn}")
+        self.sinx_holat.setVisible(True)
+
+    def _sinx_natija(self, natija: dict):
+        holat = natija.get("holat")
+        if holat == "sozlanmagan":
+            self.sinx_holat.setVisible(False)
+            return
+        if holat == "ok":
+            self._sinx_holat_qoy(f"✔ {natija.get('vaqt', '')}")
+            self.sinx_holat.setToolTip("")
+        elif holat == "oflayn":
+            self._sinx_holat_qoy("✖ internet yo'q")
+            self.sinx_holat.setToolTip(natija.get("xabar", ""))
+        else:
+            self._sinx_holat_qoy("✖ xato", theme.QIZIL_TUQ)
+            self.sinx_holat.setToolTip(natija.get("xabar", ""))
+        if natija.get("ozgardi"):
+            # Serverdan yangi yozuv keldi (bot orqali rasxod, vazifa…) —
+            # balans va kalendar o'zgargan bo'lishi mumkin.
+            self._sinx_yangila_kerak = True
+            self._sinx_yangila()
+
+    def _sinx_yangila(self):
+        """Ochiq dialog bo'lsa uning ostidagi sahifani qayta qurmaymiz —
+        keyingi tetikda (≤30 s) yangilanadi."""
+        if QApplication.activeModalWidget() is not None:
+            return
+        self._sinx_yangila_kerak = False
+        if self.tashqi_stek.currentIndex() == 0:
+            self.tanlov.yangila()
+        else:
+            self.yangila()
+
     def closeEvent(self, hodisa):
+        if self._sinxronchi is not None:
+            self._sinxronchi.toxtat()
         try:
             self.db.yop()
         except Exception:

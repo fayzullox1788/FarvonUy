@@ -48,16 +48,10 @@ def main() -> int:
             f"Ma'lumotlar bazasini ochib bo'lmadi:\n\n{e}\n\n{config.DB_YOL}")
         return 1
 
-    # Takroriy vazifalar («har kuni namoz») kalendarga shu yerda
-    # to'ldiriladi — oyna qurilishidan OLDIN, aks holda birinchi
-    # ko'rinish yangi kunlarsiz chizilardi. Yiqilsa dastur to'xtamaydi:
-    # bitta qoida buzuq bo'lgani uchun butun dastur ochilmay qolishi
-    # mumkin emas.
-    try:
-        from core import vazifa as vz
-        vz.takror_toldir(baza)
-    except Exception as e:
-        crashlog.yoz(f"Takroriy vazifalarni to'ldirib bo'lmadi: {e}")
+    # Takroriy vazifalar («har kuni namoz») endi FAQAT serverda
+    # (Cloudflare Worker) yaratiladi va sinxron bilan keladi. Desktop
+    # ham `vz.takror_toldir()` qilsa, bitta vazifa ikki tomonda har xil
+    # id bilan ikki marta paydo bo'lardi.
 
     # Foydalanuvchi tanlagan rang rejimi oyna qurilishidan OLDIN
     # qo'yilishi kerak — aks holda widgetlar eski rang bilan quriladi.
@@ -67,6 +61,8 @@ def main() -> int:
     from ui.eski.oyna import Oyna
     oyna = Oyna(baza)
     oyna.show()
+    # D1 bilan fon sinxroni — sozlanmagan bo'lsa jim turadi.
+    oyna.sinx_boshla()
     # Zaxira oynani ko'rsatishni kutib turmaydi: dastur darhol ochiladi.
     QTimer.singleShot(750, lambda: dbm.zaxira_ol(baza.yol))
     return app.exec()

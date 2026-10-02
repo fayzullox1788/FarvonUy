@@ -1,0 +1,5 @@
+node_modules/
+.wrangler/
+dist-tmp/
+# tools/d1_eksport.py natijasi — jonli ma'lumot (tg_token ham) bor, commit qilinmasin
+d1/

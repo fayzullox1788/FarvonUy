@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QHBoxLayout,
 
 import config
 import money
+import sinx
 from core import (entries, importer, ledger, plan, recurring,
                   reports, xabar)
 from ui.eski import theme
@@ -666,6 +667,16 @@ class SozlamaSahifa(Sahifa):
         tg.qosh(qator("Token:", self.tg_token))
         tg.qosh(qator("Guruh:", self.tg_guruh,
                       "Kunlik xulosa:", self.tg_vaqt, None))
+        # Bot Cloudflare'da: desktop server bazasi (D1) bilan shu
+        # manzil va maxfiy kalit orqali sinxronlanadi (`sinx.py`).
+        self.sinx_url = QLineEdit()
+        self.sinx_url.setPlaceholderText("https://farvonuy.….workers.dev")
+        self.sinx_kalit = QLineEdit()
+        self.sinx_kalit.setPlaceholderText("sinxron kaliti")
+        self.sinx_kalit.setEchoMode(QLineEdit.Password)
+        self.sinx_kalit.setFixedWidth(230)
+        tg.qosh(qator("Server:", self.sinx_url,
+                      "Kalit:", self.sinx_kalit, None))
 
         tg_top = tugma("Guruhni aniqlash")
         tg_top.setToolTip("Botni guruhga qo'shib, u yerga bitta xabar "
@@ -901,6 +912,8 @@ class SozlamaSahifa(Sahifa):
         self.tg_yoq.setChecked(s["yoqilgan"])
         self.tg_token.setText(s["token"])
         self.tg_guruh.setText(s["guruh"])
+        self.sinx_url.setText(self.db.sozlama(sinx.K_URL, ""))
+        self.sinx_kalit.setText(self.db.sozlama(sinx.K_KALIT, ""))
         self.tg_vaqt.setTime(QTime.fromString(s["kunlik_vaqt"], "HH:mm")
                              or QTime(8, 0))
         yoq = xabar.dm_yoqmaganlar(self.db)
@@ -920,6 +933,11 @@ class SozlamaSahifa(Sahifa):
             guruh=self.tg_guruh.text(),
             yoqilgan=self.tg_yoq.isChecked(),
             kunlik_vaqt=self.tg_vaqt.time().toString("HH:mm"))
+        sinx.sozlama_qoy(self.db, self.sinx_url.text(),
+                         self.sinx_kalit.text())
+        tetik = getattr(self.oyna, "_sinx_tetikla", None)
+        if tetik is not None:
+            tetik()
         self.xabar.korsat("Telegram sozlamalari saqlandi", "ok")
 
     def _tg_guruh_top(self):

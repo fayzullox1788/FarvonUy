@@ -3617,6 +3617,315 @@ teng("hamyon: tarix turlari", {"rasxod", "otkazma"},
 tekshir("audit toza (hamyon oxirida)", ledger.audit(dH).toza)
 dH.yop()
 
+# ═════════════════════════════════════════════════ sinxron (sinx.py)
+
+print("\n── sinxron: juft id, push, pull (Cloudflare D1) ─────────────")
+
+import base64 as _b64  # noqa: E402
+import json as _sj  # noqa: E402
+import sqlite3 as _sq  # noqa: E402
+import threading as _th  # noqa: E402
+import urllib.parse as _up  # noqa: E402
+
+import sinx  # noqa: E402
+
+# ── juft id: desktop faqat JUFT id beradi
+dX = dbm.Db(_TMP / "bX.db", zaxirasiz=True)
+_m1 = dX.apply("menyu", "INSERT", {"nom": "sx taom 1"})
+with dX.amal("ikkita"):
+    _m2 = dX.apply("menyu", "INSERT", {"nom": "sx taom 2"})
+    _m3 = dX.apply("menyu", "INSERT", {"nom": "sx taom 3"})
+tekshir("sinx: INSERT id juft", _m1 % 2 == 0 and _m2 % 2 == 0 and _m3 % 2 == 0,
+        f"{_m1} {_m2} {_m3}")
+tekshir("sinx: bitta amalda ketma-ket juft id", _m3 - _m2 == 2, f"{_m2} {_m3}")
+teng("sinx: jurnal id'lari ham juft", 0,
+     dX.skalyar("SELECT COUNT(*) FROM ozgarishlar WHERE id%2=1"))
+# toq MAX dan keyin — keyingi juft
+dX.con.execute("INSERT INTO menyu(id,nom) VALUES(?,?)", (_m3 + 5, "toq qator"))
+_m4 = dX.apply("menyu", "INSERT", {"nom": "sx taom 4"})
+teng("sinx: toq MAX dan keyingi juft", _m3 + 6, _m4)
+teng("sinx: juft MAX dan keyingi juft", _m4 + 2,
+     dX.apply("menyu", "INSERT", {"nom": "sx taom 5"}))
+teng("sinx: aniq berilgan id o'zgarmaydi", 999,
+     dX.apply("menyu", "INSERT", {"id": 999, "nom": "sx aniq"}))
+# undo/redo aniq id bilan qayta yozadi — juft id saqlanadi
+dX.undo()
+teng("sinx: undo INSERT ni olib tashladi", None,
+     dX.q1("SELECT 1 FROM menyu WHERE id=999"))
+dX.redo()
+teng("sinx: redo o'sha id bilan qaytardi", "sx aniq",
+     dX.skalyar("SELECT nom FROM menyu WHERE id=999"))
+
+# ── COMMIT dan keyingi ilgak: bitta amal — bitta chaqiruv
+_ilgak = []
+dX.commitdan_keyin.append(lambda: _ilgak.append(1))
+with dX.amal("ilgak"):
+    dX.apply("menyu", "INSERT", {"nom": "sx ilgak 1"})
+    with dX.amal("ichki"):
+        dX.apply("menyu", "INSERT", {"nom": "sx ilgak 2"})
+teng("sinx: ichma-ich amal — ilgak bir marta", 1, len(_ilgak))
+dX.apply("menyu", "INSERT", {"nom": "sx ilgak 3"})
+teng("sinx: mustaqil apply — ilgak chaqirildi", 2, len(_ilgak))
+dX.commitdan_keyin.append(lambda: 1 / 0)
+dX.apply("menyu", "INSERT", {"nom": "sx ilgak 4"})
+tekshir("sinx: ilgak xatosi yozuvni buzmadi",
+        dX.q1("SELECT 1 FROM menyu WHERE nom='sx ilgak 4'") is not None)
+dX.commitdan_keyin.clear()
+
+# ── migratsiya: eski bazada ustun qo'shiladi, tarix «yuborilgan»
+teng("sinx: yangi jurnal qatori sinx=0", 0,
+     dX.skalyar("SELECT sinx FROM ozgarishlar ORDER BY id DESC LIMIT 1"))
+dX.yop()
+_c = _sq.connect(str(_TMP / "bX.db"))
+_c.execute("ALTER TABLE ozgarishlar DROP COLUMN sinx")
+_c.commit()
+_c.close()
+dX = dbm.Db(_TMP / "bX.db", zaxirasiz=True)
+tekshir("sinx: migratsiya ustunni qo'shdi", dX._ustun_bormi("ozgarishlar", "sinx"))
+teng("sinx: eski tarix sinx=1 (D1 ga eksport bilan tushadi)", 0,
+     dX.skalyar("SELECT COUNT(*) FROM ozgarishlar WHERE sinx=0"))
+teng("sinx: pull kursori eksport nuqtasida (eski toq qatorlar qaytmaydi)",
+     str(dX.skalyar("SELECT MAX(id) FROM ozgarishlar WHERE id%2=1")),
+     sinx._meta(dX, sinx.META_OXIRGI))
+dX.con.execute("DELETE FROM meta WHERE kalit=?", (sinx.META_OXIRGI,))
+teng("sinx: kursor yo'q — eng katta toq id dan",
+     dX.skalyar("SELECT MAX(id) FROM ozgarishlar WHERE id%2=1"), sinx._kursor(dX))
+dX.yop()
+
+
+class _SoxtaServer:
+    """`sinx._sorov` o'rniga: Worker protokolini xotirada takrorlaydi."""
+
+    def __init__(self):
+        self.sorovlar = []
+        self.olingan = []
+        self.sozlama = None
+        self.davr = None
+        self.rasm_keldi = {}
+        self.rasm_bor = {"server.jpg": b"SERVER-RASM"}
+        self.toq = []
+        self.sahifa = 2
+        self.rad = set()
+        self.oflayn = False
+        self.rad_et = False
+        self.get = []
+
+    def __call__(self, usul, url, kalit, tana=None, vaqt=30):
+        if self.oflayn:
+            raise sinx.Oflayn("internet yo'q")
+        assert kalit == "maxfiy", kalit
+        qism = _up.urlsplit(url)
+        if usul == "GET":
+            nom = _up.parse_qs(qism.query)["nom"][0]
+            self.get.append(nom)
+            return self.rasm_bor[nom]
+        b = _sj.loads(tana.decode("utf-8"))
+        self.sorovlar.append((qism.path, b))
+        if self.rad_et:
+            return _sj.dumps({"ok": False, "xato": "kalit noto'g'ri"}).encode()
+        if qism.path == "/sinx/push":
+            self.olingan += b["ozgarishlar"]
+            self.sozlama, self.davr = b["sozlama"], b["davr"]
+            for r in b["rasmlar"]:
+                self.rasm_keldi[r["nom"]] = _b64.b64decode(r["data"])
+            return _sj.dumps({"ok": True, "qabul": [
+                q["id"] for q in b["ozgarishlar"]
+                if q["id"] not in self.rad]}).encode()
+        assert qism.path == "/sinx/pull", qism.path
+        dan = b["dan"]
+        qolgan = [q for q in self.toq if q["id"] > dan]
+        qs = qolgan[:self.sahifa]
+        return _sj.dumps({
+            "ok": True, "ozgarishlar": qs,
+            "oxirgi": qs[-1]["id"] if qs else dan,
+            "kop": len(qolgan) > len(qs),
+            "sozlama": {"tg_korilgan_guruhlar": "[-100]",
+                        "tg_rasxod_dan": "2026-10-01 08:00:00"},
+            "rasmlar": sorted(set(self.rasm_bor) | set(self.rasm_keldi)
+                              | {"../yomon.jpg"}),
+        }).encode()
+
+
+def _toq(i, amal, qid, keyin, jadval="menyu"):
+    return {"id": i, "vaqt": "2026-10-02 10:00:00", "guruh_id": f"g{i}",
+            "tavsif": "bot", "jadval": jadval, "qator_id": qid,
+            "amal": amal, "oldin": None,
+            "keyin": _sj.dumps(keyin) if keyin is not None else None,
+            "qaytarilgan": 0, "bekor": 0}
+
+
+def _yuborilmagan(db):
+    return db.skalyar(
+        "SELECT COUNT(*) FROM ozgarishlar WHERE sinx=0 AND id%2=0")
+
+
+_asl_sorov = sinx._sorov
+_srv = _SoxtaServer()
+sinx._sorov = _srv
+try:
+    dY = dbm.Db(_TMP / "bY.db", zaxirasiz=True)
+
+    # ── sozlanmagan — hech narsa qilmaydi
+    teng("sinx: sozlanmagan — holat", "sozlanmagan", sinx.sinxla(dY)["holat"])
+    teng("sinx: sozlanmagan — tarmoqqa chiqilmadi", 0, len(_srv.sorovlar))
+
+    sinx.sozlama_qoy(dY, "https://sinov.workers.dev/", "maxfiy")
+    teng("sinx: url oxiridagi / olib tashlanadi", "https://sinov.workers.dev",
+         sinx.sozlamalar(dY)["url"])
+
+    # ── desktop egalik qiladigan sozlamalar
+    for _k, _v in [("tg_token", "T"), ("rejim", "tun"), ("tg_offset", "5"),
+                   ("tg_rx:123", "{}"), ("dars_tekshirildi", "x"),
+                   ("tg_korilgan_guruhlar", "[]"), ("tg_rasxod_dan", "y")]:
+        dY.sozlama_qoy(_k, _v)
+    dY.con.execute("INSERT INTO davr(oy,holat) VALUES('2026-08','yopilgan')")
+
+    # ── 250 ta mahalliy yozuv + bitta eski toq yozuv (yuborilmaydi)
+    for _i in range(250):
+        dY.apply("menyu", "INSERT", {"nom": f"push taom {_i}"})
+    _eski = dY.skalyar("SELECT MAX(id) FROM ozgarishlar") + 1
+    dY.con.execute(
+        "INSERT INTO ozgarishlar(id,guruh_id,jadval,qator_id,amal) "
+        "VALUES(?,?,?,?,?)", (_eski, "eski", "menyu", 1, "UPDATE"))
+    _juftlar = _yuborilmagan(dY)
+    _rad = dY.skalyar("SELECT MAX(id) FROM ozgarishlar WHERE id%2=0")
+    _srv.rad = {_rad}
+
+    _n = sinx.push(dY, sinx.sozlamalar(dY))
+    _push = [b for y, b in _srv.sorovlar if y == "/sinx/push"]
+    teng("sinx: push — qabul qilinganlar", _juftlar - 1, _n)
+    tekshir("sinx: push — bo'laklarga bo'lindi (≤200)",
+            len(_push) >= 2
+            and max(len(b["ozgarishlar"]) for b in _push) <= sinx.PUSH_QATOR,
+            str([len(b["ozgarishlar"]) for b in _push]))
+    tekshir("sinx: push — faqat juft id",
+            all(q["id"] % 2 == 0 for q in _srv.olingan))
+    tekshir("sinx: push — eski toq qator ketmadi",
+            all(q["id"] != _eski for q in _srv.olingan))
+    _ids = [q["id"] for q in _push[0]["ozgarishlar"]]
+    tekshir("sinx: push — id tartibida", _ids == sorted(_ids))
+    tekshir("sinx: push — sinx ustuni yuborilmaydi",
+            all("sinx" not in q for q in _srv.olingan))
+    tekshir("sinx: push — to'liq qator (keyin JSON bilan)",
+            all({"guruh_id", "jadval", "qator_id", "keyin", "vaqt"} <= set(q)
+                for q in _srv.olingan))
+    teng("sinx: qabul qilingani sinx=1, rad etilgani 0", [_rad],
+         [r["id"] for r in dY.q(
+             "SELECT id FROM ozgarishlar WHERE sinx=0 AND id%2=0")])
+    teng("sinx: desktop sozlamalari filtri", {"tg_token": "T", "rejim": "tun"},
+         {k: v for k, v in _srv.sozlama.items() if k in (
+             "tg_token", "rejim", "tg_offset", "tg_rx:123", "dars_tekshirildi",
+             "tg_korilgan_guruhlar", "tg_rasxod_dan", "sinx_url", "sinx_kalit")})
+    teng("sinx: davr yuborildi", [("2026-08", "yopilgan")],
+         [(r["oy"], r["holat"]) for r in _srv.davr])
+    _srv.rad = set()
+
+    # ── pull: serverning toq qatorlari
+    _srv.toq = [
+        _toq(10001, "INSERT", 10001,
+             {"id": 10001, "nom": "Palov", "tartib": 3, "ochirilgan": 0,
+              "server_ustuni": "e'tiborsiz"}),
+        _toq(10003, "UPDATE", 10001,
+             {"id": 10001, "nom": "Palov (bot)", "tartib": 4, "ochirilgan": 0}),
+        _toq(10005, "INSERT", 10005,
+             {"id": 10005, "nom": "Somsa", "tartib": 5, "ochirilgan": 0}),
+        _toq(10007, "DELETE", 10005, None),
+        _toq(10009, "INSERT", 10009, {"id": 10009, "nom": "x"}, "yoq_jadval"),
+    ]
+    _juft_oldin = dY.skalyar("SELECT COUNT(*) FROM ozgarishlar WHERE id%2=0")
+    _r = sinx.sinxla(dY)
+    teng("sinx: sinxla — ok", "ok", _r["holat"])
+    teng("sinx: pull — 5 qator qo'yildi", 5, _r["ozgardi"])
+    teng("sinx: pull — upsert (oxirgi holat)", ("Palov (bot)", 4),
+         tuple(dY.q1("SELECT nom, tartib FROM menyu WHERE id=10001")))
+    teng("sinx: pull — keyin=None → DELETE", None,
+         dY.q1("SELECT 1 FROM menyu WHERE id=10005"))
+    teng("sinx: pull — qayta log bo'lmadi", _juft_oldin,
+         dY.skalyar("SELECT COUNT(*) FROM ozgarishlar WHERE id%2=0"))
+    teng("sinx: pull — jurnalga sinx=1 bilan",
+         [(i, 1) for i in (10001, 10003, 10005, 10007, 10009)],
+         [tuple(r) for r in dY.q(
+             "SELECT id, sinx FROM ozgarishlar WHERE id>=10001 ORDER BY id")])
+    teng("sinx: pull — meta.sinx_server_oxirgi", "10009",
+         sinx._meta(dY, sinx.META_OXIRGI))
+    teng("sinx: pull — sahifalab (kop)", 3,
+         len([1 for y, b in _srv.sorovlar if y == "/sinx/pull"]))
+    teng("sinx: server sozlamasi olindi", "[-100]",
+         dY.sozlama("tg_korilgan_guruhlar"))
+    teng("sinx: yuborilmagan qolmadi", 0, _yuborilmagan(dY))
+
+    # qayta qo'llash — hech narsa o'zgarmaydi
+    dY.apply("menyu", "UPDATE", {"tartib": 77}, 10001)
+    teng("sinx: qayta qo'llash — 0 ta yangi", 0,
+         sinx.qatorlarni_qoy(dY, _srv.toq))
+    teng("sinx: qayta qo'llash keyingi mahalliy o'zgarishni bosmadi", 77,
+         dY.skalyar("SELECT tartib FROM menyu WHERE id=10001"))
+    teng("sinx: ikkinchi sinxla — o'zgarish yo'q", 0, sinx.sinxla(dY)["ozgardi"])
+    # MAX(menyu.id) = 10001 (10005 o'chirilgan) → keyingi juft 10002.
+    teng("sinx: pull'dan keyin mahalliy id juft va kattaroq", 10002,
+         dY.apply("menyu", "INSERT", {"nom": "pull keyin"}))
+    tekshir("sinx: audit toza (pull keyin)", ledger.audit(dY).toza)
+
+    # ── rasmlar
+    for _nom in ("a.jpg", "b.jpg", "c.jpg", "d.jpg"):
+        (config.MAHSULOT_RASM / _nom).write_bytes(_nom.encode() * 3)
+        dY.apply("item", "INSERT", {"nom": f"mahsulot {_nom}", "rasm": _nom})
+    dY.apply("item", "INSERT", {"nom": "fayli yo'q", "rasm": "yoq.jpg"})
+    _oldin = len(_srv.sorovlar)
+    _r = sinx.sinxla(dY)
+    teng("sinx: rasmlar bilan sinxla ok", "ok", _r["holat"])
+    teng("sinx: yangi rasmlar yuborildi", {"a.jpg", "b.jpg", "c.jpg", "d.jpg"},
+         set(_srv.rasm_keldi))
+    teng("sinx: rasm mazmuni base64 orqali to'g'ri", b"a.jpga.jpga.jpg",
+         _srv.rasm_keldi["a.jpg"])
+    tekshir("sinx: bitta so'rovda ≤3 rasm",
+            all(len(b.get("rasmlar", [])) <= sinx.PUSH_RASM
+                for _, b in _srv.sorovlar[_oldin:]))
+    teng("sinx: server rasmi yuklab olindi", b"SERVER-RASM",
+         (config.MAHSULOT_RASM / "server.jpg").read_bytes())
+    teng("sinx: yomon nomli rasm so'ralmadi", ["server.jpg"], _srv.get)
+    _oldin = len(_srv.sorovlar)
+    sinx.sinxla(dY)
+    teng("sinx: rasm ikkinchi marta yuborilmadi", 0,
+         sum(len(b.get("rasmlar", [])) for _, b in _srv.sorovlar[_oldin:]))
+
+    # ── oflayn va rad
+    dY.apply("menyu", "INSERT", {"nom": "oflayn taom"})
+    _srv.oflayn = True
+    _r = sinx.sinxla(dY)
+    teng("sinx: internet yo'q — holat oflayn", "oflayn", _r["holat"])
+    teng("sinx: oflayn — qator yuborilmagan bo'lib qoldi", 1, _yuborilmagan(dY))
+    _srv.oflayn = False
+    _srv.rad_et = True
+    _r = sinx.sinxla(dY)
+    teng("sinx: server rad etdi — holat xato", "xato", _r["holat"])
+    tekshir("sinx: xato matni bor", "kalit" in _r["xabar"], _r["xabar"])
+    _srv.rad_et = False
+    teng("sinx: tiklangach yuborildi", "ok", sinx.sinxla(dY)["holat"])
+    teng("sinx: hammasi yuborildi", 0, _yuborilmagan(dY))
+    dY.yop()
+
+    # ── fon oqimi: o'z ulanishi, natija qaytaradi
+    dZ = dbm.Db(_TMP / "bZ.db", zaxirasiz=True)
+    sinx.sozlama_qoy(dZ, "https://sinov2.workers.dev", "maxfiy")
+    dZ.apply("menyu", "INSERT", {"nom": "fon taom"})
+    _tayyor = _th.Event()
+    _nat = []
+    _sx = sinx.Sinxronchi(
+        dZ.yol, natija_fn=lambda r: (_nat.append(r), _tayyor.set()),
+        kechikish=0.05)
+    _sx.tetikla()
+    _sx.tetikla()
+    _tayyor.wait(10)
+    _sx.toxtat()
+    teng("sinx: fon oqimi — ok", "ok", _nat[0]["holat"] if _nat else None)
+    teng("sinx: fon oqimi — bitta sinxron (tetiklar birlashdi)", 1, len(_nat))
+    teng("sinx: fon oqimi — UI ulanishida ko'rinadi", 0, _yuborilmagan(dZ))
+    dZ.yop()
+finally:
+    sinx._sorov = _asl_sorov
+
+
 # ═════════════════════════════════════════════════════════ yakun
 
 dG.yop(); dS.yop(); dR.yop(); dK.yop(); dO.yop(); d.yop(); d2.yop(); d3.yop(); dU.yop(); d8.yop(); d9.yop(); dA.yop(); dB.yop(); dC.yop(); dD.yop(); dT.yop(); dT2.yop()

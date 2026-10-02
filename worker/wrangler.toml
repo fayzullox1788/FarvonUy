@@ -1,0 +1,13 @@
+name = "farvonuy-bot"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[triggers]
+crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "farvonuy"
+database_id = "f2e2dbdb-7144-41a2-a9df-15ae451acc71"
+
+# Maxfiylar (wrangler secret put): SINX_KALIT, TG_MAXFIY

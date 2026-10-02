@@ -76,6 +76,9 @@ class Db:
         # to'satdan yopilgan bo'lsa WAL tiklanishi bir necha yuz millisekund
         # oladi — o'sha paytda ochilsa, kutmasa jimgina o'lib qolardi.
         self.con.execute("PRAGMA busy_timeout=5000")
+        # COMMIT dan keyin chaqiriladigan funksiyalar (sinxron shu bilan
+        # uyg'otiladi). Xatosi yozuvni buzmaydi — `_commitdan_keyin()`.
+        self.commitdan_keyin: list = []
         self._migratsiya()
         if yangi:
             self._boshlangich()
@@ -121,6 +124,8 @@ class Db:
         # Pul qayerdan chiqdi / qayerga tushdi: NULL — naqd (2026-10-01).
         ("rasxod", "karta_id", "INTEGER REFERENCES karta(id)"),
         ("kirim", "karta_id", "INTEGER REFERENCES karta(id)"),
+        # Serverga (Cloudflare D1) yuborildimi: 1 — yuborilgan (`sinx.py`).
+        ("ozgarishlar", "sinx", "INTEGER NOT NULL DEFAULT 0"),
     ]
 
     def _migratsiya(self) -> None:
@@ -132,6 +137,20 @@ class Db:
         for jadval, ustun, tur in self.YANGI_USTUNLAR:
             if not self._ustun_bormi(jadval, ustun):
                 self.con.execute(f"ALTER TABLE {jadval} ADD COLUMN {ustun} {tur}")
+                if (jadval, ustun) == ("ozgarishlar", "sinx"):
+                    # Ustungacha bo'lgan butun tarix D1 ga boshlang'ich
+                    # eksport bilan (`tools/d1_eksport.py`) tushadi — uni
+                    # qayta yuborish serverdagi yangi holatni eski
+                    # qiymat bilan bosib ketardi.
+                    self.con.execute("UPDATE ozgarishlar SET sinx=1")
+                    # Pull ham shu nuqtadan boshlansin: eksportdagi eski
+                    # toq id'li qatorlar qayta qo'yilsa, keyingi juft
+                    # yozuvlar eski holatga qaytib qolardi.
+                    self.con.execute(
+                        "INSERT OR REPLACE INTO meta(kalit,qiymat) VALUES("
+                        "'sinx_server_oxirgi',"
+                        " (SELECT COALESCE(MAX(id),0) FROM ozgarishlar"
+                        "  WHERE id%2=1))")
 
         self._vazifa_turlarini_ek()
         self._navbatni_ek()
@@ -318,6 +337,25 @@ class Db:
         r = self.q1("SELECT holat FROM davr WHERE oy=?", oy)
         return bool(r and r["holat"] == "yopilgan")
 
+    def juft_id(self, jadval: str) -> int:
+        """Keyingi JUFT id: `MAX(id)` dan katta eng kichik juft son.
+
+        Desktop faqat juft, Cloudflare Worker faqat toq id beradi —
+        ikkalasi oflayn yozadi va sinxronda birlamchi kalit
+        to'qnashmaydi. Bitta tranzaksiyada ketma-ket INSERT ham to'g'ri:
+        SQLite yozuvni darhol qo'yadi, keyingi `MAX(id)` uni ko'radi.
+        """
+        m = self.skalyar(f"SELECT MAX(id) FROM {jadval}", birlamchi=0)
+        n = int(m) + 1
+        return n + 1 if n % 2 else n
+
+    def _commitdan_keyin(self) -> None:
+        for f in list(self.commitdan_keyin):
+            try:
+                f()
+            except Exception:
+                pass
+
     def _qulfni_tekshir(self, jadval: str, data: dict, eski: dict | None) -> None:
         if jadval not in ("kirim", "rasxod", "qarz", "hisob_kitob",
                           "tashqi_qarz", "tashqi_tolov", "tashqi_ulush",
@@ -362,6 +400,8 @@ class Db:
             raise
         else:
             self.con.execute("COMMIT")
+            self._guruh = None
+            self._commitdan_keyin()
         finally:
             self._guruh = None
 
@@ -391,6 +431,8 @@ class Db:
             self._qulfni_tekshir(jadval, data, eski)
 
             if amal == "INSERT":
+                if data.get("id") is None:
+                    data["id"] = self.juft_id(jadval)
                 ustunlar = list(data)
                 sql = (f"INSERT INTO {jadval}({','.join(ustunlar)}) "
                        f"VALUES({','.join('?' * len(ustunlar))})")
@@ -423,9 +465,9 @@ class Db:
                 raise Xato(f"noma'lum amal: {amal}")
 
             self.con.execute(
-                "INSERT INTO ozgarishlar(guruh_id,tavsif,jadval,qator_id,amal,oldin,keyin)"
-                " VALUES(?,?,?,?,?,?,?)",
-                (guruh, tavsif, jadval, qator_id, amal,
+                "INSERT INTO ozgarishlar(id,guruh_id,tavsif,jadval,qator_id,amal,"
+                "oldin,keyin) VALUES(?,?,?,?,?,?,?,?)",
+                (self.juft_id("ozgarishlar"), guruh, tavsif, jadval, qator_id, amal,
                  json.dumps(eski, ensure_ascii=False) if eski else None,
                  json.dumps(keyin, ensure_ascii=False) if keyin else None))
         except Exception:
@@ -435,6 +477,7 @@ class Db:
         else:
             if mustaqil:
                 self.con.execute("COMMIT")
+                self._commitdan_keyin()
         return qator_id
 
     def _ustun_bormi(self, jadval: str, ustun: str) -> bool:
