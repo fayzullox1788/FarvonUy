@@ -20,6 +20,7 @@
   font-size: 14.5px; font-weight: 500; color: var(--matn);
 }
 .sz-menyu-q > span { flex: 1; }
+.sz-menyu-q .sz-menyu-qiymat { font-style: normal; font-weight: 600; font-size: 14px; color: var(--matn); white-space: nowrap; }
 .sz-menyu-q svg.ik { color: #3b4657; }
 .sz-menyu-q .ong { color: #6b7585; }
 .sz-menyu-q:active { background: #f6f8fb; }

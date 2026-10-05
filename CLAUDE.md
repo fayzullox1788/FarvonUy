@@ -476,6 +476,17 @@ Karta o'chirilsa qoldig'i naqdga qaytadi (o'tkazmasiz, undo bilan).
 Tanlagich — `widgets.HamyonTanla` (RasxodDialog, Bugun tezkor qo'shish,
 KirimDialog); odam almashsa `odam_qoy()`. Bot hozircha har doim naqd.
 
+**Hamyon — faqat qo'ldagi HAMMA pul** (2026-10-03, foydalanuvchi so'ragan:
+uch kishining puli jismonan asosiy odamning qo'lida; «faqat naqd va kartada
+qancha — boshqa hech narsa»). `hamyon.umumiy()`: jami = `SUM(v_balans.naqd)`,
+kartalar — hammaniki, naqd — qolgani. Desktop varag'ida Naqd, Kartalar va kichikroq «Jami»
+(naqd + kartalar, ustun 2:2:1), «Kim:» tanlagichi yo'q; yangi karta/o'tkazma — asosiy
+odamniki. Adolat/«meniki»/«kimniki» bu varaqqa QO'SHILMASIN (bir marta
+qo'shilib, foydalanuvchi olib tashlatgan). Mini App'da `umumiy` faqat asosiy
+odamga (u ko'radigan hamyon shu), boshqalar o'z pulini ko'radi. JS egizagi
+`worker/src/hamyon.js`, parity — `test/miniapp_sz_tolov.test.js`. Mini App'da
+bo'lim nomi «Hamyon» (avval «To'lov usullari»), Sozlamalar menyusida yonida jami.
+
 ## Varaqlar nomi (2026-09-30)
 
 Menyuda `MahsulotSahifa` — **«Kategoriyalar»** (kategoriya daraxti +
@@ -620,6 +631,22 @@ Qoida FAQAT bitta joyda tuziladi — `VazifaDialog` dagi «Takrorlansin».
 ikkinchi yaratish shakli qo'yilsa ikkalasi jimgina bir-biridan
 ajralib ketardi. Navbatli (ovqat) turda karta umuman chiqmaydi —
 u allaqachon aylanma jadval.
+
+### Namoz vaqti — `vz.takror_vaqt_qoy()`
+
+«Asr endi 16:30» — qoidaning `vaqt` i VA `dan` kunidan keyingi barcha
+OCHIQ kunlar JOYIDA yangilanadi. O'chirib-qayta-to'ldirish QILINMAYDI:
+`takror_toldir` o'chirilgan kalitni tiriltirmaydi, ya'ni kelajakdagi
+kunlar jimgina yo'qolardi (eski `takror_tahrir` aynan shu sabab
+ishlatilmaydi). O'qilgan/qazo kun tegilmaydi. Joylari: Mini App
+(«Namoz» filtri → «Namoz vaqtlari», vazifa ⋮ → «Vaqtini o'zgartirish»,
+Sozlamalar → Vazifalar «keyingi barcha kunlarga ham»), desktop
+VazifaDialog (takroriy kunda) va takror kartasidagi 🕐.
+
+`toifa='namoz'` (vazifa yoki `vazifa_takror`) bo'lsa — `namozmi()` True,
+nomidan qat'i nazar. Mini App'da namoz har doim «Namoz» toifasi,
+«Shaxsiy» emas. `vazifa_takror.toifa` takrordan chiqqan kunlarga ko'chadi
+(D1 ustuni: `tools/namoz_yoq.sh`).
 
 ### Namoz qazosi — `vz.qazo_qil()`
 
@@ -1068,3 +1095,31 @@ ekiladi: bayroq `meta.vazifa_turi_ekildi` da turadi. Bayroqni olib
 tashlasangiz foydalanuvchi o'chirgan turlar qayta tiriladi — shuning
 uchun u bor. `_boshlangich()` da emas, chunki u faqat YANGI bazaga
 ishlaydi, jadval esa mavjud bazalarga keyin qo'shilgan.
+
+## Demo rejim — taqdimot uchun soxta ma'lumot (2026-10-05)
+
+**Desktop:** yon panel pastidagi «Demo rejim» tugmasi `DATA/demo.yoq`
+bayrog'ini qo'yadi/oladi va dasturni qayta ochadi. Bayroq bo'lsa
+`config.DEMO=True`: baza, zaxira, cheklar, rasmlar `DATA/demo/` da
+(`src/demo.py` quradi — uch soxta odam, ~1,5 oylik kirim/rasxod, kartalar,
+qarzlar, oylik reja, shu hafta vazifalari; hammasi `core/` funksiyalari
+orqali, audit toza). Sinxron demo paytida o'chiq (`sinx.sozlamalar`),
+`xabarchi.py` har doim `config.HAQIQIY_DB` ni ochadi. `demo.qur()` faqat
+`DEMO_PAPKA` ichiga yozadi (`_xavfsiz_yol`). Qo'lda:
+`py -3.14 src\demo.py yoq|ochir|qayta|holat`.
+
+**Mini App / bot:** holat SERVERDA, har odamga alohida —
+`sozlama.miniapp_demo:<odam_id>` haqiqiy D1 da (`worker/src/demo.js`,
+texnik holat, jurnalsiz). Almashtirish: botda `/demo` (`/demo on|off`,
+`tg_menyu.matn_keldi`) yoki Mini App → Sozlamalar → «Demo rejim»
+(`/app/api/demo`). Yoqiq bo'lsa `miniapp.ishla` odamni HAQIQIY bazada
+tekshiradi, keyin `db` ni `env.DEMO_DB` (D1 `farvonuy_demo`) ga
+almashtiradi, odam = demo bazaning asosiy odami. Bot shaxsiy chati ham
+(menyu javoblari, «Rasxod yozish» va `rx:` tugmalari) demo bazadan —
+`xabar._bittasini_ishla(..., {demoDb})`; `/demo` o'zi HAQIQIY bazada
+ishlanadi (demo bazaga o'tishdan oldin). Demo yoqiq odamning shaxsiy
+chatiga eslatma YUBORILMAYDI va belgilanmaydi (`yubor_kutilayotgan`) —
+demo o'chgach yuboriladi. Guruh xabarlari, cron, eslatma tugmalari
+(`bajar:` va h.k.) — haqiqiy bazada. Demo D1 ni yaratish/
+yangilash va deploy — `bash tools/demo_d1.sh` (foydalanuvchi ishga
+tushiradi). Binding ulanmagan bo'lsa API 503 beradi.

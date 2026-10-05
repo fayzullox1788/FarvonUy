@@ -20,3 +20,10 @@ database_name = "farvonuy"
 database_id = "f2e2dbdb-7144-41a2-a9df-15ae451acc71"
 
 # Maxfiylar (wrangler secret put): SINX_KALIT, TG_MAXFIY
+
+# Demo rejim (Mini App → Sozlamalar → «Demo rejim»): soxta ma'lumotli
+# alohida baza. Yaratish va to'ldirish: bash tools/demo_d1.sh
+# [[d1_databases]]
+# binding = "DEMO_DB"
+# database_name = "farvonuy_demo"
+# database_id = ""

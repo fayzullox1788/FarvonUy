@@ -63,9 +63,10 @@
     ["kategoriyalar", "Kategoriyalar", ikon(`<rect x="3.5" y="3.5" width="17" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/><path d="M7 7h.01M17 7h-6"/>`)],
     ["vazifalar", "Vazifalar", ikon(`<rect x="4.5" y="4" width="15" height="17" rx="2.5"/><path d="M9 3v2.5h6V3M8.5 12.5l2.3 2.3 4.7-4.8"/>`)],
     ["mahsulotlar", "Mahsulotlar", ikon(`<path d="M3.5 8.5h17v10a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-10Z"/><path d="M3.5 8.5 5.5 4h13l2 4.5M12 4v4.5M9.5 12.5h5"/>`)],
-    ["tolov", "To‘lov usullari", ikon(`<rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19M6.5 15h4"/>`)],
+    ["tolov", "Hamyon", ikon(`<rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19M6.5 15h4"/>`)],
     ["reja", "Reja (budget)", ikon(`<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M8 3v4M16 3v4M3.5 10h17"/><path d="M12 13v2.5l1.6 1"/>`)],
     ["bildirishnoma", "Bildirishnomalar", ikon(`<path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/>`)],
+    ["demo", "Demo rejim", ikon(`<rect x="3" y="4.5" width="18" height="12" rx="2"/><path d="M8.5 20.5h7M12 16.5v4M10 8.5l4 2-4 2Z"/>`)],
     ["ilova", "Ilova sozlamalari", ikon(`<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/>`)],
   ];
 
@@ -240,6 +241,7 @@
     if (!korinadimi()) return;
     const s = joriy();
     S().innerHTML = s.t === "bosh" ? boshEkran() : s.t === "royxat" ? royxatEkran() : katEkran(s.id);
+    if (s.t === "bosh") hamyonJami();
     xeshYoz();
     oynaChiz();
     tgOrqa();
@@ -248,7 +250,15 @@
   function boshEkran() {
     return `<div class="sz-bosh"><h1>Sozlamalar</h1></div>
       <div class="sz-menyu">${MENYU.map(([k, nom, ik]) =>
-        `<button class="sz-menyu-q${k === "kategoriyalar" ? " faol" : ""}" data-menyu="${k}">${ik}<span>${nom}</span>${IK.ong}</button>`).join("")}</div>`;
+        `<button class="sz-menyu-q${k === "kategoriyalar" ? " faol" : ""}" data-menyu="${k}">${ik}<span>${nom}</span>${
+          k === "tolov" ? `<em class="sz-menyu-qiymat" id="sz-hamyon-jami"></em>` : ""}${
+          k === "demo" ? `<em class="sz-menyu-qiymat">${window.FarvonDemo && window.FarvonDemo.yoqiq ? "Yoqiq" : "O‘chiq"}</em>` : ""}${IK.ong}</button>`).join("")}</div>`;
+  }
+  /** «Hamyon» qatorida jami pul — sz_tolov.js dan (u hali yuklanmagan bo'lsa jim). */
+  function hamyonJami() {
+    const f = window.SozlamaJami;
+    if (!f) return;
+    f().then((m) => { const x = document.getElementById("sz-hamyon-jami"); if (x && m) x.textContent = m; }).catch(() => {});
   }
 
   function qatorlar(royxat) {
@@ -395,6 +405,8 @@
   S().addEventListener("click", (ev) => {
     const t = ev.target.closest("button"); if (!t) return;
     if (t.dataset.menyu) {
+      // Demo rejim — soxta ma'lumot bilan taqdimot (index.html dagi FarvonDemo).
+      if (t.dataset.menyu === "demo") { tebran("soft"); if (window.FarvonDemo) window.FarvonDemo.almashtir(); return; }
       if (t.dataset.menyu === "kategoriyalar") { stek.push({ t: "royxat" }); chiz(); tebran("soft"); if (!daraxt) yukla(); return; }
       // Boshqa bo'limlar o'z faylida: window.SozlamaBolimi[<kalit>] = () => ochish.
       // Kalitlar — MENYU dagi: profil, azolar, vazifalar, mahsulotlar, tolov, reja, bildirishnoma, ilova.

@@ -93,12 +93,24 @@ def eksport_papkasi() -> Path:
 
 
 DATA = _malumot_papkasi()
-DB_YOL = DATA / "farvonuy.db"
-ZAXIRA = DATA / "zaxira"          # avtomatik backuplar
-CHEKLAR = DATA / "cheklar"        # chek rasmlari
-MAHSULOT_RASM = DATA / "mahsulot_rasm"   # mahsulot rasmlari
-EKSPORT = DATA / "eksport"        # hisobotlar
+
+# Demo rejim: `demo.yoq` fayli bor bo'lsa dastur HAQIQIY baza o'rniga
+# `demo/` papkadagi soxta ma'lumotli bazani ochadi (src/demo.py quradi).
+# Zaxira, cheklar, rasmlar ham o'sha papkada — haqiqiy fayllarga tegilmaydi,
+# server bilan sinxron ham o'chiq (sinx.sozlamalar).
+DEMO_BAYROQ = DATA / "demo.yoq"
+DEMO_PAPKA = DATA / "demo"
+DEMO = DEMO_BAYROQ.exists()
+_ISH = DEMO_PAPKA if DEMO else DATA
+_ISH.mkdir(parents=True, exist_ok=True)
+
+DB_YOL = _ISH / "farvonuy.db"
+ZAXIRA = _ISH / "zaxira"          # avtomatik backuplar
+CHEKLAR = _ISH / "cheklar"        # chek rasmlari
+MAHSULOT_RASM = _ISH / "mahsulot_rasm"   # mahsulot rasmlari
+EKSPORT = _ISH / "eksport"        # hisobotlar
 LOG_YOL = DATA / "farvonuy.log"
+HAQIQIY_DB = DATA / "farvonuy.db"
 
 for _p in (ZAXIRA, CHEKLAR, MAHSULOT_RASM, EKSPORT):
     _p.mkdir(parents=True, exist_ok=True)

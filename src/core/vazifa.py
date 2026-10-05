@@ -710,14 +710,27 @@ QAZO_QOSHIMCHA = "qazosini o'qish"
 QAZO_BELGI = "qazo"
 
 
+def _qator_ol(v, ustun: str):
+    """sqlite3.Row'da ustun bo'lmasa ham yiqilmaydi (takror qoidasida
+    `manba` yo'q, eski bazada `toifa` yo'q)."""
+    try:
+        return v[ustun]
+    except (IndexError, KeyError):
+        return None
+
+
 def qazo_ishimi(v) -> bool:
-    return str(v["manba"] or "").startswith(f"{QAZO_BELGI}:") if v else False
+    return (str(_qator_ol(v, "manba") or "").startswith(f"{QAZO_BELGI}:")
+            if v else False)
 
 
 def namozmi(v) -> bool:
     """Bu vazifa namozmi (qazo ishining o'zi emas)."""
     if not v or qazo_ishimi(v):
         return False
+    # Qo'lda «Namoz» toifasi tanlangan bo'lsa — nomi nima bo'lishidan qat'i nazar.
+    if _qator_ol(v, "toifa") == "namoz":
+        return True
     sozlar = str(v["nom"] or "").lower().replace("'", " ").split()
     return any(s.startswith(n) for s in sozlar for n in NAMOZ_SOZLAR)
 
@@ -1103,14 +1116,16 @@ def takror_toldir(db, bugun=None, ufq: int = TAKROR_UFQ) -> int:
                 "nom": t["nom"], "odam_id": t["odam_id"],
                 "sana": kun.isoformat(), "vaqt": t["vaqt"],
                 "davomiylik": t["davomiylik"], "holat": OCHIQ,
-                "izoh": t["izoh"], "manba": kalit})
+                "izoh": t["izoh"], "manba": kalit,
+                "toifa": _qator_ol(t, "toifa")})
     return len(yoziladi)
 
 
 def takror_qosh(db, nom: str, odam_id: int, vaqt: str | None = None,
                 davomiylik: int = 60, naqsh: str = NAQSH_KUNLIK,
                 kunlar=None, oraliq: int = 1, izoh: str | None = None,
-                boshlanish=None, tugash=None, bugun=None) -> int:
+                boshlanish=None, tugash=None, bugun=None,
+                toifa: str | None = None) -> int:
     """Yangi takror qoidasi - va o'sha zahoti birinchi kunlar.
 
     Qoida va undan chiqqan kunlar BITTA amal: foydalanuvchi
@@ -1120,6 +1135,8 @@ def takror_qosh(db, nom: str, odam_id: int, vaqt: str | None = None,
                           kunlar, oraliq,
                           boshlanish or (bugun or date.today()), tugash)
     d["izoh"] = (izoh or "").strip() or None
+    if toifa:
+        d["toifa"] = toifa
     with db.amal(f"Takroriy vazifa: {d['nom']}"):
         tid = db.apply("vazifa_takror", "INSERT", d)
         takror_toldir(db, bugun)
@@ -1165,6 +1182,51 @@ def takror_tahrir(db, takror_id: int, bugun=None, **maydonlar) -> None:
         db.apply("vazifa_takror", "UPDATE", d, takror_id)
         _takror_kelajagini_ochir(db, takror_id, bugun)
         takror_toldir(db, bugun)
+
+
+def takror_vaqt_qoy(db, takror_id: int, vaqt: str | None,
+                    dan=None) -> int:
+    """Qoidaning vaqtini o'zgartiradi - `dan` kunidan KEYINGI BARCHA kunlar
+    uchun («Asr endi 16:30»). Qaytaradi: nechta kun yangilandi.
+
+    Kunlar o'chirib qayta yozilMAYDI, joyida yangilanadi: to'ldirish
+    o'chirilgan kalitni qayta tiriltirmaydi (`takror_toldir`), ya'ni
+    o'chirib-yozish kelajakdagi kunlarni jimgina yo'qotardi.
+
+    Faqat hali OCHIQ kunlar: o'qilgan/qazo bo'lgan namozning vaqti
+    tarix - u o'sha vaqtda o'qilgan.
+    """
+    t = takror_bitta(db, takror_id)
+    if not t:
+        raise ValueError("Takroriy vazifa topilmadi")
+    _, _, vaqt, _ = _tekshir(db, t["nom"], t["odam_id"], date.today(),
+                             vaqt, t["davomiylik"])
+    d0 = _sana(dan or date.today()).isoformat()
+    qatorlar = db.q(
+        "SELECT id, vaqt FROM vazifa WHERE ochirilgan=0 AND holat=?"
+        " AND sana>=? AND manba LIKE ?",
+        OCHIQ, d0, f"{TAKROR_BELGI}:{int(takror_id)}:%")
+    if t["vaqt"] == vaqt and all(r["vaqt"] == vaqt for r in qatorlar):
+        return 0
+    with db.amal(f"{t['nom']}: vaqti {vaqt or 'vaqtsiz'} ({d0} dan)"):
+        if t["vaqt"] != vaqt:
+            db.apply("vazifa_takror", "UPDATE", {"vaqt": vaqt}, takror_id)
+        n = 0
+        for r in qatorlar:
+            if r["vaqt"] != vaqt:
+                db.apply("vazifa", "UPDATE", {"vaqt": vaqt}, r["id"])
+                n += 1
+    return n
+
+
+def namoz_takrorlari(db, odam_id: int | None = None) -> list:
+    """Namoz qoidalari, vaqt bo'yicha (Bomdod → Xufton)."""
+    natija = [t for t in takrorlar(db)
+              if namozmi(t)]
+    if odam_id is not None:
+        natija = [t for t in natija if t["odam_id"] == odam_id]
+    return sorted(natija, key=lambda t: (_daqiqa(t["vaqt"]) is None,
+                                         _daqiqa(t["vaqt"]) or 0, t["id"]))
 
 
 def takror_ochir(db, takror_id: int, bugun=None) -> int:

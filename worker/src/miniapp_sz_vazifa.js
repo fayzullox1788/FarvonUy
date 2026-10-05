@@ -9,7 +9,8 @@
 //   POST …/vazifa                {nom, odam_id, sana, vaqt, davomiylik, izoh,
 //                                 takror?: {naqsh, kunlar, oraliq}, navbat?: {tur_id, kunlar}}
 //        → qosh | takror_qosh | navbat_biriktir (VazifaDialog._saqla kabi)
-//   POST …/vazifa/<id>           {nom?, odam_id?, sana?, vaqt?, davomiylik?, izoh?} → tahrir
+//   POST …/vazifa/<id>           {nom?, odam_id?, sana?, vaqt?, davomiylik?, izoh?, hammasi?} → tahrir
+//                                hammasi + vaqt (takror): qoida va shu kundan keyingi barcha kunlar
 //   POST …/vazifa/<id>/ochir     → shu kun (ochir)
 //   POST …/vazifa/<id>/takror-ochir → qoidani bugundan to'xtatish (takror_ochir)
 //   GET  …/vazifa/<id>/navbat?odam=  → almashuv oldindan (almashtirish_rejasi)
@@ -234,7 +235,12 @@ export async function ishla(req, url, yol, db, odam) {
         }
         if ("sana" in m && !SANA.test(String(m.sana || ""))) return xato("Sana noto'g'ri");
         if ("vaqt" in m) m.vaqt = m.vaqt || null;
-        await vz.tahrir(db, id, m);
+        const t = "vaqt" in m && b.hammasi ? await vz.takror_egasi(db, v) : null;
+        if (t) {
+          await vz.takror_vaqt_qoy(db, t.id, m.vaqt, v.sana);
+          delete m.vaqt;
+        }
+        if (Object.keys(m).length) await vz.tahrir(db, id, m);
         return json({ ok: true });
       }
       if (amal === "ochir" && qism.length === 3) {

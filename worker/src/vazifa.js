@@ -211,6 +211,8 @@ export function qazo_ishimi(v) {
 // vazifa.py:717
 export function namozmi(v) {
   if (!v || qazo_ishimi(v)) return false;
+  // Qo'lda «Namoz» toifasi tanlangan bo'lsa — nomi nima bo'lishidan qat'i nazar.
+  if (v.toifa === "namoz") return true;
   const sozlar = String(v.nom || "").toLowerCase().replaceAll("'", " ").split(/\s+/).filter(Boolean);
   return sozlar.some((s) => NAMOZ_SOZLAR.some((n) => s.startsWith(n)));
 }
@@ -374,7 +376,7 @@ export async function takror_toldir(db, bugun = null, ufq = TAKROR_UFQ, { a = nu
     await a.apply("vazifa", "INSERT", {
       nom: t.nom, odam_id: t.odam_id, sana: k, vaqt: t.vaqt,
       davomiylik: t.davomiylik, holat: OCHIQ, izoh: t.izoh, manba: kalit,
-      yaratilgan: yar,
+      toifa: t.toifa ?? null, yaratilgan: yar,
     });
   }
   if (oz) await a.commit();
@@ -778,11 +780,12 @@ export function takror_tavsif(t) {
 // vazifa.py:1110 — kwargs → obyekt. Qoida va undan chiqqan kunlar BITTA amal.
 export async function takror_qosh(db, nom, odam_id, {
   vaqt: vaqt_ = null, davomiylik = 60, naqsh = NAQSH_KUNLIK, kunlar = null, oraliq = 1,
-  izoh = null, boshlanish = null, tugash = null, bugun = null,
+  izoh = null, boshlanish = null, tugash = null, bugun = null, toifa = null,
 } = {}) {
   const d = await _takrorni_tekshir(db, nom, odam_id, vaqt_, davomiylik, naqsh, kunlar, oraliq,
     boshlanish || bugun || vaqt.bugun(), tugash);
   d.izoh = String(izoh ?? "").trim() || null;
+  if (toifa) d.toifa = toifa;
   const a = db.amal(`Takroriy vazifa: ${d.nom}`);
   const yar = vaqt.hozirStr();
   const tid = await a.apply("vazifa_takror", "INSERT", { ...d, yaratilgan: yar });
@@ -799,7 +802,7 @@ export async function takror_qosh(db, nom, odam_id, {
       if (bor.has(kalit)) continue;
       await a.apply("vazifa", "INSERT", {
         nom: d.nom, odam_id: d.odam_id, sana: k, vaqt: d.vaqt, davomiylik: d.davomiylik,
-        holat: OCHIQ, izoh: d.izoh, manba: kalit, yaratilgan: yar,
+        holat: OCHIQ, izoh: d.izoh, manba: kalit, toifa: d.toifa ?? null, yaratilgan: yar,
       });
     }
   }
@@ -816,6 +819,36 @@ async function _takror_kelajagini_ochir(db, a, takror_id, bugun = null) {
     OCHIQ, d0, `${TAKROR_BELGI}:${Math.trunc(Number(takror_id))}:%`);
   for (const r of qatorlar) await a.apply("vazifa", "DELETE", {}, r.id);
   return qatorlar.length;
+}
+
+// vazifa.py — takror_vaqt_qoy: qoida + `dan` kunidan keyingi BARCHA ochiq kunlar,
+// joyida (o'chirib-yozish emas: to'ldirish o'chirilgan kalitni tiriltirmaydi).
+export async function takror_vaqt_qoy(db, takror_id, vaqt_, dan = null) {
+  const t = await takror_bitta(db, takror_id);
+  if (!t) throw new Error("Takroriy vazifa topilmadi");
+  [, , vaqt_] = await _tekshir(db, t.nom, t.odam_id, vaqt.bugun(), vaqt_, t.davomiylik);
+  const d0 = _sana(dan || vaqt.bugun());
+  const qatorlar = await db.q(
+    "SELECT id, vaqt FROM vazifa WHERE ochirilgan=0 AND holat=? AND sana>=? AND manba LIKE ?",
+    OCHIQ, d0, `${TAKROR_BELGI}:${Math.trunc(Number(takror_id))}:%`);
+  if (t.vaqt === vaqt_ && qatorlar.every((r) => r.vaqt === vaqt_)) return 0;
+  const a = db.amal(`${t.nom}: vaqti ${vaqt_ || "vaqtsiz"} (${d0} dan)`);
+  if (t.vaqt !== vaqt_) await a.apply("vazifa_takror", "UPDATE", { vaqt: vaqt_ }, t.id);
+  let n = 0;
+  for (const r of qatorlar) {
+    if (r.vaqt === vaqt_) continue;
+    await a.apply("vazifa", "UPDATE", { vaqt: vaqt_ }, r.id);
+    n++;
+  }
+  await a.commit();
+  return n;
+}
+
+// vazifa.py — namoz_takrorlari: namoz qoidalari, vaqt bo'yicha.
+export async function namoz_takrorlari(db, odam_id = null) {
+  const r = (await takrorlar(db)).filter((t) => namozmi(t) && (odam_id == null || t.odam_id === odam_id));
+  const k = (t) => (t.vaqt ? _daqiqa(t.vaqt) : 1e9);
+  return r.sort((x, y) => k(x) - k(y) || x.id - y.id);
 }
 
 // vazifa.py:1170

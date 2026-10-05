@@ -1,4 +1,4 @@
-// Mini App Sozlamalar → «To'lov usullari» (miniapp_sz_tolov.js + hamyon.js):
+// Mini App Sozlamalar → «Hamyon» (miniapp_sz_tolov.js + hamyon.js):
 // o'qish va yozish Python `core/hamyon.py` bilan PARITY (natija, qatorlar, jurnal),
 // egalik (faqat o'z kartasi — 403), xato matnlari.
 import { test } from "node:test";
@@ -105,6 +105,24 @@ print(json.dumps(r, ensure_ascii=False))
   // Funksiyalar ham to'g'ridan-to'g'ri (API'siz) bir xil.
   const fid = (await b.db.q1("SELECT id FROM odam WHERE tg_chat=111")).id;
   assert.deepEqual(await hm.hamyon(b.db, fid), kut["111"].h);
+});
+
+test("umumiy pul: faqat asosiy odamga, Python bilan parity, naqd + kartalar = jami", async () => {
+  const b = qur();
+  const kut = pyJson(b.pyPapka, String.raw`
+import json
+from core import hamyon, plan
+print(json.dumps({"u": hamyon.umumiy(db), "asosiy": db.skalyar("SELECT tg_chat FROM odam WHERE id=?", plan.asosiy_odam(db))}, ensure_ascii=False))
+`);
+  const [s, j] = await jsonOl(await b.sor("", { user: { id: Number(kut.asosiy) } }));
+  assert.equal(s, 200);
+  assert.deepEqual(j.umumiy, kut.u);
+  assert.equal(j.umumiy.naqd + j.umumiy.karta, j.umumiy.jami);
+  for (const tg of [111, 222].filter((x) => x !== Number(kut.asosiy))) {
+    const [s2, j2] = await jsonOl(await b.sor("", { user: { id: tg } }));
+    assert.equal(s2, 200);
+    assert.equal(j2.umumiy, undefined, `boshqa odam (${tg}) umumiyni ko'rmaydi`);
+  }
 });
 
 test("egalik: boshqa odamning kartasi va o'tkazmasi — 403, yo'q/o'chirilgan — 404", async () => {

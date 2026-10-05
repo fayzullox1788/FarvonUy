@@ -2,8 +2,12 @@
 //
 //   GET  /app                       — sahifa (worker/app/index.html, ASSETS)
 //   GET  /app/api/vazifalar?sana=   — ochgan odamning shu kungi vazifalari
-//   POST /app/api/vazifa            — yangi vazifa {nom, sana, vaqt, davomiylik, toifa}
-//   POST /app/api/vazifa/<id>       — {amal: bajarildi|ochiq|kechiktir|bekor, daqiqa?}
+//   POST /app/api/vazifa            — yangi vazifa {nom, sana, vaqt, davomiylik, toifa, takror?}
+//                                     takror=true → «har kuni» qoidasi (takror_qosh)
+//   POST /app/api/vazifa/<id>       — {amal: bajarildi|ochiq|kechiktir|bekor|vaqt, daqiqa?,
+//                                      vaqt?, hammasi?} — vaqt+hammasi: qoidaga, keyingi kunlarga ham
+//   GET  /app/api/namozlar          — o'z namoz qoidalari [{id, nom, vaqt}]
+//   POST /app/api/namozlar          — {vaqtlar: {<takror id>: "HH:MM"}} → bugundan keyingi barcha kunlar
 //
 // Kim ekanini Telegram aytadi: har so'rovda `Authorization: tma <initData>`,
 // imzosi bot tokeni bilan tekshiriladi (core.telegram.org/bots/webapps
@@ -12,6 +16,8 @@
 // bo'yicha topiladi — botdagi `_egasimi` bilan bir xil manba. Faqat O'Z
 // vazifalari: boshqa odamning vazifasiga tegish 403.
 
+import { Db } from "./db.js";
+import * as demo from "./demo.js";
 import * as vz from "./vazifa.js";
 import * as vaqt from "./vaqt.js";
 import * as rasxodApi from "./miniapp_rasxod.js";
@@ -24,7 +30,7 @@ import * as tolovApi from "./miniapp_sz_tolov.js";
 import * as rejaApi from "./miniapp_sz_reja.js";
 import * as szVazifaApi from "./miniapp_sz_vazifa.js";
 
-export const TOIFALAR = ["shaxsiy", "uy", "darslar", "boshqa"];
+export const TOIFALAR = ["namoz", "shaxsiy", "uy", "darslar", "boshqa"];
 const IMZO_MUDDATI = 24 * 3600; // soniya
 
 const json = (d, status = 200) => new Response(JSON.stringify(d), {
@@ -73,19 +79,28 @@ export async function odamTop(db, user) {
 
 /** Vazifaning kategoriyasi: qo'lda tanlangan `toifa`, bo'lmasa qoidadan. */
 export function toifaAniqla(v, shaxsiy, uyTurlari) {
+  // Namoz har doim «Namoz» — qo'lda boshqa kategoriya tanlangan bo'lsa ham.
+  if (vz.namozmi(v) || vz.qazo_ishimi(v)) return "namoz";
   if (v.toifa && TOIFALAR.includes(v.toifa)) return v.toifa;
   if (String(v.manba || "").startsWith("dars:")) return "darslar";
-  if (shaxsiy.has(v.nom) || vz.namozmi(v) || vz.qazo_ishimi(v)) return "shaxsiy";
+  if (shaxsiy.has(v.nom)) return "shaxsiy";
   if (uyTurlari.has(v.nom)) return "uy";
   return "boshqa";
 }
 
 async function vazifalar(db, odam, sana) {
-  const [qatorlar, shaxsiy, turlar] = await Promise.all([
+  const [qatorlar, shaxsiy, turlar, qoidalar] = await Promise.all([
     vz.kun(db, sana, odam.id),
     vz.shaxsiy_nomlari(db),
     db.q("SELECT nom FROM vazifa_turi WHERE ochirilgan=0 AND COALESCE(shaxsiy,0)=0"),
+    vz.takrorlar(db),
   ]);
+  const qoida = new Map(qoidalar.map((t) => [t.id, t]));
+  const takrorOl = (v) => {
+    if (!vz.takrorlimi(v)) return null;
+    const t = qoida.get(Number(String(v.manba).split(":")[1]));
+    return t ? { id: t.id, vaqt: t.vaqt, tavsif: vz.takror_tavsif(t) } : null;
+  };
   const uy = new Set(turlar.map((r) => r.nom));
   const h = vaqt.hozir();
   return {
@@ -103,6 +118,7 @@ async function vazifalar(db, odam, sana) {
       izoh: v.izoh,
       kechiktirildi: v.kechiktirildi,
       toifa: toifaAniqla(v, shaxsiy, uy),
+      takror: takrorOl(v),
     })),
   };
 }
@@ -118,8 +134,28 @@ export async function ishla(req, env, db) {
   const initData = sarlavha.startsWith("tma ") ? sarlavha.slice(4) : "";
   const user = await initDataTekshir(initData, token);
   if (!user) return xato("Telegram orqali oching", 401);
-  const odam = await odamTop(db, user);
+  let odam = await odamTop(db, user);
   if (!odam) return xato("Siz uy a'zolari ro'yxatida yo'qsiz. Avval botga /start yozing.", 403);
+  // Demo rejim holati — HAQIQIY bazada (`demo.js`); bot /demo yoki shu yerdan.
+  if (yol === "/app/api/demo") {
+    if (req.method === "POST") {
+      let b = {};
+      try { b = await req.json(); } catch { /* bo'sh — almashtirish */ }
+      const yoq = typeof b.yoq === "boolean" ? b.yoq : !(await demo.yoqiqmi(db, odam.id));
+      await demo.qoy(db, odam.id, yoq);
+      return json({ ok: true, yoqiq: yoq, ulangan: !!env?.DEMO_DB });
+    }
+    return json({ ok: true, yoqiq: await demo.yoqiqmi(db, odam.id), ulangan: !!env?.DEMO_DB });
+  }
+  // Demo yoqilgan bo'lsa: HAQIQIY uy a'zosi tekshirilgach, qolgan hamma
+  // narsa alohida demo D1 dan — o'qish ham, yozish ham. Kirgan odam demo
+  // bazaning asosiy odami bo'lib ko'rinadi.
+  if (await demo.yoqiqmi(db, odam.id)) {
+    if (!env?.DEMO_DB) return xato("Demo baza hali ulanmagan (tools/demo_d1.sh)", 503);
+    db = new Db(env.DEMO_DB);
+    odam = await demo.demoOdam(db);
+    if (!odam) return xato("Demo baza bo'sh", 503);
+  }
   if (yol === "/app/api/rasxod" || yol.startsWith("/app/api/rasxod/")) {
     return (await rasxodApi.ishla(req, db, odam, yol)) || xato("Topilmadi", 404);
   }
@@ -154,13 +190,36 @@ export async function ishla(req, env, db) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(sana)) return xato("Sana noto'g'ri");
       return json(await vazifalar(db, odam, sana));
     }
+    if (req.method === "GET" && yol === "/app/api/namozlar") {
+      const r = await vz.namoz_takrorlari(db, odam.id);
+      return json({ ok: true, namozlar: r.map((t) => ({ id: t.id, nom: t.nom, vaqt: t.vaqt })) });
+    }
 
     if (req.method !== "POST") return xato("Topilmadi", 404);
     let b;
     try { b = await req.json(); } catch { return xato("JSON noto'g'ri"); }
 
+    if (yol === "/app/api/namozlar") {
+      // Faqat O'Z qoidalari; vaqt bugundan keyingi barcha kunlarga yoziladi.
+      const ozi = new Map((await vz.namoz_takrorlari(db, odam.id)).map((t) => [t.id, t]));
+      let n = 0;
+      for (const [k, vq] of Object.entries(b.vaqtlar || {})) {
+        const t = ozi.get(Number(k));
+        if (!t) return xato("Bu namoz sizniki emas", 403);
+        if ((vq || null) === t.vaqt) continue;
+        n += await vz.takror_vaqt_qoy(db, t.id, vq || null);
+      }
+      return json({ ok: true, soni: n });
+    }
+
     if (yol === "/app/api/vazifa") {
       const toifa = TOIFALAR.includes(b.toifa) ? b.toifa : null;
+      if (b.takror) {
+        const takror_id = await vz.takror_qosh(db, b.nom, odam.id, {
+          vaqt: b.vaqt || null, davomiylik: b.davomiylik || 30, boshlanish: b.sana || vaqt.bugun(), toifa,
+        });
+        return json({ ok: true, takror_id });
+      }
       const id = await vz.qosh(db, b.nom, odam.id, b.sana || vaqt.bugun(), b.vaqt || null,
         b.davomiylik || 30, null, toifa);
       return json({ ok: true, id });
@@ -177,6 +236,13 @@ export async function ishla(req, env, db) {
       case "ochiq": await vz.bajar(db, v.id, false); break;
       case "kechiktir": await vz.kechiktir(db, v.id, b.daqiqa || 10); break;
       case "bekor": await vz.ochir(db, v.id); break;
+      case "vaqt": {
+        // hammasi: «Asr endi 16:30» — qoidaga va shu kundan keyingi barcha kunlarga.
+        const t = b.hammasi ? await vz.takror_egasi(db, v) : null;
+        if (t) await vz.takror_vaqt_qoy(db, t.id, b.vaqt || null, v.sana);
+        else await vz.tahrir(db, v.id, { vaqt: b.vaqt || null });
+        break;
+      }
       default: return xato("Noma'lum amal");
     }
     return json({ ok: true });

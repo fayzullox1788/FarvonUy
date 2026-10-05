@@ -54,7 +54,7 @@ test("tg webhook: maxfiy yo'l + sarlavha tekshiriladi, token bilan xabar.bittasi
   assert.equal(b.chaqiruv.length, 0);
   const r = await b.tg(u);
   assert.equal(r.status, 200);
-  assert.deepEqual(b.chaqiruv, [["bittasini_ishla", ["123:ABC", u]]]);
+  assert.deepEqual(b.chaqiruv, [["bittasini_ishla", ["123:ABC", u, { demoDb: null }]]]);
   // Maxfiy sozlanmagan bo'lsa yo'l yopiq.
   b.env.TG_MAXFIY = "";
   assert.equal((await b.tg(u, { yol: "", sarlavha: "" })).status, 404);

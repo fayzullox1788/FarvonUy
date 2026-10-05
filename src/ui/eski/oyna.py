@@ -95,7 +95,8 @@ class Oyna(QMainWindow):
         self._sinxronchi = None
         self._sinx_yangila_kerak = False
         self.bolim = "moliya"
-        self.setWindowTitle(f"{config.APP_NOM} {config.VERSIYA}")
+        self.setWindowTitle(f"{config.APP_NOM} {config.VERSIYA}"
+                            + ("  —  DEMO (soxta ma'lumot)" if config.DEMO else ""))
         self.resize(1280, 860)
         # Eng tor sahifa (Rasxodlar) ~1033px joy so'raydi, yon panel 212px.
         # Minimalni shundan past qo'yish = gorizontal aylantirgich demak.
@@ -164,6 +165,21 @@ class Oyna(QMainWindow):
         yv.addWidget(self.sinx_holat)
         self.sinx_holat.setVisible(False)
 
+        # Taqdimot uchun: haqiqiy ma'lumot o'rniga soxta baza (`demo.py`).
+        # Almashtirish dasturni qayta ochadi — baza yo'li `config` da
+        # import paytida tanlanadi.
+        self.demo_tugma = QPushButton(
+            "  ●   Demo: YOQIQ — o'chirish" if config.DEMO else "  ○   Demo rejim")
+        self.demo_tugma.setObjectName("Nav")
+        self.demo_tugma.setCursor(Qt.PointingHandCursor)
+        self.demo_tugma.setToolTip(
+            "Soxta ma'lumot bilan ko'rsatish. Haqiqiy baza o'zgarmaydi,\n"
+            "server bilan sinxron demo paytida o'chiq.")
+        if config.DEMO:
+            self.demo_tugma.setStyleSheet(f"color: {theme.QIZIL_TUQ}; font-weight: 700;")
+        self.demo_tugma.clicked.connect(self._demo_almashtir)
+        yv.addWidget(self.demo_tugma)
+
         tashqi.addWidget(yon)
 
         # Tanlagichlar sahifani aylantirayotgan g'ildirakni yutmasin.
@@ -187,6 +203,29 @@ class Oyna(QMainWindow):
             self.stek.addWidget(QWidget())
         tashqi.addWidget(self.stek, 1)
         return markaz
+
+    def _demo_almashtir(self):
+        """Demo rejimni yoqadi/o'chiradi va dasturni qayta ochadi."""
+        import os
+        import sys
+        import demo
+        from PySide6.QtCore import QProcess
+        try:
+            if config.DEMO:
+                demo.ochir()
+            else:
+                self.statusBar().showMessage("Demo baza tayyorlanmoqda…")
+                QApplication.processEvents()
+                demo.yoq()
+        except Exception as e:
+            self.statusBar().showMessage(f"Demo rejim almashmadi: {e}")
+            return
+        if getattr(sys, "frozen", False):
+            QProcess.startDetached(sys.executable, sys.argv[1:])
+        else:
+            QProcess.startDetached(sys.executable,
+                                   [os.path.abspath(sys.argv[0])] + sys.argv[1:])
+        QApplication.quit()
 
     # ── bo'limlar ────────────────────────────────────────────────────
 
@@ -288,6 +327,7 @@ class Oyna(QMainWindow):
         # Faqat asosiy odamning (Fayzulloxon) puli; boshqalarda pul
         # bo'lmasa ularning rejaga ulushi ham undan — `plan.qoldagi_pul`.
         qp = plan.qoldagi_pul(self.db)
+        jp = plan.jami_pul(self.db)
         holat = ("✔ kitob teng" if a.toza else "✘ kitob teng emas!")
         rang = theme.YON_KUL if a.toza else theme.QIZIL_TUQ
         self.yon_holat.setText(
@@ -295,6 +335,11 @@ class Oyna(QMainWindow):
             f"<b style='font-size:14px;color:{theme.MATN_OQ}'>"
             f"{money.fmt(qp['qoldi'])}</b> so'm"
             + (f"<br>rejaga band {money.fmt(qp['band'])}" if qp["band"] else "")
+            + "<br><br>"
+            f"Hammaning puli (birga)<br>"
+            f"<b style='font-size:14px;color:{theme.MATN_OQ}'>"
+            f"{money.fmt(jp['qoldi'])}</b> so'm"
+            + (f"<br>rejaga band {money.fmt(jp['band'])}" if jp["band"] else "")
             + "<br><br>"
             f"<span style='color:{rang}'>{holat}</span>")
         self.statusBar().showMessage("Moliya")

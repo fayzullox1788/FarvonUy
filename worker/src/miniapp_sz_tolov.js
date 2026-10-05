@@ -1,6 +1,7 @@
-// Telegram Mini App — Sozlamalar → «To'lov usullari» (desktop «Hamyon»).
+// Telegram Mini App — Sozlamalar → «Hamyon» (desktop «Hamyon»).
 //
 //   GET  /app/api/tolov                        — ochgan odamning hamyoni: jami, naqd, kartalar
+//                                                (+ asosiy odamga `umumiy`: hammaning naqdi va kartalari birga)
 //   GET  /app/api/tolov/karta/<id>             — + bitta karta: qoldig'i va tarixi
 //   POST /app/api/tolov/karta                  — yangi karta {nom, qoldiq}
 //   POST /app/api/tolov/otkazma                — {dan, ga, summa, izoh} (null = naqd)
@@ -21,6 +22,7 @@
 
 import * as hm from "./hamyon.js";
 import * as vaqt from "./vaqt.js";
+import * as plan from "./plan.js";
 
 const json = (d, status = 200) => new Response(JSON.stringify(d), {
   status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
@@ -52,6 +54,9 @@ async function oz_kartasi(db, odam, kid) {
 export async function holat(db, odam, kid = null) {
   const h = await hm.hamyon(db, odam.id);
   const natija = { ok: true, odam: odam.nom, bugun: vaqt.bugun(), hamyon: h };
+  // Uch kishining puli asosiy odamning qo'lida turadi — unga hammaning naqdi va
+  // kartalari birga (faqat ikki raqam); boshqalar faqat o'z pulini ko'radi.
+  if (await plan.asosiy_odam(db) === odam.id) natija.umumiy = await hm.umumiy(db);
   if (kid != null) {
     const k = h.kartalar.find((x) => x.id === kid);
     if (k) natija.karta = { ...k, harakatlar: await hm.harakatlar(db, kid) };

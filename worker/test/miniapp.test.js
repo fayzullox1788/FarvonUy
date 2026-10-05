@@ -75,7 +75,7 @@ test("vazifalar: faqat o'ziniki, kategoriya qoidasi, Toshkent soati", async () =
   assert.equal(j.hozir, "17:20");
   const t = Object.fromEntries(j.vazifalar.map((v) => [v.nom, v.toifa]));
   assert.deepEqual(t, {
-    "Peshin namozi": "shaxsiy", "Matematika": "darslar", "Do'kon hisoboti": "boshqa", "Kitob o'qish": "shaxsiy",
+    "Peshin namozi": "namoz", "Matematika": "darslar", "Do'kon hisoboti": "boshqa", "Kitob o'qish": "shaxsiy",
   });
   assert.equal((await b.sor("/app/api/vazifalar?sana=yomon")).status, 400);
 });
@@ -138,4 +138,89 @@ test("/app sahifani ASSETS dan beradi; /app/api ilova orqali", async () => {
   assert.equal(await r.text(), "<html>ok</html>");
   assert.equal((await app.fetch(new Request("https://w.example/app/api/vazifalar"), env, {})).status, 401);
   assert.equal((await app.fetch(new Request("https://w.example/app"), { DB: b.d1 }, {})).status, 404);
+});
+
+test("namozlar: vaqtini o'zgartirish keyingi barcha kunlarga, faqat o'ziniki", async () => {
+  const b = qur();
+  // Otabekning namozi ham bor — Fayzulloxon unga tega olmaydi.
+  const [, q1] = await jsonOl(await b.sor("/app/api/vazifa", {
+    tana: { nom: "Asr namozi", sana: "2026-10-04", vaqt: "17:00", davomiylik: 5, toifa: "namoz", takror: true } }));
+  assert.ok(q1.takror_id);
+  const [, q2] = await jsonOl(await b.sor("/app/api/vazifa", { user: { id: 222, username: "otabek_33" },
+    tana: { nom: "Asr namozi", sana: "2026-10-04", vaqt: "17:10", davomiylik: 5, takror: true } }));
+  const [, n] = await jsonOl(await b.sor("/app/api/namozlar"));
+  assert.deepEqual(n.namozlar.map((x) => [x.nom, x.vaqt]), [["Asr namozi", "17:00"]]);
+  assert.equal((await b.sor("/app/api/namozlar", { tana: { vaqtlar: { [q2.takror_id]: "16:00" } } })).status, 403);
+
+  const [s, j] = await jsonOl(await b.sor("/app/api/namozlar", { tana: { vaqtlar: { [q1.takror_id]: "16:30" } } }));
+  assert.equal(s, 200, JSON.stringify(j));
+  for (const sana of ["2026-10-04", "2026-10-10", "2026-11-03"]) {
+    const [, k] = await jsonOl(await b.sor(`/app/api/vazifalar?sana=${sana}`));
+    const asr = k.vazifalar.find((v) => v.nom === "Asr namozi");
+    assert.equal(asr.vaqt, "16:30", sana);
+    assert.equal(asr.toifa, "namoz");
+    assert.equal(asr.takror.vaqt, "16:30");
+  }
+
+  // Vazifaning o'zidan: «keyingi kunlarga ham» — o'sha kundan boshlab
+  const [, k5] = await jsonOl(await b.sor("/app/api/vazifalar?sana=2026-10-05"));
+  const id5 = k5.vazifalar.find((v) => v.nom === "Asr namozi").id;
+  await b.sor(`/app/api/vazifa/${id5}`, { tana: { amal: "vaqt", vaqt: "16:15", hammasi: true } });
+  const vq = async (sana) => (await jsonOl(await b.sor(`/app/api/vazifalar?sana=${sana}`)))[1]
+    .vazifalar.find((v) => v.nom === "Asr namozi").vaqt;
+  assert.equal(await vq("2026-10-04"), "16:30");
+  assert.equal(await vq("2026-10-05"), "16:15");
+  assert.equal(await vq("2026-10-20"), "16:15");
+  // faqat shu kun
+  await b.sor(`/app/api/vazifa/${id5}`, { tana: { amal: "vaqt", vaqt: "15:00" } });
+  assert.equal(await vq("2026-10-05"), "15:00");
+  assert.equal(await vq("2026-10-06"), "16:15");
+});
+
+test("demo rejim: holat serverda, yoqilsa hamma narsa DEMO_DB dan, haqiqiysiga tegilmaydi", async () => {
+  const { D1Shim } = await import("./d1shim.js");
+  const { Db } = await import("../src/db.js");
+  const { py } = await import("./fixture.js");
+  const { join } = await import("node:path");
+  const demo = await import("../src/demo.js");
+  const b = qur();
+  py(b.papka, "import demo, config\ndemo.qur(config.DEMO_PAPKA / 'd.db')");
+  const demoD1 = new D1Shim(join(b.papka, "demo", "d.db"));
+  const F = { id: 111, username: "fsultonoov" };
+  const sor = (yol, env, { user = F, tana } = {}) => ma.ishla(new Request("https://w.example" + yol, {
+    method: tana ? "POST" : "GET",
+    headers: { authorization: "tma " + imzola(user), ...(tana ? { "content-type": "application/json" } : {}) },
+    body: tana ? JSON.stringify(tana) : undefined,
+  }), env, b.db);
+  const env = { DEMO_DB: demoD1 };
+
+  // Birlamchi o'chiq — haqiqiy odam.
+  assert.deepEqual((await (await sor("/app/api/demo", env)).json()), { ok: true, yoqiq: false, ulangan: true });
+  assert.equal((await (await sor("/app/api/vazifalar", env)).json()).odam, "Fayzulloxon");
+  // Mini App'dan yoqish.
+  assert.equal((await (await sor("/app/api/demo", env, { tana: { yoq: true } })).json()).yoqiq, true);
+  const [s, j] = await jsonOl(await sor("/app/api/vazifalar", env));
+  assert.equal(s, 200);
+  assert.equal(j.odam, "Sardor");
+  assert.ok(!j.vazifalar.some((v) => /Do'kon|Kitob|namoz/i.test(v.nom)));
+  // Boshqa odamga ta'sir qilmaydi.
+  assert.equal((await (await sor("/app/api/vazifalar", env, { user: { id: 222, username: "otabek_33" } })).json()).odam, "Otabek");
+  // Demo baza ulanmagan bo'lsa — tushunarli xato, haqiqiy ma'lumot EMAS.
+  assert.equal((await sor("/app/api/vazifalar", {})).status, 503);
+  // Demo'da yozilgan vazifa haqiqiy bazaga tushmaydi.
+  const oldin = (await b.db.q1("SELECT count(*) n FROM vazifa")).n;
+  assert.equal((await sor("/app/api/vazifa", env, { tana: { nom: "Demo ish", sana: "2026-10-04", vaqt: "09:00" } })).status, 200);
+  assert.equal((await b.db.q1("SELECT count(*) n FROM vazifa")).n, oldin);
+  assert.ok(await new Db(demoD1).q1("SELECT 1 FROM vazifa WHERE nom='Demo ish'"));
+  // Demo yoqiq paytida ham o'chirish mumkin.
+  assert.equal((await (await sor("/app/api/demo", env, { tana: {} })).json()).yoqiq, false);
+  assert.equal((await (await sor("/app/api/vazifalar", env)).json()).odam, "Fayzulloxon");
+
+  // Bot buyrug'i: /demo — almashtiradi, on/off — aniq; boshqa matn — null.
+  assert.equal(await demo.buyruq(b.db, 1, "/demo"), true);
+  assert.equal(await demo.yoqiqmi(b.db, 1), true);
+  assert.equal(await demo.buyruq(b.db, 1, "/demo"), false);
+  assert.equal(await demo.buyruq(b.db, 1, "/demo on"), true);
+  assert.equal(await demo.buyruq(b.db, 1, "/demo@farvonuy_bot off"), false);
+  assert.equal(await demo.buyruq(b.db, 1, "demo emas"), null);
 });

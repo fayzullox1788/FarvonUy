@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from PySide6.QtCore import QSignalBlocker, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QFormLayout,
                                QGridLayout, QInputDialog, QLabel, QLineEdit,
                                QVBoxLayout, QWidget)
@@ -19,7 +19,7 @@ from ui.eski import theme
 from ui.eski.dialogs import (KirimDialog, RasxodDialog, tasdiq,
                              xato_koraset)
 from ui.eski.sahifa_asosiy import Sahifa, sana_qisqa, shaffof
-from ui.eski.widgets import (HamyonTanla, Jadval, Karta, OdamTanla, PulEdit,
+from ui.eski.widgets import (HamyonTanla, Jadval, Karta, PulEdit,
                              RaqamKarta, SanaEdit, izoh, qator, sarlavha,
                              tugma, yoq)
 
@@ -35,32 +35,34 @@ def _bosiladigan(k: RaqamKarta, fn) -> RaqamKarta:
 # ═══════════════════════════════════════════════════════════ varaq
 
 class HamyonSahifa(Sahifa):
+    """Qo'ldagi HAMMA pul (uch kishiniki birga) — naqd, kartalar va kichik «Jami»
+    (2026-10-03, foydalanuvchi so'ragan: boshqa hech narsa kerak emas).
+    Yangi karta va o'tkazma — asosiy odamniki (pul uning qo'lida)."""
+
     def __init__(self, oyna):
         super().__init__(oyna)
-        self.kim = OdamTanla(self.db)
-        oid = plan.asosiy_odam(self.db)
-        if oid is not None:
-            self.kim.tanla(oid)
-        self.kim.currentIndexChanged.connect(self.yangila)
         yangi = tugma("+ Karta qo'shish", asosiy=True)
         yangi.clicked.connect(self._karta_qosh)
         otk = tugma("⇄ O'tkazma")
         otk.setToolTip("Bankomatdan yechish, kartaga solish, karta → karta")
         otk.clicked.connect(lambda: self._otkazma())
-        self.tana.addWidget(qator(sarlavha("Pulim qayerda"), None,
-                                  "Kim:", self.kim, otk, yangi))
-        self.jami_izoh = izoh("")
-        self.tana.addWidget(self.jami_izoh)
+        self.tana.addWidget(qator(sarlavha("Pulim qayerda"), None, otk, yangi))
 
         quti = shaffof(QWidget())
         self.naqd_k = RaqamKarta("💵 Naqd", 0, "")
         self.karta_k = _bosiladigan(RaqamKarta("💳 Kartalar", 0, ""),
                                     self._kartalarni_ochyop)
+        # Jami — naqd + kartalar; kichikroq karta (ustun kengligi 2:2:1).
+        self.jami_k = RaqamKarta("💰 Jami", 0, "")
         hl = QGridLayout(quti)
         hl.setContentsMargins(0, 0, 0, 0)
         hl.setHorizontalSpacing(14)
         hl.addWidget(self.naqd_k, 0, 0)
         hl.addWidget(self.karta_k, 0, 1)
+        hl.addWidget(self.jami_k, 0, 2)
+        hl.setColumnStretch(0, 2)
+        hl.setColumnStretch(1, 2)
+        hl.setColumnStretch(2, 1)
         self.tana.addWidget(quti)
 
         # «Kartalar» bosilganda ochiladi — har karta alohida qoldig'i bilan.
@@ -78,30 +80,22 @@ class HamyonSahifa(Sahifa):
         self.tana.addStretch(1)
 
     def odam_id(self):
-        return self.kim.odam_id()
+        return plan.asosiy_odam(self.db)
 
     def yangila(self):
-        with QSignalBlocker(self.kim):
-            self.kim.yangila()
-        oid = self.odam_id()
-        if oid is None:
-            return
-        h = hamyon.hamyon(self.db, oid)
-        self.jami_izoh.setText(
-            f"Qo'ldagi jami pul: {money.fmt_som(h['jami'])} — naqd va "
-            f"kartalarga bo'lingan. Rasxod/kirim yozayotganda «Qayerdan» "
-            f"ni tanlang.")
-        n = len(h["kartalar"])
-        if h["naqd"] < 0:
-            self.naqd_k.qoy(h["naqd"], "kartalardagi pul jamidan ko'p — "
+        u = hamyon.umumiy(self.db)
+        n = len(u["kartalar"])
+        if u["naqd"] < 0:
+            self.naqd_k.qoy(u["naqd"], "kartalardagi pul jamidan ko'p — "
                                        "qoldiqlarni tekshiring")
             self.naqd_k.izoh_holati("berasan")
         else:
-            self.naqd_k.qoy(h["naqd"], "qo'ldagi naqd pul")
+            self.naqd_k.qoy(u["naqd"], "qo'ldagi naqd pul")
             self.naqd_k.izoh_holati(None)
-        self.karta_k.qoy(h["karta"], (f"{n} ta karta · bosing" if n else
+        self.karta_k.qoy(u["karta"], (f"{n} ta karta · bosing" if n else
                                       "karta yo'q · bosing"))
-        self._kartalarni_chiz(h["kartalar"])
+        self.jami_k.qoy(u["jami"], "naqd + kartalar")
+        self._kartalarni_chiz(u["kartalar"])
 
     def _kartalarni_chiz(self, kartalar: list[dict]):
         while self.tor.count():

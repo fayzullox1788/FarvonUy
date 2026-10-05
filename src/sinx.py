@@ -101,6 +101,9 @@ def _post(sozl: dict, yol: str, malumot: dict) -> dict:
 
 def sozlamalar(db) -> dict | None:
     """`{"url", "kalit"}` yoki sozlanmagan bo'lsa None."""
+    # Demo bazadagi soxta ma'lumot hech qachon serverga ketmasin.
+    if config.DEMO:
+        return None
     url = (db.sozlama(K_URL, "") or "").strip().rstrip("/")
     kalit = (db.sozlama(K_KALIT, "") or "").strip()
     if not url or not kalit:

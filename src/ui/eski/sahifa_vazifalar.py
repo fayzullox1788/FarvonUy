@@ -110,6 +110,14 @@ class VazifaDialog(QDialog):
         forma.addRow("Vaqt:", self.vaqt)
         forma.addRow("Davomiyligi:", self.davomiylik)
         forma.addRow("Izoh:", self.izoh)
+        # Takroriy kun (namoz): vaqt o'zgarsa — qoida va shu kundan
+        # keyingi BARCHA kunlar («Asr endi 16:30»). O'chirilsa faqat shu kun.
+        self.qoida = (vz.takror_egasi(db, vz.bitta(db, vazifa_id))
+                      if vazifa_id else None)
+        self.hammasi = QCheckBox("Vaqt keyingi barcha kunlarga ham")
+        self.hammasi.setChecked(True)
+        if self.qoida:
+            forma.addRow("", self.hammasi)
         tashqi.addLayout(forma)
 
         # ── navbat (ovqat): bittasi tanlansa qolgani o'zi joylashadi
@@ -301,6 +309,12 @@ class VazifaDialog(QDialog):
             izoh=self.izoh.text())
         try:
             if self.vazifa_id:
+                eski = vz.bitta(self.db, self.vazifa_id)
+                if (self.qoida and self.hammasi.isChecked()
+                        and maydonlar["vaqt"] != eski["vaqt"]):
+                    vz.takror_vaqt_qoy(self.db, self.qoida["id"],
+                                       maydonlar.pop("vaqt"),
+                                       maydonlar["sana"])
                 vz.tahrir(self.db, self.vazifa_id, **maydonlar)
             elif self.navbatli and self.navbat.isChecked():
                 vz.navbat_biriktir(
@@ -1975,6 +1989,7 @@ class _TakrorQator(QFrame):
     """Bitta takror qoidasi: kim, qaysi ish va qaysi kunlar."""
 
     ochir = Signal(int)
+    vaqt = Signal(int)
 
     def __init__(self, t, parent=None):
         super().__init__(parent)
@@ -2007,6 +2022,12 @@ class _TakrorQator(QFrame):
             f"color:{theme.KUL};background:transparent;"
             f"font-size:{theme.O_MAYDA}px;")
         ich.addWidget(qachon)
+
+        vq = tugma("🕐")
+        vq.setMaximumWidth(40)
+        vq.setToolTip("Vaqtini o'zgartirish — bugundan keyingi barcha kunlar")
+        vq.clicked.connect(lambda: self.vaqt.emit(self.takror_id))
+        ich.addWidget(vq)
 
         o = tugma("✕", xavfli=True)
         o.setMaximumWidth(40)
@@ -2293,12 +2314,42 @@ class VazifaTurlariSahifa(Sahifa):
             return
         self.oyna.yangila()
 
+    def _takror_vaqt(self, takror_id: int):
+        t = vz.takror_bitta(self.db, takror_id)
+        if t is None:
+            return
+        d = QDialog(self)
+        d.setWindowTitle(t["nom"])
+        ich = QVBoxLayout(d)
+        ich.addWidget(izoh("Yangi vaqt bugundan boshlab keyingi barcha "
+                           "kunlarga yoziladi. O'qilgan/bajarilganlari "
+                           "joyida qoladi."))
+        soat = QTimeEdit(QTime.fromString(t["vaqt"] or "09:00", "HH:mm"))
+        soat.setDisplayFormat("HH:mm")
+        ich.addWidget(soat)
+        tg = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        tg.button(QDialogButtonBox.Save).setText("Saqlash")
+        tg.button(QDialogButtonBox.Cancel).setText("Bekor qilish")
+        tg.accepted.connect(d.accept)
+        tg.rejected.connect(d.reject)
+        ich.addWidget(tg)
+        if d.exec() != QDialog.Accepted:
+            return
+        try:
+            vz.takror_vaqt_qoy(self.db, takror_id,
+                               soat.time().toString("HH:mm"))
+        except Exception as e:
+            xato_koraset(self, str(e))
+            return
+        self.oyna.yangila()
+
     def _takrorlarni_chiz(self):
         self._bosal(self.takrorlar_layout)
         royxat = vz.takrorlar(self.db)
         for t in royxat:
             q = _TakrorQator(t)
             q.ochir.connect(self._takror_ochir)
+            q.vaqt.connect(self._takror_vaqt)
             self.takrorlar_layout.addWidget(q)
         if not royxat:
             self.takrorlar_layout.addWidget(

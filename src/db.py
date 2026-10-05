@@ -129,6 +129,9 @@ class Db:
         # Mini App'da tanlangan kategoriya (shaxsiy/uy/darslar/boshqa).
         # NULL — nomidan va manbasidan aniqlanadi (worker/src/miniapp.js).
         ("vazifa", "toifa", "TEXT"),
+        # Takror qoidasining kategoriyasi — undan chiqqan har kunga
+        # `vazifa.toifa` bo'lib ko'chadi (namoz/uy/...). NULL — nomidan.
+        ("vazifa_takror", "toifa", "TEXT"),
     ]
 
     def _migratsiya(self) -> None:

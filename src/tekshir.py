@@ -1962,6 +1962,38 @@ teng("bitta undo hammasini oldi", 0,
      len(vz.oraliq(dT2, _TB.isoformat(), _TOX.isoformat())))
 teng("qoida ham qaytdi", 0, len(vz.takrorlar(dT2)))
 
+# ── namoz vaqti: qoida + KEYINGI BARCHA ochiq kunlar, joyida
+_asr = vz.takror_qosh(dT2, "Asr namozi", t2, "17:00", 5, bugun=_TB)
+_asr_k = lambda kun: vz.kun(dT2, (_TB + _td(days=kun)).isoformat(), t2)
+_asr_b = [v for v in _asr_k(0) if v["nom"] == "Asr namozi"][0]
+vz.bajar(dT2, _asr_b["id"])
+_asr_e = [v for v in _asr_k(1) if v["nom"] == "Asr namozi"][0]
+_n = vz.takror_vaqt_qoy(dT2, _asr, "16:30", _TB)
+teng("namoz vaqti: o'qilgani tegilmaydi", "17:00",
+     vz.bitta(dT2, _asr_b["id"])["vaqt"])
+teng("namoz vaqti: ertangi kun yangilandi (o'sha qator)", "16:30",
+     vz.bitta(dT2, _asr_e["id"])["vaqt"])
+teng("namoz vaqti: hamma ochiq kunlar", vz.TAKROR_UFQ, _n)
+teng("namoz vaqti: qoidaning o'zi", "16:30",
+     vz.takror_bitta(dT2, _asr)["vaqt"])
+teng("namoz vaqti: keyingi to'ldirish ham yangi vaqt bilan", "16:30",
+     [v for v in vz.kun(dT2, (_TB + _td(days=vz.TAKROR_UFQ + 1)).isoformat(),
+                         t2) if v["nom"] == "Asr namozi"][0]["vaqt"]
+     if vz.takror_toldir(dT2, _TB + _td(days=1)) else None)
+teng("namoz vaqti: o'zgarmasa hech narsa yozilmaydi", 0,
+     vz.takror_vaqt_qoy(dT2, _asr, "16:30", _TB))
+tekshir("namoz vaqti: noto'g'ri vaqt rad etiladi",
+        _yiqiladimi(lambda: vz.takror_vaqt_qoy(dT2, _asr, "25:00", _TB)))
+teng("namoz ro'yxati: faqat namozlar",
+     ["Asr namozi"], [t["nom"] for t in vz.namoz_takrorlari(dT2, t2)])
+_tf = vz.takror_qosh(dT2, "Tahajjud", t2, "03:00", 15, bugun=_TB,
+                     toifa="namoz")
+teng("toifa: qoidadan kunga ko'chadi", "namoz",
+     [v for v in _asr_k(0) if v["nom"] == "Tahajjud"][0]["toifa"])
+teng("toifa=namoz nomidan qat'i nazar namoz",
+     ["Tahajjud", "Asr namozi"],
+     [t["nom"] for t in vz.namoz_takrorlari(dT2, t2)])
+
 
 # ═════════════════════════════════════════════════════════ namoz qazosi
 #
@@ -2870,6 +2902,18 @@ tekshir("qo'ldagi pul: rejadan minusga tushmaydi",
         _qp["qoldi"] >= min(0, _nq[_qp["odam_id"]]))
 teng("qo'ldagi pul = naqd − band", _nq[_qp["odam_id"]] - _qp["band"],
      _qp["qoldi"])
+_jp = plan.jami_pul(dM)
+teng("hammaning puli: naqd yig'indisi", sum(_nq.values()), _jp["naqd"])
+teng("hammaning puli = naqd − hamma band", sum(_nq.values()) - sum(
+    v["ayirildi"] for v in plan.band_hisob(dM).values()), _jp["qoldi"])
+tekshir("hammaning bandi ⊇ asosiy odamniki", _jp["band"] >= _qp["band"])
+from core import hamyon as _hm
+_um = _hm.umumiy(dM)
+teng("hamyon umumiy: jami = naqd yig'indisi", sum(_nq.values()), _um["jami"])
+teng("hamyon umumiy: kartalar = hammaning kartalari", sum(
+    x["qoldiq"] for x in _um["kartalar"]), _um["karta"])
+teng("hamyon umumiy: naqd + kartalar = jami", _um["jami"],
+     _um["naqd"] + _um["karta"])
 dM.undo()
 
 # «Qarzim»: ichki + tashqi, juft_qarzlar va tashqi_qarzlar bilan bir xil
@@ -3924,6 +3968,42 @@ try:
     dZ.yop()
 finally:
     sinx._sorov = _asl_sorov
+
+
+# ═════════════════════════════════════════════════════════ demo rejim
+
+print("\n── demo rejim: soxta baza, haqiqiysiga tegmaydi ─────────────")
+import demo  # noqa: E402
+
+_dyol = demo.qur(config.DEMO_PAPKA / "sinov.db")
+dDm = dbm.Db(_dyol, zaxirasiz=True)
+tekshir("demo: kitob teng", ledger.audit(dDm).toza)
+teng("demo: uch soxta odam", ["Sardor", "Jasur", "Bekzod"],
+     [r["nom"] for r in dDm.q("SELECT nom FROM odam ORDER BY tartib")])
+tekshir("demo: rasxod, kirim, vazifa bor",
+        all(dDm.skalyar(f"SELECT count(*) FROM {j}") > 0
+            for j in ("rasxod", "kirim", "vazifa", "karta")))
+teng("demo: server/Telegram sozlamasi yo'q", 0, dDm.skalyar(
+    "SELECT count(*) FROM sozlama WHERE kalit LIKE 'tg_%' OR kalit LIKE 'sinx%'"))
+dDm.yop()
+for _yomon in (config.HAQIQIY_DB, config.DATA / "boshqa.db"):
+    try:
+        demo.qur(_yomon)
+        tekshir(f"demo: {_yomon.name} ga yozishni rad etadi", False)
+    except RuntimeError:
+        tekshir(f"demo: {_yomon.name} ga yozishni rad etadi", True)
+tekshir("demo: bayroqsiz — o'chiq", not config.DEMO and not demo.yoqilganmi())
+demo.yoq()
+tekshir("demo: yoq() bayroq qo'yadi va bazani quradi",
+        demo.yoqilganmi() and demo.DEMO_DB.exists())
+demo.ochir()
+tekshir("demo: ochir() bayroqni oladi", not demo.yoqilganmi())
+_s = sinx.sozlamalar.__globals__["config"]
+_s.DEMO = True
+try:
+    tekshir("demo: sinxron o'chiq", sinx.sozlamalar(d) is None)
+finally:
+    _s.DEMO = False
 
 
 # ═════════════════════════════════════════════════════════ yakun

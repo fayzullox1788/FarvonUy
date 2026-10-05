@@ -29,7 +29,7 @@
   const OYLAR = ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr"];
   const KUNLAR = ["dushanba", "seshanba", "chorshanba", "payshanba", "juma", "shanba", "yakshanba"];
   const KUN_QISQA = ["Du", "Se", "Ch", "Pa", "Ju", "Sh", "Ya"];
-  const TOIFA = { shaxsiy: "Shaxsiy", uy: "Uy", darslar: "Dars", boshqa: "Boshqa" };
+  const TOIFA = { namoz: "Namoz", shaxsiy: "Shaxsiy", uy: "Uy", darslar: "Dars", boshqa: "Boshqa" };
   const NAQSH = [["kunlik", "Har kuni"], ["kunlar", "Kunlar"], ["oraliq", "Har N kunda"]];
   const DAVOM = [15, 30, 45, 60, 90];
   const KUN_SONI = 8; // bugun + 7 kun
@@ -314,7 +314,7 @@
   function vazifaForma(x) {
     return { t: "vazifa", id: x.id, r: x.ruxsat, asl: x, nom: x.nom, tur_id: x.tur_id, odam_id: x.odam_id, sana: x.sana,
       vaqtsiz: !x.vaqt, vaqt: x.vaqt || "09:00", davomiylik: x.davomiylik, izoh: x.izoh || "", xato: "",
-      yangiOdam: null, navbatReja: null, tasdiq: null };
+      yangiOdam: null, navbatReja: null, tasdiq: null, hammasi: true };
   }
 
   function oynaHtml(v) {
@@ -386,6 +386,7 @@
           <input class="sz-kirit" id="szvVaqt" type="time" value="${v.vaqtsiz ? "" : e(v.vaqt)}"${dis(m.vaqt && !v.vaqtsiz)}></div>
       </div>
       <label class="szv-almash kichik"><input type="checkbox" id="szvVaqtsiz"${v.vaqtsiz ? " checked" : ""}${dis(m.vaqt)}><span>Aniq vaqtsiz (kun davomida)</span></label>
+      ${!yangi && x.takror && m.vaqt ? `<label class="szv-almash kichik"><input type="checkbox" id="szvHammasi"${v.hammasi ? " checked" : ""}><span>Vaqt keyingi barcha kunlarga ham</span></label>` : ""}
       <div class="sz-yorliq">Davomiyligi${qulf(m.davomiylik)}</div>
       <div class="szv-davom">${DAVOM.map((n) => `<button class="sz-chip${v.davomiylik === n ? " faol" : ""}" data-davom="${n}"${dis(m.davomiylik)}>${davMatn(n)}</button>`).join("")}
         <input class="sz-kirit" id="szvDavom" type="number" inputmode="numeric" min="1" max="720" value="${e(v.davomiylik)}" aria-label="Daqiqa"${dis(m.davomiylik)}><span>daq</span></div>
@@ -503,6 +504,7 @@
     if (t.id === "szvNavbatKun" && ev.type === "change") { v.navbatKun = t.value; oynaChiz(); }
     if (ev.type !== "change") return;
     if (t.id === "szvVaqtsiz") { v.vaqtsiz = t.checked; oynaChiz(); }
+    if (t.id === "szvHammasi") v.hammasi = t.checked;
     if (t.id === "szvTakror") { v.takror = t.checked; oynaChiz(); }
     if (t.id === "szvNavbat") { v.navbat = t.checked; oynaChiz(); }
   }
@@ -578,6 +580,7 @@
     if (m.kim && v.odam_id !== x.odam_id) tana.odam_id = v.odam_id;
     if (m.sana && v.sana !== x.sana) tana.sana = v.sana;
     if (m.vaqt && vaqt !== (x.vaqt || null)) tana.vaqt = vaqt;
+    if ("vaqt" in tana && x.takror && v.hammasi) tana.hammasi = true;
     if (m.davomiylik && v.davomiylik !== x.davomiylik) tana.davomiylik = v.davomiylik;
     if (m.izoh && v.izoh.trim() !== (x.izoh || "")) tana.izoh = v.izoh;
     if (!Object.keys(tana).length) { oynaYop(); return xabar("O‘zgarish yo‘q"); }

@@ -221,12 +221,15 @@ def main() -> int:
     import crashlog
     crashlog.ornat()
 
+    import config
     import db as dbm
     from core import xabar
 
     kod_izi = _kod_izi()
     # Zaxira olmaymiz: bu skript tez-tez ishga tushadi.
-    baza = dbm.Db(zaxirasiz=True)
+    # Har doim HAQIQIY baza: desktopda demo rejim yoqilgan bo'lsa ham
+    # bot soxta ma'lumot bilan ishlamasin (`config.DEMO`).
+    baza = dbm.Db(config.HAQIQIY_DB, zaxirasiz=True)
     try:
         if not sinov:
             _davriy(baza)

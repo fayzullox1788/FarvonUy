@@ -1,4 +1,4 @@
-// Sozlamalar → «To‘lov usullari» — desktop «Hamyon» (pulim qayerda: naqd + kartalar).
+// Sozlamalar → «Hamyon» — desktop «Hamyon» (pulim qayerda: naqd + kartalar).
 // index.html yordamchilari ustida: api(), NAMUNA, INIT, xabar(), tebran(), e().
 // API: worker/src/miniapp_sz_tolov.js (/app/api/tolov*), hisob — hamyon.js (Python
 // core/hamyon.py egizagi). Faqat ochgan odamning O‘Z puli.
@@ -46,6 +46,7 @@
   let el = null;            // sahifa elementi (yopiq bo‘lsa null)
   let stek = [];            // [{t:"bosh"}] | [..., {t:"karta", id}]
   let h = null;             // {jami, naqd, karta, kartalar:[{id, nom, qoldiq}]}
+  let u = null;             // faqat asosiy odamga: hammaning puli {jami, naqd, karta, kartalar}
   let tafsilot = new Map(); // karta_id → harakatlar
   let bugun = "";
   let xatoMatn = "";
@@ -87,6 +88,8 @@
     });
     const kj = kartalar.reduce((s, k) => s + k.qoldiq, 0);
     h = { jami: N.jami, naqd: N.jami - kj, karta: kj, kartalar };
+    // Namuna: asosiy odam — hammaning puli (boshqalarniki +450 000 naqd)
+    u = { ...h, jami: h.jami + 450_000, naqd: h.naqd + 450_000 }; h = u;
     tafsilot = new Map(N.kartalar.map((k) => [k.id, k.tarix.map((x) => ({ ...x }))]));
   }
   function namunaYoz(yol, b) {
@@ -138,7 +141,7 @@
 
   // ── Ma'lumot ───────────────────────────────────────────────────────
   function qabul(j) {
-    h = j.hamyon; bugun = j.bugun || bugun;
+    u = j.umumiy || null; h = u || j.hamyon; bugun = j.bugun || bugun;
     if (j.karta) tafsilot.set(j.karta.id, j.karta.harakatlar);
     // O‘chgan karta ekranida qolmaslik
     if (joriy()?.t === "karta" && !karta(joriy().id)) stek = [{ t: "bosh" }];
@@ -171,7 +174,7 @@
       el = document.createElement("section");
       el.className = "szt-sahifa";
       el.setAttribute("role", "dialog");
-      el.setAttribute("aria-label", "To‘lov usullari");
+      el.setAttribute("aria-label", "Hamyon");
       el.addEventListener("click", bosildi);
       document.body.appendChild(el);
     }
@@ -217,7 +220,7 @@
   function boshEkran() {
     const skelet = `<div class="szt-jami szt-skelet-jami"></div><div class="sz-bolim">Hamyon</div>
       <div class="sz-royxat">${"<div class=\"sz-skelet\"></div>".repeat(3)}</div>`;
-    const bosh = sarlavha("To‘lov usullari", h && h.kartalar.length
+    const bosh = sarlavha("Hamyon", h && h.kartalar.length
       ? `<button class="sz-ikon-tugma" data-amal="otkazma" aria-label="O‘tkazma">${IK.otkazma}</button>` : "");
     const hol = holatHtml(skelet);
     if (hol) return bosh + hol;
@@ -237,7 +240,7 @@
           <span><b style="background:#8fb3ff"></b>Kartalar<em>${som(h.karta)}</em></span>
         </div>
       </div>
-      <div class="sz-bolim szt-bolim">Hamyon<small>${n ? `${n + 1} ta joy` : ""}</small></div>
+      <div class="sz-bolim szt-bolim">Naqd va kartalar<small>${n ? `${n + 1} ta joy` : ""}</small></div>
       <div class="sz-royxat">
         <div class="sz-q szt-q szt-naqd">
           <span class="szt-belgi" style="background:#e3f7ee;color:#1d9d63">${IK.naqd}</span>
@@ -540,6 +543,13 @@
   // ── Ro‘yxatdan o‘tish va havola ────────────────────────────────────
   window.SozlamaBolimi = window.SozlamaBolimi || {};
   window.SozlamaBolimi.tolov = () => och();
+  /** Sozlamalar menyusidagi «Hamyon» qatori uchun jami pul matni. */
+  window.SozlamaJami = async () => {
+    if (NAMUNA) { if (!h) namuna(); }
+    else if (INIT) qabul(await api("tolov"));
+    const j = h?.jami;
+    return j == null ? null : `${j < 0 ? "−" : ""}${fmt(j)}${NB}so‘m`;
+  };
 
   /** «#sozlamalar/tolov[/karta/<id>]» → ochish. */
   function havola(xesh) {

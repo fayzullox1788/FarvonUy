@@ -20,6 +20,7 @@
     --qizil-fon: #fff3f3;
     --yashil: #22c27a;
 
+    --namoz: #0d9488;    --namoz-fon: #d5f2ee;    --namoz-matn: #0b7c72;
     --shaxsiy: #22c27a;  --shaxsiy-fon: #d9f3e6;  --shaxsiy-matn: #1f9d5c;
     --uy: #f08a24;       --uy-fon: #fcecdc;       --uy-matn: #c27a3a;
     --darslar: #7c4dff;  --darslar-fon: #ebe5fd;  --darslar-matn: #6a3fd6;
@@ -139,7 +140,13 @@
     display: inline-block; margin-top: 5px; padding: 2px 7px; border-radius: 5px;
     font-size: 12px; font-weight: 500; line-height: 1.35;
   }
+  .b-namoz   { background: var(--namoz-fon);   color: var(--namoz-matn); }
   .b-shaxsiy { background: var(--shaxsiy-fon); color: var(--shaxsiy-matn); }
+  .namoz-tugma { width: 100%; margin: 0 0 10px; padding: 11px 14px; border: 1px dashed var(--namoz); border-radius: 14px;
+    background: var(--namoz-fon); color: var(--namoz-matn); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+  .nv-qator { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+  .nv-qator span { font-weight: 600; }
+  .nv-qator input { width: 120px; }
   .b-uy      { background: var(--uy-fon);      color: var(--uy-matn); }
   .b-darslar { background: var(--darslar-fon); color: var(--darslar-matn); }
   .b-boshqa  { background: var(--boshqa-fon);  color: var(--boshqa-matn); }
@@ -245,6 +252,53 @@
   .xabar.kor { opacity: 1; transform: translate(-50%, 0); }
 </style>
 <script>
+// ── Demo rejim ─────────────────────────────────────────────────────────
+// Taqdimot uchun: yoqilgan bo'lsa Worker HAMMA /app/api/* ni alohida demo D1
+// dan (soxta odamlar va pullar) beradi — haqiqiy ma'lumot ekranga chiqmaydi.
+// Holat serverda (odamga bitta, hamma qurilmada): botda /demo yoki
+// Sozlamalar → «Demo rejim». Bu yerda faqat belgi va almashtirish.
+(function () {
+  var init = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || "";
+  function sor(tana) {
+    return fetch("/app/api/demo", {
+      method: tana ? "POST" : "GET",
+      headers: Object.assign({ authorization: "tma " + init }, tana ? { "content-type": "application/json" } : {}),
+      body: tana ? JSON.stringify(tana) : undefined,
+    }).then(function (r) { return r.json(); });
+  }
+  function belgi(yoqiq) {
+    var b = document.getElementById("farvon-demo-belgi");
+    if (!yoqiq) { if (b) b.remove(); return; }
+    if (b) return;
+    b = document.createElement("div");
+    b.id = "farvon-demo-belgi";
+    b.textContent = "DEMO";
+    b.title = "Soxta ma'lumot — o'chirish: botda /demo";
+    b.style.cssText = "position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:9999;" +
+      "background:#d9534f;color:#fff;font:700 11px/1 system-ui,sans-serif;letter-spacing:.08em;" +
+      "padding:4px 10px;border-radius:999px;pointer-events:none;opacity:.92";
+    (document.body || document.documentElement).appendChild(b);
+  }
+  window.FarvonDemo = {
+    yoqiq: false,
+    almashtir: function () {
+      return sor({ yoq: !window.FarvonDemo.yoqiq }).then(function (j) {
+        if (j && j.ok) location.reload();
+      });
+    },
+  };
+  if (!init) return;
+  sor().then(function (j) {
+    if (!j || !j.ok) return;
+    window.FarvonDemo.yoqiq = !!j.yoqiq;
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { belgi(j.yoqiq); });
+    else belgi(j.yoqiq);
+    var q = document.querySelector('[data-menyu="demo"] .sz-menyu-qiymat');
+    if (q) q.textContent = j.yoqiq ? "Yoqiq" : "O‘chiq";
+  }).catch(function () {});
+})();
+</script>
+<script>
 // «Yangi rasxod» oynasi (rasxod.css/js). Sahifa /app da (oxirida «/» siz) ochiladi —
 // nisbiy yo'l /rasxod.js ga ketardi, shuning uchun prefiks bilan.
 (function () {
@@ -328,6 +382,7 @@
 // Telegram ichida: Worker API (/app/api/*), kim ekanini initData aytadi.
 // Faylni kompyuterda ochib ko'rilsa (file://) — namunaviy ma'lumot.
 const TURLAR = {
+  namoz:   { nom: "Namoz",   rang: "var(--namoz)" },
   shaxsiy: { nom: "Shaxsiy", rang: "var(--shaxsiy)" },
   uy:      { nom: "Uy",      rang: "var(--uy)" },
   darslar: { nom: "Darslar", rang: "var(--darslar)" },
@@ -406,11 +461,12 @@ function royxatniChiz() {
     .filter((v) => filtr === "barchasi" || v.toifa === filtr)
     .sort((a, b) => (tayyormi(a) - tayyormi(b)) || (daqiqa(a.vaqt) - daqiqa(b.vaqt)));
   $("soni").textContent = `${korinadi.length} ta vazifa`;
+  const namozTugma = filtr === "namoz" && !NAMUNA ? `<button class="namoz-tugma" data-amal="namozlar">🕌 Namoz vaqtlarini o‘zgartirish</button>` : "";
   if (!korinadi.length) {
-    $("royxat").innerHTML = `<div class="bosh-holat">Bu yerda hozircha vazifa yo‘q</div>`;
+    $("royxat").innerHTML = namozTugma + `<div class="bosh-holat">Bu yerda hozircha vazifa yo‘q</div>`;
     return;
   }
-  $("royxat").innerHTML = korinadi.map((v) => {
+  $("royxat").innerHTML = namozTugma + korinadi.map((v) => {
     const k = kechikish(v);
     const t = tayyormi(v);
     const cls = t ? " tayyor" : k ? " kech" : "";
@@ -466,11 +522,15 @@ function amallarOyna(v) {
     ${t ? "" : `<button class="amal" data-h="boshladim"><i>▶️</i>Boshladim</button>`}
     <button class="amal" data-h="${t ? "ochiq" : "bajarildi"}"><i>✅</i>${t ? "Bajarilmagan deb belgilash" : "Bajarildi"}</button>
     ${t ? "" : `<button class="amal" data-h="kechiktir"><i>⏳</i>Kechiktirish</button>`}
+    ${t ? "" : `<button class="amal" data-h="vaqt"><i>🕐</i>Vaqtini o‘zgartirish</button>`}
+    ${v.toifa === "namoz" ? `<button class="amal" data-h="namozlar"><i>🕌</i>Barcha namoz vaqtlari</button>` : ""}
     <button class="amal xavf" data-h="bekor"><i>✕</i>Bekor qilish</button>`);
   $("oyna").onclick = async (ev) => {
     const b = ev.target.closest(".amal"); if (!b) return;
     const h = b.dataset.h;
     if (h === "kechiktir") return kechiktirOyna(v);
+    if (h === "vaqt") return vaqtOyna(v);
+    if (h === "namozlar") return namozlarOyna();
     oynaYop(); tebran();
     if (h === "boshladim") return xabar("Omad! 💪");
     if (await holat(v.id, h)) xabar({ bajarildi: "Bajarildi ✅", ochiq: "Qayta ochildi", bekor: "Bekor qilindi" }[h]);
@@ -485,6 +545,63 @@ function kechiktirOyna(v) {
     const m = Number(b.dataset.m);
     oynaYop(); tebran();
     if (await holat(v.id, "kechiktir", { daqiqa: m })) xabar(`Bot ${nomi(m)}dan keyin yana eslatadi`);
+  };
+}
+
+// Vaqtni o'zgartirish. Takroriy vazifada (namoz) birlamchi — shu va keyingi
+// BARCHA kunlar: qoida o'zi o'zgaradi, ertangi kunlar ham yangi vaqt bilan.
+function vaqtOyna(v) {
+  oynaOch(`<h3>${e(v.nom)}</h3>
+    <div class="maydon"><label>Yangi vaqt</label><input id="yVaqt" type="time" value="${e(v.vaqt || "")}"></div>
+    ${v.takror ? `<div class="maydon"><label>Qaysi kunlarga</label><select id="yQamrov">
+      <option value="hammasi" selected>Shu va keyingi barcha kunlar</option>
+      <option value="shu">Faqat shu kun</option></select></div>` : ""}
+    <button class="asosiy-tugma" id="ySaqla">Saqlash</button>`);
+  $("oyna").onclick = async (ev) => {
+    if (ev.target.id !== "ySaqla") return;
+    const yangi = $("yVaqt").value || null;
+    const hammasi = Boolean(v.takror) && $("yQamrov").value === "hammasi";
+    ev.target.disabled = true;
+    try {
+      if (!NAMUNA) await api("vazifa/" + v.id, { amal: "vaqt", vaqt: yangi, hammasi });
+      else v.vaqt = yangi;
+      oynaYop(); tebran("medium");
+      xabar(hammasi ? "Vaqt keyingi barcha kunlar uchun o‘zgardi" : "Vaqt o‘zgardi");
+      await yukla();
+    } catch (err) { ev.target.disabled = false; xabar(err.message); }
+  };
+}
+
+// Hamma namoz vaqtlari bitta oynada: o'zgargani bugundan keyingi barcha kunlarga.
+async function namozlarOyna() {
+  oynaOch(`<h3>Namoz vaqtlari</h3><div class="bosh-holat">Yuklanmoqda…</div>`);
+  let r;
+  try { r = (await api("namozlar")).namozlar; }
+  catch (err) { oynaYop(); return xabar(err.message); }
+  if (!r.length) {
+    oynaOch(`<h3>Namoz vaqtlari</h3><p class="izoh">Hali takroriy namoz yo‘q. «+» bilan qo‘shing:
+      kategoriya — Namoz, «Har kuni takrorlansin».</p>`);
+    return;
+  }
+  oynaOch(`<h3>Namoz vaqtlari</h3>
+    <p class="izoh">O‘zgartirgan vaqtingiz bugundan boshlab keyingi barcha kunlarga yoziladi.</p>
+    ${r.map((n) => `<div class="maydon nv-qator"><span>${e(n.nom)}</span>
+      <input type="time" data-id="${n.id}" value="${e(n.vaqt || "")}"></div>`).join("")}
+    <button class="asosiy-tugma" id="nSaqla">Saqlash</button>`);
+  $("oyna").onclick = async (ev) => {
+    if (ev.target.id !== "nSaqla") return;
+    const vaqtlar = {};
+    for (const i of $("oyna").querySelectorAll("input[data-id]")) {
+      const eski = r.find((n) => n.id === Number(i.dataset.id));
+      if ((i.value || null) !== (eski.vaqt || null)) vaqtlar[i.dataset.id] = i.value || null;
+    }
+    if (!Object.keys(vaqtlar).length) return oynaYop();
+    ev.target.disabled = true;
+    try {
+      await api("namozlar", { vaqtlar });
+      oynaYop(); tebran("medium"); xabar("Namoz vaqtlari yangilandi");
+      await yukla();
+    } catch (err) { ev.target.disabled = false; xabar(err.message); }
   };
 }
 
@@ -525,19 +642,23 @@ function yangiVazifaOyna() {
       <div class="maydon"><label>Kategoriya</label><select id="vTur">${Object.entries(TURLAR).map(([k, t]) => `<option value="${k}"${k === "shaxsiy" ? " selected" : ""}>${t.nom}</option>`).join("")}</select></div>
       <div class="maydon"><label>Davomiyligi</label><select id="vDav"><option value="15">15 daqiqa</option><option value="30" selected>30 daqiqa</option><option value="60">1 soat</option><option value="120">2 soat</option></select></div>
     </div>
+    <div class="maydon"><label>Takrorlansin</label><select id="vTak">
+      <option value="">Yo‘q, faqat shu kun</option><option value="kunlik">Har kuni takrorlansin</option></select></div>
     <div class="maydon"><label>Eslatma</label><select id="vEsl" disabled><option>Vaqti kelganda bot eslatadi</option></select></div>
     <button class="asosiy-tugma" id="vSaqla">Saqlash</button>`);
+  // Namoz deyarli doim har kuni — kategoriya tanlanganda o'zi qo'yiladi.
+  $("vTur").onchange = () => { if ($("vTur").value === "namoz") $("vTak").value = "kunlik"; };
   $("oyna").onclick = async (ev) => {
     if (ev.target.id !== "vSaqla") return;
     const nom = $("vNom").value.trim();
     if (!nom) { $("vNom").focus(); return; }
     const yangi = { nom, sana: $("vSana").value || tanlangan, vaqt: $("vVaqt").value || null,
-      davomiylik: Number($("vDav").value), toifa: $("vTur").value };
+      davomiylik: Number($("vDav").value), toifa: $("vTur").value, takror: $("vTak").value === "kunlik" };
     ev.target.disabled = true;
     try {
       if (NAMUNA) vazifalar.push({ id: Date.now(), holat: "ochiq", ...yangi });
       else await api("vazifa", yangi);
-      oynaYop(); tebran("medium"); xabar("Vazifa qo‘shildi");
+      oynaYop(); tebran("medium"); xabar(yangi.takror ? "Har kuni takrorlanadi 🔁" : "Vazifa qo‘shildi");
       if (NAMUNA) return royxatniChiz();
       tanlangan = yangi.sana; await yukla();
     } catch (err) { ev.target.disabled = false; xabar(err.message); }
@@ -550,6 +671,7 @@ $("filtrlar").onclick = (ev) => {
   filtr = b.dataset.k; tebran("soft"); filtrlarniChiz(); royxatniChiz();
 };
 $("royxat").onclick = (ev) => {
+  if (ev.target.closest("[data-amal='namozlar']")) return namozlarOyna();
   const q = ev.target.closest(".qator"); if (!q) return;
   const v = vazifalar.find((x) => x.id === Number(q.dataset.id)); if (!v) return;
   const amal = ev.target.closest("[data-amal]")?.dataset.amal;

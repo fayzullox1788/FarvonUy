@@ -1,5 +1,5 @@
 // Hamyon — JS egizagi (Python `core/hamyon.py`): bot uchun tanlov/tekshiruv va
-// Mini App «To'lov usullari» uchun o'qish/yozish (pastda).
+// Mini App «Hamyon» uchun o'qish/yozish (pastda).
 import * as _vaqt from "./vaqt.js";
 import * as _money from "./money.js";
 
@@ -29,7 +29,7 @@ export async function tanlov(db, odam_id) {
 }
 
 // ─────────────────────────────────────────── Hamyon: o'qish va yozish
-// (Mini App «To'lov usullari» — desktop «Hamyon» varag'i bilan bir xil yo'l.)
+// (Mini App «Hamyon» — desktop «Hamyon» varag'i bilan bir xil yo'l.)
 // Python date.today() → vaqt.bugun(); f"{x:,}" → money.fmt.
 
 // hamyon.py:33
@@ -69,6 +69,20 @@ export async function kartalar(db, odam_id) {
 export async function hamyon(db, odam_id) {
   const jami = Math.trunc(Number(await db.skalyar("SELECT naqd FROM v_balans WHERE id=?", [odam_id], 0)));
   const k = await kartalar(db, odam_id);
+  const kjami = k.reduce((s, x) => s + x.qoldiq, 0);
+  return { jami, naqd: jami - kjami, karta: kjami, kartalar: k };
+}
+
+// hamyon.py:umumiy
+/** Qo'ldagi HAMMA pul (uch kishiniki birga): {jami, naqd, karta, kartalar} —
+ *  faqat naqd va kartalar. Faqat ko'rsatish. */
+export async function umumiy(db) {
+  const jami = Math.trunc(Number(await db.skalyar("SELECT SUM(naqd) FROM v_balans", [], 0) || 0));
+  const q = await _qoldiqlar(db);
+  const k = (await db.q("SELECT k.id, k.nom FROM karta k JOIN odam o" +
+    " ON o.id=k.odam_id WHERE k.ochirilgan=0" +
+    " ORDER BY o.tartib, o.id, k.tartib, k.id"))
+    .map((r) => ({ id: r.id, nom: r.nom, qoldiq: q.get(r.id) ?? 0 }));
   const kjami = k.reduce((s, x) => s + x.qoldiq, 0);
   return { jami, naqd: jami - kjami, karta: kjami, kartalar: k };
 }

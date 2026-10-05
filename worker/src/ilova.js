@@ -60,7 +60,7 @@ export function ilova(m) {
     try { await guruhniEslab(db, u); } catch (e) { console.error("guruh yozilmadi:", e); }
     try {
       const token = await db.sozlama("tg_token");
-      if (token) await m.xabar.bittasini_ishla(db, token, u);
+      if (token) await m.xabar.bittasini_ishla(db, token, u, { demoDb: env?.DEMO_DB ? new Db(env.DEMO_DB) : null });
     } catch (e) {
       console.error("update ishlanmadi:", e?.stack || e);
     }

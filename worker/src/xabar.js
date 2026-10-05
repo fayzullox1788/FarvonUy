@@ -12,6 +12,7 @@
 // odamlar, uborka qadamlari, menyu) va matn quruvchilar faqat shu xotiradan
 // o'qiydi. Har eksport qilingan funksiya Python imzosini saqlaydi va oxirida
 // ixtiyoriy `ctx` oladi — berilmasa o'zi quradi (natija bir xil).
+import * as demo from "./demo.js";
 import * as vaqt from "./vaqt.js";
 import * as money from "./money.js";
 import * as tg from "./tg.js";
@@ -638,7 +639,13 @@ export async function yubor_kutilayotgan(db, hozir = null) {
   const s = await sozlamalar(db);
   if (!(s.yoqilgan && s.token && s.guruh)) return [];
   const natija = [];
+  // Demo rejimdagi odamning SHAXSIY chatiga haqiqiy xabar ketmasin:
+  // belgilanmaydi — demo o'chgach keyingi daqiqada yuboriladi.
+  const demoChat = new Set((await db.q(
+    "SELECT o.tg_chat FROM odam o JOIN sozlama s ON s.kalit='miniapp_demo:'||o.id" +
+    " WHERE s.qiymat='1' AND o.tg_chat IS NOT NULL")).map((r) => String(r.tg_chat)));
   for (const x of await kutilayotgan(db, hozir)) {
+    if (x.chat != null && demoChat.has(String(x.chat))) continue;
     const chat = x.chat != null ? x.chat : s.guruh;
     let javob;
     try {
@@ -756,15 +763,34 @@ async function _javob_ber(token, cb) {
  * xabar.py:1035 — bitta Telegram update (webhook). Natija — log qatorlari.
  * getUpdates/offset YO'Q: webhook har update'ni bir marta beradi.
  */
-export async function _bittasini_ishla(db, token, u) {
+/**
+ * Demo rejim (`demo.js`): yoqilgan odamning bot suhbati (menyu javoblari,
+ * rasxod yozish) soxta bazadan. → {db, id} yoki demo o'chiq bo'lsa null;
+ * demo yoqiq, lekin baza ulanmagan bo'lsa {db: null}.
+ */
+async function _demo_ish(db, azo, demoDb) {
+  if (!(await demo.yoqiqmi(db, azo.id))) return null;
+  if (!demoDb) return { db: null, id: null };
+  const o = await demo.demoOdam(demoDb);
+  return o ? { db: demoDb, id: o.id } : { db: null, id: null };
+}
+
+const DEMO_ULANMAGAN = "🎭 Demo rejim yoqiq, lekin demo baza hali ulanmagan — " +
+  "haqiqiy ma'lumot ko'rsatilmaydi. O'chirish: /demo";
+
+export async function _bittasini_ishla(db, token, u, { demoDb = null } = {}) {
   const natija = [];
   if ("callback_query" in u) {
     const cb = u.callback_query;
     if (String(cb.data ?? "").startsWith("rx:")) {
       const msg = { ...(cb.message || {}), from: cb.from };
       const azo = await _shaxsiy_azo(db, msg);
-      if (azo) {
-        natija.push((await tgr.tugma_bosildi(db, token, cb, azo.id)) || "rx: ?");
+      const d = azo ? await _demo_ish(db, azo, demoDb) : null;
+      if (d && !d.db) {
+        await _javob_ber(token, cb);
+        natija.push("rx: demo ulanmagan");
+      } else if (azo) {
+        natija.push((await tgr.tugma_bosildi(d ? d.db : db, token, cb, d ? d.id : azo.id)) || "rx: ?");
       } else {
         await _javob_ber(token, cb); // begona — hech kim javob bermasdi
       }
@@ -784,12 +810,27 @@ export async function _bittasini_ishla(db, token, u) {
     if (oid) natija.push(`chat bog'landi: odam#${oid}`);
     const azo = await _shaxsiy_azo(db, msg);
     if (azo && msg.text) {
+      // /demo — HAQIQIY bazadagi holatni almashtiradi (taqdimot uchun).
+      const yangi = await demo.buyruq(db, azo.id, msg.text);
+      if (yangi !== null) {
+        await tg.sorov(token, "sendMessage", { chat_id: msg.chat.id, text: demo.javobMatn(yangi), parse_mode: "HTML" });
+        natija.push(`demo: ${yangi ? "yoq" : "ochir"}`);
+        return natija;
+      }
+      const d = await _demo_ish(db, azo, demoDb);
+      if (d && !d.db) {
+        await tg.sorov(token, "sendMessage", { chat_id: msg.chat.id, text: DEMO_ULANMAGAN });
+        natija.push("demo: ulanmagan");
+        return natija;
+      }
+      const ishDb = d ? d.db : db, ishId = d ? d.id : azo.id;
       // Avval menyu (Moliya / Vazifalar): suhbat o'rtasida menyu tugmasi
       // bosilsa u «sabab» bo'lib yozilib qolmasin.
-      const r = (await tgm.matn_keldi(db, token, msg, azo.id))
-        || (await tgr.matn_keldi(db, token, msg, azo.id))
-        || (await tgm.tushunmadim(db, token, msg.chat.id));
+      const r = (await tgm.matn_keldi(ishDb, token, msg, ishId))
+        || (await tgr.matn_keldi(ishDb, token, msg, ishId))
+        || (await tgm.tushunmadim(ishDb, token, msg.chat.id));
       natija.push(r);
+      if (d) return natija; // demo paytida rasm haqiqiy mahsulotga yozilmasin
     }
     const r = await _rasmni_ishla(db, msg, token);
     if (r) natija.push(r);

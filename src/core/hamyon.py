@@ -70,6 +70,24 @@ def hamyon(db, odam_id: int) -> dict:
             "kartalar": k}
 
 
+def umumiy(db) -> dict:
+    """Qo'ldagi HAMMA pul (2026-10-03, foydalanuvchi so'ragan: uch kishining
+    puli bitta odamning qo'lida turadi). Faqat ikki narsa: naqd va kartalar.
+
+    jami = SUM(v_balans.naqd); karta — hammaning kartalari; naqd — qolgani.
+    `kartalar` — hamma kartalar (egasi tartibida). Faqat ko'rsatish.
+    """
+    jami = int(db.skalyar("SELECT SUM(naqd) FROM v_balans", birlamchi=0) or 0)
+    q = _qoldiqlar(db)
+    k = [{"id": r["id"], "nom": r["nom"], "qoldiq": q.get(r["id"], 0)}
+         for r in db.q("SELECT k.id, k.nom FROM karta k JOIN odam o"
+                       " ON o.id=k.odam_id WHERE k.ochirilgan=0"
+                       " ORDER BY o.tartib, o.id, k.tartib, k.id")]
+    kjami = sum(x["qoldiq"] for x in k)
+    return {"jami": jami, "naqd": jami - kjami, "karta": kjami,
+            "kartalar": k}
+
+
 def tanlov(db, odam_id: int | None) -> list[tuple[int | None, str]]:
     """Rasxod/kirim oynasidagi «qayerdan» ro'yxati: naqd + kartalari."""
     natija: list[tuple[int | None, str]] = [(None, NAQD_NOM)]

@@ -994,6 +994,15 @@ def qoldagi_pul(db, kun: date | str | None = None) -> dict:
             "naqd": naqd, "band": ayir, "qoldi": naqd - ayir}
 
 
+def jami_pul(db, kun: date | str | None = None) -> dict:
+    """Yon panel: HAMMANING qo'lidagi pul birga (2026-10-02, foydalanuvchi
+    so'ragan) — `v_balans.naqd` yig'indisi, rejaga band (`band_hisob`
+    dagi `ayirildi`) ayirilgan. Faqat ko'rsatish."""
+    naqd = db.skalyar("SELECT SUM(naqd) FROM v_balans", birlamchi=0) or 0
+    band = sum(v["ayirildi"] for v in band_hisob(db, kun).values())
+    return {"naqd": naqd, "band": band, "qoldi": naqd - band}
+
+
 # ─────────────────────────────────────────────────────────────── prognoz
 
 def prognoz(db, kunlar: int = 30) -> dict:
