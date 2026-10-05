@@ -252,7 +252,7 @@
       <div class="sz-menyu">${MENYU.map(([k, nom, ik]) =>
         `<button class="sz-menyu-q${k === "kategoriyalar" ? " faol" : ""}" data-menyu="${k}">${ik}<span>${nom}</span>${
           k === "tolov" ? `<em class="sz-menyu-qiymat" id="sz-hamyon-jami"></em>` : ""}${
-          k === "demo" ? `<em class="sz-menyu-qiymat">${window.FarvonDemo && window.FarvonDemo.yoqiq ? "Yoqiq" : "O‘chiq"}</em>` : ""}${IK.ong}</button>`).join("")}</div>`;
+          k === "demo" ? `<i class="sz-switch${window.FarvonDemo && window.FarvonDemo.yoqiq ? " on" : ""}" aria-hidden="true"></i>` : IK.ong}</button>`).join("")}</div>`;
   }
   /** «Hamyon» qatorida jami pul — sz_tolov.js dan (u hali yuklanmagan bo'lsa jim). */
   function hamyonJami() {
@@ -406,7 +406,12 @@
     const t = ev.target.closest("button"); if (!t) return;
     if (t.dataset.menyu) {
       // Demo rejim — soxta ma'lumot bilan taqdimot (index.html dagi FarvonDemo).
-      if (t.dataset.menyu === "demo") { tebran("soft"); if (window.FarvonDemo) window.FarvonDemo.almashtir(); return; }
+      if (t.dataset.menyu === "demo") {
+        tebran("soft");
+        const sw = t.querySelector(".sz-switch"); if (sw) sw.classList.toggle("on");
+        if (window.FarvonDemo) window.FarvonDemo.almashtir().catch(() => { if (sw) sw.classList.toggle("on"); xabar("Ulanib bo‘lmadi"); });
+        return;
+      }
       if (t.dataset.menyu === "kategoriyalar") { stek.push({ t: "royxat" }); chiz(); tebran("soft"); if (!daraxt) yukla(); return; }
       // Boshqa bo'limlar o'z faylida: window.SozlamaBolimi[<kalit>] = () => ochish.
       // Kalitlar — MENYU dagi: profil, azolar, vazifalar, mahsulotlar, tolov, reja, bildirishnoma, ilova.

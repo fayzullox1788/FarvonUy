@@ -652,6 +652,16 @@ class SozlamaSahifa(Sahifa):
         kr.qosh(qator("Rang rejimi:", self.rejim, None))
         self.tana.addWidget(kr)
 
+        # ── demo rejim ───────────────────────────────────────────────
+        # Taqdimot uchun soxta ma'lumot (`demo.py`). Belgilansa/olinsa
+        # dastur o'zi qayta ochiladi — `Oyna._demo_almashtir`.
+        dm = Karta("Demo rejim")
+        self.demo = QCheckBox("Soxta ma'lumot bilan ko'rsatish (haqiqiy ma'lumot yashiriladi)")
+        self.demo.setChecked(config.DEMO)
+        self.demo.clicked.connect(lambda _: self.oyna._demo_almashtir())
+        dm.qosh(qator(self.demo, None))
+        self.tana.addWidget(dm)
+
         # ── Telegram ─────────────────────────────────────────────────
         tg = Karta("Telegram guruhi")
         self.tg_yoq = QCheckBox("Yoqilgan")

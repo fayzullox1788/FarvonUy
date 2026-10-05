@@ -1098,7 +1098,8 @@ ishlaydi, jadval esa mavjud bazalarga keyin qo'shilgan.
 
 ## Demo rejim — taqdimot uchun soxta ma'lumot (2026-10-05)
 
-**Desktop:** yon panel pastidagi «Demo rejim» tugmasi `DATA/demo.yoq`
+**Desktop:** Sozlamalar → «Demo rejim» belgisi (`clicked`, `toggled` EMAS — kod
+bilan belgilash dasturni qayta ochmasin) yoki yon panel pastidagi tugma `DATA/demo.yoq`
 bayrog'ini qo'yadi/oladi va dasturni qayta ochadi. Bayroq bo'lsa
 `config.DEMO=True`: baza, zaxira, cheklar, rasmlar `DATA/demo/` da
 (`src/demo.py` quradi — uch soxta odam, ~1,5 oylik kirim/rasxod, kartalar,
@@ -1111,8 +1112,8 @@ orqali, audit toza). Sinxron demo paytida o'chiq (`sinx.sozlamalar`),
 **Mini App / bot:** holat SERVERDA, har odamga alohida —
 `sozlama.miniapp_demo:<odam_id>` haqiqiy D1 da (`worker/src/demo.js`,
 texnik holat, jurnalsiz). Almashtirish: botda `/demo` (`/demo on|off`,
-`tg_menyu.matn_keldi`) yoki Mini App → Sozlamalar → «Demo rejim»
-(`/app/api/demo`). Yoqiq bo'lsa `miniapp.ishla` odamni HAQIQIY bazada
+`xabar._bittasini_ishla`) yoki Mini App → Sozlamalar → «Demo rejim»
+yoqish/o'chirish tugmasi (`.sz-switch`, `/app/api/demo`, keyin sahifa qayta yuklanadi). Yoqiq bo'lsa `miniapp.ishla` odamni HAQIQIY bazada
 tekshiradi, keyin `db` ni `env.DEMO_DB` (D1 `farvonuy_demo`) ga
 almashtiradi, odam = demo bazaning asosiy odami. Bot shaxsiy chati ham
 (menyu javoblari, «Rasxod yozish» va `rx:` tugmalari) demo bazadan —

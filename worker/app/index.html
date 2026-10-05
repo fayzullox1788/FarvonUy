@@ -283,7 +283,8 @@
     yoqiq: false,
     almashtir: function () {
       return sor({ yoq: !window.FarvonDemo.yoqiq }).then(function (j) {
-        if (j && j.ok) location.reload();
+        if (!j || !j.ok) throw new Error("demo");
+        setTimeout(function () { location.reload(); }, 250); // tugma surilishi ko'rinsin
       });
     },
   };
@@ -293,8 +294,8 @@
     window.FarvonDemo.yoqiq = !!j.yoqiq;
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { belgi(j.yoqiq); });
     else belgi(j.yoqiq);
-    var q = document.querySelector('[data-menyu="demo"] .sz-menyu-qiymat');
-    if (q) q.textContent = j.yoqiq ? "Yoqiq" : "O‘chiq";
+    var q = document.querySelector('[data-menyu="demo"] .sz-switch');
+    if (q) q.classList.toggle("on", !!j.yoqiq);
   }).catch(function () {});
 })();
 </script>
