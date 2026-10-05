@@ -15,14 +15,25 @@ echo "== 1/4 Soxta baza (src/demo.py) va SQL eksport"
 DEMO_DB=$(py -3.14 -c "import sys; sys.path.insert(0, r'$ILDIZ_W/src'); import demo, config; print(demo.qur(config.DEMO_PAPKA / 'd1.db'))")
 rm -rf d1_demo
 py -3.14 "$ILDIZ/tools/d1_eksport.py" --db "$DEMO_DB" --chiqish d1_demo | tail -2
-# Eski jadvallarni tashlash (qayta to'ldirish uchun): avval viewlar, keyin jadvallar.
-py -3.14 - "$DEMO_DB" > d1_demo/drop.sql <<'PY'
-import sqlite3, sys
-c = sqlite3.connect(sys.argv[1])
+# Eski jadvallarni tashlash (qayta to'ldirish uchun). Tartib MUHIM: ichida
+# qatori bor ota jadval bolalaridan OLDIN tashlansa, D1 butun importni FK xatosi
+# bilan orqaga qaytaradi. Shuning uchun viewlar, keyin jadvallar BOLALARIDAN
+# boshlab (bog'lanishlar d1_demo/schema.sql dan).
+py -3.14 - > d1_demo/drop.sql <<'PY'
+import sqlite3
+c = sqlite3.connect(":memory:")
+c.executescript(open("d1_demo/schema.sql", encoding="utf-8").read())
 print("PRAGMA defer_foreign_keys = true;")
-for tur in ("view", "table"):
-    for (nom,) in c.execute("SELECT name FROM sqlite_master WHERE type=? AND name NOT LIKE 'sqlite_%'", (tur,)):
-        print(f'DROP {tur.upper()} IF EXISTS "{nom}";')
+for (v,) in c.execute("SELECT name FROM sqlite_master WHERE type='view'"):
+    print(f'DROP VIEW IF EXISTS "{v}";')
+jad = [r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
+ota = {t: {r[2] for r in c.execute(f'PRAGMA foreign_key_list("{t}")')} for t in jad}
+qoldi = set(jad)
+while qoldi:
+    bola = sorted(t for t in qoldi if not any(t in ota[x] and x != t for x in qoldi)) or sorted(qoldi)
+    for t in bola:
+        print(f'DROP TABLE IF EXISTS "{t}";')
+    qoldi -= set(bola)
 PY
 
 echo "== 2/4 D1 baza: farvonuy_demo"
