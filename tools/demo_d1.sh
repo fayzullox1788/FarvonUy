@@ -6,11 +6,13 @@
 #   bash tools/demo_d1.sh
 set -euo pipefail
 ILDIZ="$(cd "$(dirname "$0")/.." && pwd)"
+# Windows Python /c/... yo'lni tushunmaydi — satr ichidagi yo'llar uchun C:/... ko'rinishi.
+ILDIZ_W="$(cd "$ILDIZ" && pwd -W)"
 cd "$ILDIZ/worker"
 export PYTHONIOENCODING=utf-8
 
 echo "== 1/4 Soxta baza (src/demo.py) va SQL eksport"
-DEMO_DB=$(py -3.14 -c "import sys; sys.path.insert(0, r'$ILDIZ/src'); import demo, config; print(demo.qur(config.DEMO_PAPKA / 'd1.db'))")
+DEMO_DB=$(py -3.14 -c "import sys; sys.path.insert(0, r'$ILDIZ_W/src'); import demo, config; print(demo.qur(config.DEMO_PAPKA / 'd1.db'))")
 rm -rf d1_demo
 py -3.14 "$ILDIZ/tools/d1_eksport.py" --db "$DEMO_DB" --chiqish d1_demo | tail -2
 # Eski jadvallarni tashlash (qayta to'ldirish uchun): avval viewlar, keyin jadvallar.
