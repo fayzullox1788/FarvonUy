@@ -250,7 +250,7 @@
     if (!chizildi) skelet();
     eskirgan = false;
     if (NAMUNA) { m = NAMUNA_MALUMOT(oy); return chiz(); }
-    if (!INIT) { xatoMatn = "Bu sahifani Telegram'dagi Farovon Uy botidan oching."; return chiz(); }
+    if (!INIT) { xatoMatn = "Bu sahifani Telegram'dagi Farovon Hayot botidan oching."; return chiz(); }
     if (yuklanmoqda) return;
     yuklanmoqda = true;
     try {

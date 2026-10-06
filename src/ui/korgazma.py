@@ -68,7 +68,7 @@ def sahifa(rejim_kaliti: str) -> QWidget:
                          T.QOBIQ_CHET, T.QOBIQ_CHET)
     v.setSpacing(T.ORALIQ_KARTA)
 
-    v.addWidget(Q.sarlavha(f"Farvon Uy — «{T.rejim_nomi()}» rejimi"))
+    v.addWidget(Q.sarlavha(f"Farovon Hayot — «{T.rejim_nomi()}» rejimi"))
     v.addWidget(Q.maslahat(
         f"shrift: {T.shrift_oilasi()}   ·   pul raqamlari tabular (tnum)   "
         f"·   {len(Q.__all__)} ta komponent"))
@@ -214,7 +214,7 @@ def main() -> int:
 
     from PySide6.QtWidgets import QScrollArea, QTabWidget
     oyna = QTabWidget()
-    oyna.setWindowTitle("Farvon Uy — dizayn ko'rgazmasi")
+    oyna.setWindowTitle("Farovon Hayot — dizayn ko'rgazmasi")
     oyna.resize(1240, 940)
     for kalit, nom in T.REJIMLAR:
         aylanma = QScrollArea()

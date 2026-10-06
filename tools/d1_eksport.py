@@ -230,7 +230,7 @@ def schema_sql(con: sqlite3.Connection) -> tuple[str, list[str]]:
     tartib = _fk_tartib(con, jadvallar)
     sql_of = {n: s for t, n, _, s in obyektlar}
 
-    qator = ["-- Farvon Uy → Cloudflare D1 sxemasi (tools/d1_eksport.py yaratgan).",
+    qator = ["-- Farovon Hayot → Cloudflare D1 sxemasi (tools/d1_eksport.py yaratgan).",
              "-- Toshkent vaqti: datetime('now','+5 hours') — yozgi vaqt yo'q.", ""]
     for t in tartib:
         s = sql_of[t]

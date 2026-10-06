@@ -274,7 +274,7 @@
     const ichi = $("#rxIchi");
     if (NAMUNA) { if (!F) { F = NAMUNA_FORMA; } }
     else {
-      if (!INIT) return xabar("Bu sahifani Telegram'dagi Farovon Uy botidan oching.");
+      if (!INIT) return xabar("Bu sahifani Telegram'dagi Farovon Hayot botidan oching.");
       if (!F) ichi.innerHTML = `<p style="color:#8a94a6">Yuklanmoqda…</p>`;
     }
     $("#rxParda").classList.add("ochiq"); $("#rxOyna").classList.add("ochiq");

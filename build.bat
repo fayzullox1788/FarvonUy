@@ -1,7 +1,7 @@
 @echo off
 setlocal
 REM =====================================================================
-REM  Farvon Uy - INSTALLER YASASH
+REM  Farovon Hayot - INSTALLER YASASH
 REM  Natija:  installer\FarvonUySetup.exe   <-- odamlarga SHU fayl beriladi
 REM  Kerak:   Python 3.14 (py -3.14)  va  Inno Setup 6 (ISCC.exe)
 REM =====================================================================

@@ -1,4 +1,4 @@
-"""Farvon Uy — ishga tushirish nuqtasi."""
+"""Farovon Hayot — ishga tushirish nuqtasi."""
 from __future__ import annotations
 
 import sys
@@ -44,7 +44,7 @@ def main() -> int:
     except Exception as e:
         crashlog.yoz(f"Bazani ochib bo'lmadi: {e}")
         QMessageBox.critical(
-            None, "Farvon Uy",
+            None, "Farovon Hayot",
             f"Ma'lumotlar bazasini ochib bo'lmadi:\n\n{e}\n\n{config.DB_YOL}")
         return 1
 

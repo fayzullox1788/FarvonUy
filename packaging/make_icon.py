@@ -1,4 +1,4 @@
-"""Farvon Uy ikonkasini yasaydi.
+"""Farovon Hayot ikonkasini yasaydi.
 
     py -3.14 packaging\\make_icon.py
 

@@ -150,7 +150,7 @@
   async function yukla() {
     if (yuklanmoqda) return;
     if (NAMUNA) { if (!mahsulotlar) mahsulotlar = namunaMa(); return tayyor(); }
-    if (!INIT) { xatoMatn = "Bu sahifani Telegram'dagi Farovon Uy botidan oching."; return tayyor(); }
+    if (!INIT) { xatoMatn = "Bu sahifani Telegram'dagi Farovon Hayot botidan oching."; return tayyor(); }
     yuklanmoqda = true;
     try { qabul(await api("mahsulot")); xatoMatn = ""; } catch (err) { xatoMatn = err.message; }
     yuklanmoqda = false;

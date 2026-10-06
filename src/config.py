@@ -10,7 +10,7 @@ import os
 import sys
 from pathlib import Path
 
-APP_NOM = "Farvon Uy"
+APP_NOM = "Farovon Hayot"
 APP_ID = "FarvonUy"
 VERSIYA = "1.2.1"
 

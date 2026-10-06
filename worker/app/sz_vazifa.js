@@ -112,7 +112,7 @@
 
   async function yukla() {
     if (NAMUNA) { if (!d) namuna(); return chiz(); }
-    if (!INIT) { xatoMatn = "Bu sahifani Telegram'dagi Farovon Uy botidan oching."; return chiz(); }
+    if (!INIT) { xatoMatn = "Bu sahifani Telegram'dagi Farovon Hayot botidan oching."; return chiz(); }
     if (yuklanmoqda) return;
     yuklanmoqda = true;
     try {

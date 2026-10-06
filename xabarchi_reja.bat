@@ -1,6 +1,6 @@
 @echo off
 REM =====================================================================
-REM  Farvon Uy - Telegram xabarchisi uchun REJA o'rnatadi.
+REM  Farovon Hayot - Telegram xabarchisi uchun REJA o'rnatadi.
 REM
 REM  Ikki marta bosing. Shundan keyin Windows har daqiqada
 REM  `src\xabarchi.py` ni ishga tushiradi va kerak bo'lsa guruhga

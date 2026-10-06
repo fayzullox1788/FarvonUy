@@ -48,6 +48,6 @@ def ornat() -> None:
             return
         matn = "".join(traceback.format_exception(turi, qiymat, iz))
         yoz(matn)
-        _korsat("Farvon Uy — xato", matn)
+        _korsat("Farovon Hayot — xato", matn)
 
     sys.excepthook = tutgich

@@ -1,4 +1,4 @@
-# Farvon Uy — agentlar uchun ish qoidalari
+# Farovon Hayot — agentlar uchun ish qoidalari
 
 PySide6 desktop dasturi (Python 3.14), uch kishilik uy moliyasi hisobi.
 UI tili — o'zbekcha. `README.md` da loyiha tuzilishi va ishga tushirish bor —
@@ -991,10 +991,10 @@ ko'rsatilardi, ya'ni kalendar ochilganda har bajarilgan ish uchun
 bittadan quti. Windows ilgagi (`SetWinEventHook`) uni shunday
 ko'rsatgan edi:
 
-    Qt6112QWindowIcon  133x58  sarlavha='Farvon Uy'  KO'RSATILDI/YASHIRILDI
+    Qt6112QWindowIcon  133x58  sarlavha='Farovon Hayot'  KO'RSATILDI/YASHIRILDI
 
 Sarlavha `setApplicationDisplayName()` dan keladi — sarlavhasi bo'sh
-har qanday oyna «Farvon Uy» bo'lib ko'rinadi, ya'ni bu bizniki.
+har qanday oyna «Farovon Hayot» bo'lib ko'rinadi, ya'ni bu bizniki.
 `setVisible(False)` xavfsiz: u oyna yaratmaydi.
 
 `ui_tekshir.py` butun sinov davomida `QWidget.setVisible` ni kuzatadi

@@ -148,7 +148,7 @@
       if (s.t === "kat") kat = namunaKat(s.id);
       return chiz();
     }
-    if (!INIT) { xatoMatn = "Bu sahifani Telegram'dagi Farovon Uy botidan oching."; return chiz(); }
+    if (!INIT) { xatoMatn = "Bu sahifani Telegram'dagi Farovon Hayot botidan oching."; return chiz(); }
     try {
       const so = { oy: joriyOy(), doira };
       if (!bugun) delete so.oy;

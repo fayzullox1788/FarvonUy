@@ -1,6 +1,6 @@
 @echo off
 REM =====================================================================
-REM  Farvon Uy - HAMMA TESTNI ISHGA TUSHIRISH
+REM  Farovon Hayot - HAMMA TESTNI ISHGA TUSHIRISH
 REM  1) yadro testlari (pul, bo'lish, undo, audit)
 REM  2) UI testlari (hamma sahifa xatosiz quriladimi)
 REM =====================================================================

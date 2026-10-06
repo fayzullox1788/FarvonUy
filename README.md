@@ -1,4 +1,4 @@
-# Farvon Uy
+# Farovon Hayot
 
 Uch kishilik uy uchun moliya hisobi. Lokal, oflayn, bitta kompyuterda.
 SQLite + PySide6. Hech qanday server, hech qanday internet.

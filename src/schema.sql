@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════
---  Farvon Uy  —  SQLite schema  v1
+--  Farovon Hayot  —  SQLite schema  v1
 --
 --  Uchta qat'iy prinsip:
 --    1. Hech narsa o'chirilmaydi — `ochirilgan=1` qo'yiladi.

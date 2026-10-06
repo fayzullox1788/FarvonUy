@@ -180,7 +180,7 @@
     const tgv = window.Telegram && Telegram.WebApp && Telegram.WebApp.version;
     const tgp = window.Telegram && Telegram.WebApp && Telegram.WebApp.platform;
     const u = i.uborka, d = i.dars;
-    return `<div class="szp-holat"><div class="ik navy">${IK.uy}</div><div><b>Farovon Uy</b><small>Versiya ${e(i.versiya)}${tgv && tgp && tgp !== "unknown" ? ` · Telegram ${e(tgv)} (${e(tgp)})` : ""}</small></div></div>
+    return `<div class="szp-holat"><div class="ik navy">${IK.uy}</div><div><b>Farovon Hayot</b><small>Versiya ${e(i.versiya)}${tgv && tgp && tgp !== "unknown" ? ` · Telegram ${e(tgv)} (${e(tgp)})` : ""}</small></div></div>
       <div class="szp-sar">Sinxron</div>
       <div class="szp-karta">
         ${qator("Desktop", qiymat(i.desktop_oxirgi ? qachon(i.desktop_oxirgi) : "Hali yo‘q"), { izoh: "Oxirgi kelgan o‘zgarish" })}
@@ -220,7 +220,7 @@
   // ── Ma'lumot ───────────────────────────────────────────────────────
   async function yukla() {
     if (NAMUNA) { if (!M) M = namuna(); chiz(); return; }
-    if (!INIT) { xatoMatn = "Bu sahifani Telegram'dagi Farovon Uy botidan oching."; chiz(); return; }
+    if (!INIT) { xatoMatn = "Bu sahifani Telegram'dagi Farovon Hayot botidan oching."; chiz(); return; }
     if (yuklanmoqda) return;
     yuklanmoqda = true;
     try { M = await api("profil"); xatoMatn = ""; }

@@ -212,9 +212,9 @@ def html_hisobot(db, boshi: str, oxiri: str,
     q = []
     q.append(f"<!doctype html><html lang='uz'><head><meta charset='utf-8'>"
              f"<meta name='viewport' content='width=device-width,initial-scale=1'>"
-             f"<title>Farvon Uy — {html.escape(_oraliq_nom(boshi, oxiri))}</title>"
+             f"<title>Farovon Hayot — {html.escape(_oraliq_nom(boshi, oxiri))}</title>"
              f"<style>{_CSS}</style></head><body><div class='o'>")
-    q.append(f"<h1>Farvon Uy</h1><div class='davr'>Hisobot davri: "
+    q.append(f"<h1>Farovon Hayot</h1><div class='davr'>Hisobot davri: "
              f"{html.escape(_oraliq_nom(boshi, oxiri))} &nbsp;·&nbsp; "
              f"tuzildi {date.today().isoformat()}</div>")
 
@@ -298,7 +298,7 @@ def html_hisobot(db, boshi: str, oxiri: str,
         q.append(f"<div class='izoh manfiy'>{html.escape(m)}</div>")
     q.append("</div>")
 
-    q.append(f"<div class='oyoq'>Farvon Uy {config.VERSIYA} — "
+    q.append(f"<div class='oyoq'>Farovon Hayot {config.VERSIYA} — "
              f"uy moliyasi hisobi</div></div></body></html>")
 
     yol.parent.mkdir(parents=True, exist_ok=True)
@@ -453,7 +453,7 @@ def vazifa_html(db, dan: str, oxiri: str, odam_id=None,
         q.append("</div>")
     q.append("</div>")
 
-    q.append("<div class='oyoq'>Farvon Uy · vazifalar kalendari</div>")
+    q.append("<div class='oyoq'>Farovon Hayot · vazifalar kalendari</div>")
     q.append("</div></body></html>")
     yol = Path(yol)
     yol.parent.mkdir(parents=True, exist_ok=True)
@@ -634,7 +634,7 @@ def umumiy_rasxod_html(db, dan: str, oxiri: str,
     q.append(f"<tr><td colspan='4'><b>Jami</b></td>"
              f"<td class='r'><b>{_pul(jami)}</b></td></tr>")
     q.append("</table></div>")
-    q.append("<div class='izoh'>Farvon Uy · umumiy rasxodlar</div>")
+    q.append("<div class='izoh'>Farovon Hayot · umumiy rasxodlar</div>")
     q.append("</div></body></html>")
 
     yol = Path(yol)
@@ -705,7 +705,7 @@ def shaxsiy_ulush_html(db, dan: str, oxiri: str, odam_id=None,
                  f"<td class='r'><b>{_pul(d['jami'])}</b></td></tr>")
         q.append("</table></div>")
 
-    q.append("<div class='izoh'>Farvon Uy · umumiy rasxoddan ulushlar</div>")
+    q.append("<div class='izoh'>Farovon Hayot · umumiy rasxoddan ulushlar</div>")
     q.append("</div></body></html>")
 
     yol = Path(yol)

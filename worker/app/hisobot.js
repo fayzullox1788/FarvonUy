@@ -167,7 +167,7 @@
     try {
       let j;
       if (NAMUNA) j = namuna(v);
-      else if (!INIT) throw new Error("Bu sahifani Telegram'dagi Farovon Uy botidan oching.");
+      else if (!INIT) throw new Error("Bu sahifani Telegram'dagi Farovon Hayot botidan oching.");
       else j = await api(sorov(v));
       if (mening !== navbat) return;
       if (j.bugun && j.bugun !== H.bugun) {

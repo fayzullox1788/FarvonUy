@@ -1,11 +1,11 @@
 ; ═══════════════════════════════════════════════════════════════════
-;  Farvon Uy — Inno Setup 6
+;  Farovon Hayot — Inno Setup 6
 ;  Natija:  installer\FarvonUySetup.exe   <- foydalanuvchiga shu beriladi
 ; ═══════════════════════════════════════════════════════════════════
 
-#define Nom       "Farvon Uy"
+#define Nom       "Farovon Hayot"
 #define Versiya   "1.2.1"
-#define Muallif   "Farvon Uy"
+#define Muallif   "Farovon Hayot"
 #define ExeNom    "FarvonUy.exe"
 
 [Setup]

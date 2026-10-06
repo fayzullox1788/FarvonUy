@@ -148,7 +148,7 @@
       }
       return kutilganXesh != null ? xeshniOch() : chiz();
     }
-    if (!INIT) { xatoMatn = "Bu sahifani Telegram'dagi Farovon Uy botidan oching."; return chiz(); }
+    if (!INIT) { xatoMatn = "Bu sahifani Telegram'dagi Farovon Hayot botidan oching."; return chiz(); }
     yuklanmoqda = true;
     try { qabul(await api("kategoriya")); xatoMatn = ""; }
     catch (err) { xatoMatn = err.message; }
