@@ -1403,6 +1403,287 @@ class TashqiTolovDialog(QDialog):
         self.accept()
 
 
+class TashqiBerishOyna(QDialog):
+    """Tashqariga berilgan qarzlar — yozish, kimdan qancha, qaytib olish.
+
+    Qarz varag'idagi «Tashqariga qarz» tugmasi ochadi (2026-10-06).
+    `TashqiQarzOyna` ning teskarisi: pul bergan odamning qo'lidan chiqadi,
+    qaytganda unga qaytadi. Uydagilar orasidagi qarzga tegmaydi.
+    """
+
+    def __init__(self, db, parent=None):
+        super().__init__(parent)
+        from PySide6.QtWidgets import QScrollArea
+        self.db = db
+        self.ozgardi = False
+        self.setWindowTitle("Tashqariga berilgan qarzlar")
+        self.resize(940, 780)
+        self.setMinimumSize(760, 560)
+
+        tashqi = QVBoxLayout(self)
+        tashqi.setContentsMargins(0, 0, 0, 0)
+        aylanma = QScrollArea()
+        aylanma.setWidgetResizable(True)
+        aylanma.setFrameShape(QScrollArea.NoFrame)
+        ichi = QWidget()
+        ichi.setObjectName("Shaffof")
+        ichi.setStyleSheet("QWidget#Shaffof { background: transparent; }")
+        v = QVBoxLayout(ichi)
+        v.setContentsMargins(22, 20, 22, 18)
+        v.setSpacing(14)
+
+        v.addWidget(sarlavha("Tashqariga berilgan qarzlar"))
+        v.addWidget(izoh("Uydan tashqaridagi odamga berilgan qarz. Pul bergan "
+                         "odamning qo'lidan chiqadi, qaytganda unga qaytadi; "
+                         "uydagilar orasidagi qarzga tegmaydi."))
+        self.xabar = Xabar()
+        v.addWidget(self.xabar)
+
+        # ── kimdan qancha qaytib olish kerak ─────────────────────────
+        k = Karta("Kimdan qancha olish kerak")
+        self.jami = QLabel("")
+        self.jami.setStyleSheet(
+            f"color:{theme.MATN};background:transparent;"
+            f"font-family:{theme.RAQAM_OILA};"
+            f"font-size:{theme.O_KATTA}px;font-weight:700;")
+        k.qosh(self.jami)
+        self.kimdan_jadval = Jadval(["Kimdan", "Nechta qarz", "Olish kerak"],
+                                    pul_ustunlar={2},
+                                    bosh_matn="✔ Hech kimda qarz yo'q")
+        self.kimdan_jadval.kengliklar(0, 130, 160)
+        self.kimdan_jadval.setMinimumHeight(120)
+        k.qosh(self.kimdan_jadval)
+        v.addWidget(k)
+
+        # ── yangi qarz ───────────────────────────────────────────────
+        y = Karta("Yangi qarz berish")
+        forma = QWidget()
+        f = QFormLayout(forma)
+        f.setContentsMargins(0, 0, 0, 0)
+        f.setSpacing(11)
+        # Oldin yozilgan ismlar taklif qilinadi, yangisini ham yozsa bo'ladi.
+        self.kimga = QComboBox()
+        self.kimga.setEditable(True)
+        self.kimga.addItems(ledger.tashqi_kimgalar(db))
+        self.kimga.setCurrentText("")
+        self.kimga.lineEdit().setPlaceholderText("masalan: Aziz aka")
+        self.summa = PulEdit()
+        self.kim = OdamTanla(db)
+        self.sana = SanaEdit()
+        self.sabab = QLineEdit()
+        f.addRow("Kimga berildi", self.kimga)
+        f.addRow("Summa", self.summa)
+        f.addRow("Kim berdi", self.kim)
+        f.addRow("Sana", self.sana)
+        f.addRow("Sabab", self.sabab)
+        y.qosh(forma)
+        qosh = tugma("Qarzni yozish", asosiy=True)
+        qosh.clicked.connect(self._qosh)
+        y.qosh(qator(None, qosh))
+        v.addWidget(y)
+
+        # ── qarzlar ──────────────────────────────────────────────────
+        q = Karta("Berilgan qarzlar")
+        self.jadval = Jadval(
+            ["Sana", "Kimga", "Kim berdi", "Sabab", "Berilgan", "Qaytgan",
+             "Qoldiq"], pul_ustunlar={4, 5, 6})
+        self.jadval.kengliklar(100, 140, 130, 0, 110, 110, 110)
+        self.jadval.setMinimumHeight(180)
+        q.qosh(self.jadval)
+        self.hammasi = QCheckBox("Yopilganlari ham ko'rinsin")
+        self.hammasi.toggled.connect(self._yangila)
+        och = tugma("O'chirish", xavfli=True)
+        qis = tugma("Qisman qaytdi")
+        yop = tugma("To'liq qaytdi", asosiy=True)
+        och.clicked.connect(self._ochir)
+        qis.clicked.connect(self._qisman)
+        yop.clicked.connect(self._yop)
+        q.qosh(qator(self.hammasi, None, och, qis, yop))
+        v.addWidget(q)
+
+        # ── qaytib olingan pullar ────────────────────────────────────
+        t = Karta("Qaytib olingan pullar")
+        self.qaytim_jadval = Jadval(
+            ["Sana", "Kimdan", "Kimga qaytdi", "Izoh", "Summa"], pul_ustunlar={4})
+        self.qaytim_jadval.kengliklar(100, 140, 130, 0, 130)
+        self.qaytim_jadval.setMinimumHeight(140)
+        t.qosh(self.qaytim_jadval)
+        to = tugma("Yozuvni o'chirish", xavfli=True)
+        to.clicked.connect(self._qaytim_ochir)
+        t.qosh(qator(None, to))
+        v.addWidget(t)
+
+        yopish = QDialogButtonBox()
+        yopish.addButton("Yopish", QDialogButtonBox.RejectRole)
+        yopish.rejected.connect(self.reject)
+        v.addWidget(yopish)
+
+        aylanma.setWidget(ichi)
+        tashqi.addWidget(aylanma)
+        self._yangila()
+
+    def _yangila(self):
+        from ui.eski.sahifa_asosiy import sana_qisqa
+        hammasi = ledger.tashqi_berilganlar(self.db)
+        korinadi = (hammasi if self.hammasi.isChecked()
+                    else [r for r in hammasi if r["qoldiq"] > 0])
+        self.jadval.tuldir(
+            [[sana_qisqa(r["sana"]), r["kimga"], r["odam_nom"],
+              r["sabab"] or "—", r["summa"], r["qaytgan"],
+              r["qoldiq"] or "✔ yopildi"] for r in korinadi],
+            [r["id"] for r in korinadi])
+
+        kimdan = ledger.tashqi_kimdan_olish(self.db)
+        self.kimdan_jadval.tuldir(
+            [[x["kimga"], f"{x['soni']} ta", x["qoldiq"]] for x in kimdan])
+        jami = sum(x["qoldiq"] for x in kimdan)
+        self.jami.setText(f"Jami olish kerak: {money.fmt_som(jami)}"
+                          if jami else "Berilgan qarz yo'q")
+
+        qatorlar, idlar = [], []
+        for r in self.db.q(
+                "SELECT t.*, b.kimga, o.nom FROM tashqi_qaytim t"
+                " JOIN tashqi_berilgan b ON b.id=t.berilgan_id"
+                " JOIN odam o ON o.id=b.odam_id"
+                " WHERE t.ochirilgan=0 AND b.ochirilgan=0"
+                " ORDER BY t.sana DESC, t.id DESC"):
+            qatorlar.append([sana_qisqa(r["sana"]), r["kimga"], r["nom"],
+                             r["izoh"] or "—", r["summa"]])
+            idlar.append(r["id"])
+        self.qaytim_jadval.tuldir(qatorlar, idlar)
+
+    def _ozgardi(self, matn: str):
+        self.ozgardi = True
+        self._yangila()
+        self.xabar.korsat(matn, "ok", 3500)
+
+    def _tanlangan(self):
+        bid = self.jadval.tanlangan_id()
+        if not bid:
+            self.xabar.korsat("Avval jadvaldan qarzni tanlang.", "ogoh", 3000)
+        return bid
+
+    def _qosh(self):
+        kimga = self.kimga.currentText().strip()
+        if not kimga:
+            xato_koraset(self, "Kimga berilgani yozilmagan.")
+            return
+        if self.summa.qiymat() <= 0:
+            xato_koraset(self, "Summa kiritilmagan.")
+            return
+        try:
+            entries.tashqi_berish_qosh(
+                self.db, self.sana.iso(), self.kim.odam_id(), kimga,
+                self.summa.qiymat(), self.sabab.text().strip() or None)
+        except Exception as e:
+            xato_koraset(self, str(e))
+            return
+        with QSignalBlocker(self.kimga):
+            self.kimga.clear()
+            self.kimga.addItems(ledger.tashqi_kimgalar(self.db))
+            self.kimga.setCurrentText("")
+        self.summa.qoy(0)
+        self.sabab.clear()
+        self._ozgardi(f"✔ {kimga} ga berilgan qarz yozildi.")
+
+    def _yop(self, *, soramasdan: bool = False):
+        """Tanlangan qarzning butun qoldig'i qaytib keldi."""
+        from datetime import date
+        bid = self._tanlangan()
+        if not bid:
+            return
+        b = self.db.q1("SELECT kimga FROM tashqi_berilgan WHERE id=?", bid)
+        qoldiq = entries.tashqi_berish_qoldiq(self.db, bid)
+        if qoldiq <= 0:
+            self.xabar.korsat("Bu qarz allaqachon yopilgan.", "ogoh", 3000)
+            return
+        if not soramasdan and not tasdiq(
+                self, f"{b['kimga']} {money.fmt_som(qoldiq)} qaytardi "
+                      f"deb qarz yopilsinmi?"):
+            return
+        try:
+            entries.tashqi_berish_yop(self.db, bid, date.today().isoformat())
+        except Exception as e:
+            xato_koraset(self, str(e))
+            return
+        self._ozgardi(f"✔ {b['kimga']} dagi qarz yopildi.")
+
+    def _qisman(self):
+        bid = self._tanlangan()
+        if not bid:
+            return
+        if entries.tashqi_berish_qoldiq(self.db, bid) <= 0:
+            self.xabar.korsat("Bu qarz to'liq qaytgan.", "ogoh", 3000)
+            return
+        if TashqiQaytimDialog(self.db, bid, self).exec():
+            self._ozgardi("✔ Qaytgan pul yozildi.")
+
+    def _ochir(self):
+        bid = self._tanlangan()
+        if bid and tasdiq(self, "Berilgan qarz yozuvi o'chirilsinmi?\n\n"
+                                "Uning qaytgan pullari ham o'chadi."):
+            entries.tashqi_berish_ochir(self.db, bid)
+            self._ozgardi("✔ O'chirildi.")
+
+    def _qaytim_ochir(self):
+        tid = self.qaytim_jadval.tanlangan_id()
+        if not tid:
+            self.xabar.korsat("Avval yozuvni tanlang.", "ogoh", 3000)
+            return
+        if tasdiq(self, "Qaytgan pul yozuvi o'chirilsinmi?"):
+            entries.tashqi_qaytim_ochir(self.db, tid)
+            self._ozgardi("✔ O'chirildi.")
+
+
+class TashqiQaytimDialog(QDialog):
+    """Tashqariga berilgan qarz qisman (yoki to'liq) qaytdi."""
+
+    def __init__(self, db, berilgan_id: int, parent=None):
+        super().__init__(parent)
+        self.db = db
+        self.berilgan_id = berilgan_id
+        b = db.q1("SELECT b.kimga, o.nom FROM tashqi_berilgan b"
+                  " JOIN odam o ON o.id=b.odam_id WHERE b.id=?", berilgan_id)
+        qoldiq = entries.tashqi_berish_qoldiq(db, berilgan_id)
+        self.setWindowTitle("Berilgan qarz qaytdi")
+        self.setMinimumWidth(430)
+
+        v = QVBoxLayout(self)
+        v.setContentsMargins(22, 20, 22, 18)
+        v.setSpacing(14)
+        v.addWidget(izoh(f"{b['kimga']} → {b['nom']} · qoldiq "
+                         f"{money.fmt_som(qoldiq)}"))
+        f = QFormLayout()
+        f.setSpacing(11)
+        self.sana = SanaEdit()
+        self.summa = PulEdit(qoldiq)
+        self.izohm = QLineEdit()
+        f.addRow("Sana", self.sana)
+        f.addRow("Summa", self.summa)
+        f.addRow("Izoh", self.izohm)
+        v.addLayout(f)
+
+        t = QDialogButtonBox()
+        t.addButton("Saqlash", QDialogButtonBox.AcceptRole).setObjectName("Asosiy")
+        t.addButton("Bekor", QDialogButtonBox.RejectRole)
+        t.accepted.connect(self._saqla)
+        t.rejected.connect(self.reject)
+        v.addWidget(t)
+
+    def _saqla(self):
+        if self.summa.qiymat() <= 0:
+            xato_koraset(self, "Summa kiritilmagan.")
+            return
+        try:
+            entries.tashqi_qaytim_qosh(
+                self.db, self.berilgan_id, self.sana.iso(), self.summa.qiymat(),
+                self.izohm.text().strip() or None)
+        except Exception as e:
+            xato_koraset(self, str(e))
+            return
+        self.accept()
+
+
 # ═══════════════════════════════════════════════════ hisob-kitob
 
 class TolovDialog(QDialog):

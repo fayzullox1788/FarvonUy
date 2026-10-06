@@ -742,6 +742,51 @@ def main() -> int:
 
     bosqich("tashqi qarz: yozish va qaytarish", _tashqi_qarz)
 
+    # ── tashqariga berilgan qarz: oyna, qisman qaytim, yopish ──────────
+    def _tashqi_berish():
+        from core import ledger as lg
+        from core import entries
+        from ui.eski.dialogs import TashqiBerishOyna, TashqiQaytimDialog
+        from ui.eski.oyna import HAMMA as _H
+        w = TashqiBerishOyna(d, parent=oyna)
+        w.kimga.setCurrentText("Berish aka")
+        w.summa.qoy(70_000)
+        w._qosh()
+        b = next((r for r in lg.tashqi_berilganlar(d) if r["kimga"] == "Berish aka"),
+                 None)
+        _tasdiq(b is not None and b["summa"] == 70_000, "oyna qarz bermadi")
+        _tasdiq(w.ozgardi and w.summa.qiymat() == 0,
+                "yozilgandan keyin forma tozalanmadi")
+        _tasdiq(any(w.kimdan_jadval.item(i, 0).text() == "Berish aka"
+                    for i in range(w.kimdan_jadval.rowCount())),
+                "«Kimdan qancha olish kerak» da yo'q")
+        _tasdiq(lg.audit(d).toza, "qarz berilgach audit qizil")
+
+        sahifa = oyna.sahifa_ol(next(i for i, x in enumerate(_H)
+                                     if x[0] == "Qarz"))
+        sahifa.yangila()
+        _tasdiq("Berish aka" in sahifa.berish_xulosa.text(),
+                "berilgan qarz Qarz varag'idagi xulosada ko'rinmadi")
+        _tasdiq("·" in sahifa.berish_tugma.text(),
+                "«Tashqariga qarz» tugmasida qoldiq yo'q")
+
+        t = TashqiQaytimDialog(d, b["id"], parent=w)
+        _tasdiq(t.summa.qiymat() == 70_000, "qaytim summasi qoldiqdan olinmadi")
+        t.summa.qoy(30_000)
+        t._saqla()
+        _tasdiq(entries.tashqi_berish_qoldiq(d, b["id"]) == 40_000,
+                "qisman qaytim yozilmadi")
+        w._yangila()
+        qator_ = next(i for i in range(w.jadval.rowCount())
+                      if w.jadval.item(i, 0).data(0x0100) == b["id"])
+        w.jadval.setCurrentCell(qator_, 0)
+        w._yop(soramasdan=True)
+        _tasdiq(entries.tashqi_berish_qoldiq(d, b["id"]) == 0, "qarz yopilmadi")
+        _tasdiq(lg.audit(d).toza, "berilgan qarz yopilgach audit qizil")
+        w.close()
+
+    bosqich("tashqariga qarz: berish va qaytib olish", _tashqi_berish)
+
     # ── umumiy tashqi qarz: oynadan umumiy yozish va mavjudini almashtirish
     def _umumiy_tashqi():
         from core import ledger as lg

@@ -365,6 +365,7 @@ class Db:
     def _qulfni_tekshir(self, jadval: str, data: dict, eski: dict | None) -> None:
         if jadval not in ("kirim", "rasxod", "qarz", "hisob_kitob",
                           "tashqi_qarz", "tashqi_tolov", "tashqi_ulush",
+                          "tashqi_berilgan", "tashqi_qaytim",
                           "karta_otkazma"):
             return
         for manba in (data, eski or {}):

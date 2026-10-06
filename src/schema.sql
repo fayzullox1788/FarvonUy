@@ -204,6 +204,35 @@ CREATE TABLE IF NOT EXISTS tashqi_ulush (
 );
 CREATE INDEX IF NOT EXISTS ix_tashqi_ulush ON tashqi_ulush(qarz_id, tolov_id);
 
+-- ─────────────────────────────────────────────────── tashqariga berilgan qarz
+-- Uydagi odam TASHQARIDAGI odamga qarz berdi («Fayzulloxon Aziz akaga
+-- 300 000 berdi», 2026-10-06). `tashqi_qarz` ning teskarisi: berilganda
+-- berganning `naqd` i kamayadi, qaytib olinganda oshadi. `sof` ga TEGMAYDI
+-- (uydagilar orasidagi qarz emas). Hali qaytmagani — `v_balans.tashqi_haq`.
+-- Faqat SHAXSIY: pulni bergan odamniki, qaytganda ham unga qaytadi.
+
+CREATE TABLE IF NOT EXISTS tashqi_berilgan (
+  id         INTEGER PRIMARY KEY,
+  sana       TEXT    NOT NULL,
+  odam_id    INTEGER NOT NULL REFERENCES odam(id),
+  kimga      TEXT    NOT NULL,
+  summa      INTEGER NOT NULL CHECK (summa > 0),
+  sabab      TEXT,
+  ochirilgan INTEGER NOT NULL DEFAULT 0,
+  yaratilgan TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS tashqi_qaytim (
+  id          INTEGER PRIMARY KEY,
+  berilgan_id INTEGER NOT NULL REFERENCES tashqi_berilgan(id),
+  sana        TEXT    NOT NULL,
+  summa       INTEGER NOT NULL CHECK (summa > 0),
+  izoh        TEXT,
+  ochirilgan  INTEGER NOT NULL DEFAULT 0,
+  yaratilgan  TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS ix_tashqi_qaytim ON tashqi_qaytim(berilgan_id);
+
 -- ───────────────────────────────────────────────────────── yo'qlik kunlari
 
 CREATE TABLE IF NOT EXISTS yoq_kun (
@@ -642,7 +671,14 @@ ttq AS (SELECT u.odam_id id, SUM(u.summa) s FROM tashqi_ulush u
         JOIN tashqi_tolov t ON t.id=u.tolov_id
         JOIN tashqi_qarz q ON q.id=t.tashqi_qarz_id
         WHERE u.ochirilgan=0 AND t.ochirilgan=0 AND q.ochirilgan=0
-          AND q.umumiy=1 GROUP BY u.odam_id)
+          AND q.umumiy=1 GROUP BY u.odam_id),
+-- TASHQARIGA BERILGAN qarz (2026-10-06): berilgani naqd'dan chiqadi,
+-- qaytib olingani qaytadi. O'chirilgan qarzning qaytimi hisobga kirmaydi.
+tb AS (SELECT odam_id    id, SUM(summa) s FROM tashqi_berilgan
+       WHERE ochirilgan=0 GROUP BY odam_id),
+tbq AS (SELECT b.odam_id id, SUM(t.summa) s FROM tashqi_qaytim t
+        JOIN tashqi_berilgan b ON b.id=t.berilgan_id
+        WHERE t.ochirilgan=0 AND b.ochirilgan=0 GROUP BY b.odam_id)
 -- DIQQAT: bu view faol bo'lmagan odamni ham qaytaradi. Agar `faol=1` filtri
 -- shu yerda bo'lsa, odam nofaol qilinganda uning qarzi hisobdan tushib
 -- qoladi va SUM(sof) noldan chiqib ketadi — ya'ni audit yolg'on gapiradi.
@@ -662,11 +698,15 @@ SELECT
   COALESCE(tq.s,0) + COALESCE(ttq.s,0)                 AS tashqi_qaytargan,
   COALESCE(ta.s,0) - COALESCE(tq.s,0)
     + COALESCE(tsq.s,0) - COALESCE(ttq.s,0)            AS tashqi_qoldiq,
+  COALESCE(tb.s,0)                                     AS tashqi_berilgan,
+  COALESCE(tbq.s,0)                                    AS tashqi_qaytib_olgan,
+  COALESCE(tb.s,0) - COALESCE(tbq.s,0)                 AS tashqi_haq,
   COALESCE(k.s,0) - COALESCE(sh.s,0) - COALESCE(ut.s,0)
     - COALESCE(qb.s,0) + COALESCE(qo.s,0)
     - COALESCE(ht.s,0) + COALESCE(ho.s,0)
     + COALESCE(ta.s,0) - COALESCE(tq.s,0)
-    + COALESCE(tsq.s,0) - COALESCE(ttq.s,0)            AS naqd,
+    + COALESCE(tsq.s,0) - COALESCE(ttq.s,0)
+    - COALESCE(tb.s,0) + COALESCE(tbq.s,0)              AS naqd,
   (COALESCE(ut.s,0) - COALESCE(uu.s,0) - COALESCE(ub.s,0))
     + COALESCE(qb.s,0) - COALESCE(qo.s,0)
     + COALESCE(ht.s,0) - COALESCE(ho.s,0)              AS sof,
@@ -676,7 +716,8 @@ SELECT
   COALESCE(k.s,0) - COALESCE(sh.s,0)
     - COALESCE(uu.s,0) - COALESCE(ub.s,0)
     + COALESCE(ta.s,0) - COALESCE(tq.s,0)
-    + COALESCE(tsq.s,0) - COALESCE(ttq.s,0)            AS adolat
+    + COALESCE(tsq.s,0) - COALESCE(ttq.s,0)
+    - COALESCE(tb.s,0) + COALESCE(tbq.s,0)              AS adolat
 FROM odam o
 LEFT JOIN k  ON k.id=o.id   LEFT JOIN sh ON sh.id=o.id
 LEFT JOIN ut ON ut.id=o.id  LEFT JOIN uu ON uu.id=o.id
@@ -684,7 +725,8 @@ LEFT JOIN ub ON ub.id=o.id
 LEFT JOIN qb ON qb.id=o.id  LEFT JOIN qo ON qo.id=o.id
 LEFT JOIN ht ON ht.id=o.id  LEFT JOIN ho ON ho.id=o.id
 LEFT JOIN ta ON ta.id=o.id  LEFT JOIN tq ON tq.id=o.id
-LEFT JOIN tsq ON tsq.id=o.id LEFT JOIN ttq ON ttq.id=o.id;
+LEFT JOIN tsq ON tsq.id=o.id LEFT JOIN ttq ON ttq.id=o.id
+LEFT JOIN tb ON tb.id=o.id   LEFT JOIN tbq ON tbq.id=o.id;
 
 -- Juftlik bo'yicha xom qarz (netlanmagan)
 DROP VIEW IF EXISTS v_juft_qarz;

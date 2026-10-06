@@ -257,6 +257,19 @@ uy a'zosi botga SHAXSIY rasm yuboradi, izohida mahsulot nomi
 (`xabar._rasmni_ishla`, har daqiqada). Begona odam va guruh rasmlari
 e'tiborsiz — bot ochiq.
 
+### Tashqariga berilgan qarz (`tashqi_berilgan`, `tashqi_qaytim`, 2026-10-06)
+
+`tashqi_qarz` ning TESKARISI: uydagi odam tashqaridagi odamga (`kimga` —
+matn) qarz berdi. Alohida jadvallar — `tashqi_qarz` ga yo'nalish ustuni
+qo'shilmagan, aks holda uni o'qiydigan hamma joy (desktop + worker)
+berilganni olingan deb sanardi. `v_balans`: `tb`/`tbq` naqd VA adolatdan
+bir xil ayiriladi/qo'shiladi, `sof` ga tegmaydi; `tashqi_haq` = hali
+qaytmagani. Audit 2-sharti `… − jami_tashqi_haq`, 8-sharti — ortig'i bilan
+qaytmagan. Faqat SHAXSIY (umumiy varianti yo'q). UI —
+`dialogs.TashqiBerishOyna` (Qarz varag'idagi «Tashqariga qarz» tugmasi +
+xulosa kartasi), qisman qaytim `TashqiQaytimDialog`. D1 —
+`tools/qarz_berish_yoq.sh` (bajarilgan 2026-10-06).
+
 ### Umumiy tashqi qarz (`tashqi_qarz.umumiy=1`, `tashqi_ulush`)
 
 **Qoida 2026-10-01 da o'zgardi (foydalanuvchi so'ragan).** Olingan pul

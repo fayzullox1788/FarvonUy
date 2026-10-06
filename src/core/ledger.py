@@ -66,6 +66,43 @@ def tashqi_qarzlar(db, faqat_ochiq: bool = False) -> list[dict]:
     return qatorlar
 
 
+def jami_tashqi_haq(db) -> int:
+    """Tashqariga berilgan va hali qaytmagan qarz — hamma odam bo'yicha."""
+    return db.skalyar("SELECT SUM(tashqi_haq) FROM v_balans")
+
+
+def tashqi_berilganlar(db, faqat_ochiq: bool = False) -> list[dict]:
+    """Tashqariga berilgan qarzlar: berilgan, qaytgan va qoldig'i bilan."""
+    qatorlar = [dict(r) for r in db.q(
+        "SELECT b.*, o.nom odam_nom,"
+        "  COALESCE((SELECT SUM(t.summa) FROM tashqi_qaytim t"
+        "            WHERE t.berilgan_id=b.id AND t.ochirilgan=0),0) qaytgan"
+        " FROM tashqi_berilgan b JOIN odam o ON o.id=b.odam_id"
+        " WHERE b.ochirilgan=0 ORDER BY b.sana DESC, b.id DESC")]
+    for r in qatorlar:
+        r["qoldiq"] = r["summa"] - r["qaytgan"]
+    if faqat_ochiq:
+        qatorlar = [r for r in qatorlar if r["qoldiq"] > 0]
+    return qatorlar
+
+
+def tashqi_kimdan_olish(db) -> list[dict]:
+    """Kimdan qancha qaytib olish kerak: [{kimga, qoldiq, soni}]."""
+    jam: dict[str, dict] = {}
+    for r in tashqi_berilganlar(db, faqat_ochiq=True):
+        x = jam.setdefault(r["kimga"], {"kimga": r["kimga"], "qoldiq": 0, "soni": 0})
+        x["qoldiq"] += r["qoldiq"]
+        x["soni"] += 1
+    return sorted(jam.values(), key=lambda x: -x["qoldiq"])
+
+
+def tashqi_kimgalar(db) -> list[str]:
+    """Oldin qarz berilgan ismlar — eng yangisi birinchi (taklif uchun)."""
+    return [r["kimga"] for r in db.q(
+        "SELECT kimga, MAX(sana) s FROM tashqi_berilgan WHERE ochirilgan=0"
+        " GROUP BY kimga ORDER BY s DESC")]
+
+
 def tashqi_kimga_qaytarish(db) -> list[dict]:
     """Kimga qancha qaytarish kerak — ochiq qarzlar qarz beruvchi bo'yicha.
 
@@ -308,13 +345,14 @@ def audit(db) -> Audit:
     a.naqd_yigindi = sum(r["naqd"] for r in qatorlar)
     #    Tashqaridan olingan qarz uyga pul olib kiradi, qaytarilgani olib
     #    chiqadi — ikkalasi ham haqiqiy pul harakati.
+    #    Tashqariga berilgan qarz esa pulni olib chiqadi, qaytgani olib kiradi.
     a.kutilgan_naqd = (jami_kirim(db) - jami_rasxod(db)
-                       + jami_tashqi_qoldiq(db))
+                       + jami_tashqi_qoldiq(db) - jami_tashqi_haq(db))
     if a.naqd_yigindi != a.kutilgan_naqd:
         a.toza = False
         a.muammolar.append(
             f"Naqd pul mos kelmadi: {money.fmt(a.naqd_yigindi)} ≠ "
-            f"kirim − rasxod + tashqi qarz = {money.fmt(a.kutilgan_naqd)}")
+            f"kirim − rasxod + tashqi qarz − berilgan = {money.fmt(a.kutilgan_naqd)}")
 
     # 7. Umumiy tashqi qarz: ulushlar yig'indisi = qarz (va har to'lov).
     for r in db.q(
@@ -336,6 +374,17 @@ def audit(db) -> Audit:
         a.toza = False
         a.muammolar.append(f"Umumiy tashqi qarz to'lovi #{r['id']}: ulushlar "
                            f"{money.fmt(r['us'])} ≠ {money.fmt(r['summa'])}")
+
+    # 8. Tashqariga berilgan qarz ortig'i bilan qaytmaydi.
+    for r in db.q(
+            "SELECT b.id, b.kimga, b.summa, SUM(t.summa) qaytgan"
+            " FROM tashqi_berilgan b JOIN tashqi_qaytim t"
+            "   ON t.berilgan_id=b.id AND t.ochirilgan=0"
+            " WHERE b.ochirilgan=0 GROUP BY b.id HAVING qaytgan > b.summa"):
+        a.toza = False
+        a.muammolar.append(
+            f"Berilgan qarz #{r['id']} ({r['kimga']}): qaytgan "
+            f"{money.fmt(r['qaytgan'])} > qarz {money.fmt(r['summa'])}")
 
     # 6. Tashqi qarz ortig'i bilan qaytarilmaydi.
     for r in db.q(

@@ -250,7 +250,62 @@
     opacity: 0; transition: .2s; pointer-events: none; z-index: 20; max-width: 90%;
   }
   .xabar.kor { opacity: 1; transform: translate(-50%, 0); }
+  /* 24 soatlik vaqt tanlagich (vaqt24) — AM/PM yo'q */
+  .vaqt24 { display: inline-flex; align-items: center; gap: 4px; }
+  .vaqt24 select { width: auto !important; min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+  .vaqt24 b { font-weight: 600; color: #7b8494; }
 </style>
+<script>
+// ── 24 soatlik vaqt (2026-10-06, foydalanuvchi so'ragan) ────────────────
+// Telefondagi <input type="time"> qurilma tiliga qarab AM/PM ko'rsatadi.
+// Har bir shunday maydon yashirilib, o'rniga soat (00–23) va daqiqa
+// (00–59) tanlagichi qo'yiladi. Asl input qoladi va "HH:MM" ni saqlaydi —
+// .value o'qiydigan kod o'zgarmaydi; tanlanganda input/change chiqadi.
+(function () {
+  var ikki = function (n) { return (n < 10 ? "0" : "") + n; };
+  function variant(max, bosh) {
+    var h = bosh ? '<option value="">--</option>' : "";
+    for (var i = 0; i < max; i++) h += '<option value="' + ikki(i) + '">' + ikki(i) + "</option>";
+    return h;
+  }
+  function aylantir(inp) {
+    if (inp.dataset.vaqt24) return;
+    inp.dataset.vaqt24 = "1";
+    inp.type = "hidden";
+    var w = document.createElement("span");
+    w.className = "vaqt24";
+    w.innerHTML = '<select aria-label="Soat">' + variant(24, true) + "</select><b>:</b>" +
+                  '<select aria-label="Daqiqa">' + variant(60, true) + "</select>";
+    inp.after(w);
+    var s = w.children[0], d = w.children[2];
+    function oqi() {
+      var m = /^(\d{1,2}):(\d{2})/.exec(inp.value || "");
+      s.value = m ? ikki(+m[1]) : ""; d.value = m ? m[2] : "";
+      s.disabled = d.disabled = inp.disabled;
+    }
+    function yoz(ev) {
+      if (ev.target === s && s.value && !d.value) d.value = "00";
+      if (ev.target === d && d.value && !s.value) s.value = "00";
+      if (!s.value && ev.target === s) d.value = "";
+      if (!d.value && ev.target === d) s.value = "";
+      inp.value = s.value && d.value ? s.value + ":" + d.value : "";
+      inp.dispatchEvent(new Event("input", { bubbles: true }));
+      inp.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    s.addEventListener("change", yoz); d.addEventListener("change", yoz);
+    new MutationObserver(oqi).observe(inp, { attributes: true, attributeFilter: ["disabled", "value"] });
+    oqi();
+  }
+  function hammasi(ildiz) {
+    (ildiz.querySelectorAll ? ildiz : document).querySelectorAll('input[type="time"]').forEach(aylantir);
+    if (ildiz.matches && ildiz.matches('input[type="time"]')) aylantir(ildiz);
+  }
+  new MutationObserver(function (ozg) {
+    ozg.forEach(function (o) { o.addedNodes.forEach(function (n) { if (n.nodeType === 1) hammasi(n); }); });
+  }).observe(document.documentElement, { childList: true, subtree: true });
+  document.addEventListener("DOMContentLoaded", function () { hammasi(document); });
+})();
+</script>
 <script>
 // ── Demo rejim ─────────────────────────────────────────────────────────
 // Taqdimot uchun: yoqilgan bo'lsa Worker HAMMA /app/api/* ni alohida demo D1

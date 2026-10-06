@@ -416,6 +416,81 @@ def tashqi_tolov_ochir(db, tolov_id: int) -> None:
         db.apply("tashqi_tolov", "DELETE", qator_id=tolov_id)
 
 
+# ───────────────────────────────────────────── tashqariga berilgan qarz
+# Uydagi odam tashqaridagi odamga qarz berdi (2026-10-06). Pul bergan
+# odamning qo'lidan chiqadi, qaytganda unga qaytadi. `sof` ga tegmaydi.
+
+def tashqi_berish_qosh(db, sana: str, odam_id: int, kimga: str, summa: int,
+                       sabab: str | None = None) -> int:
+    summa = int(summa)
+    kimga = (kimga or "").strip()
+    if summa <= 0:
+        raise ValueError("Qarz summasi musbat bo'lishi kerak")
+    if not kimga:
+        raise ValueError("Kimga berilgani yozilmagan")
+    nom = _odam_nom(db, odam_id)
+    with db.amal(f"Tashqariga qarz: {nom} → {kimga} {money.fmt(summa)}"):
+        return db.apply("tashqi_berilgan", "INSERT", {
+            "sana": sana, "odam_id": odam_id, "kimga": kimga,
+            "summa": summa, "sabab": sabab or None})
+
+
+def tashqi_berish_qoldiq(db, berilgan_id: int) -> int:
+    return db.skalyar(
+        "SELECT b.summa - COALESCE((SELECT SUM(t.summa) FROM tashqi_qaytim t"
+        "  WHERE t.berilgan_id=b.id AND t.ochirilgan=0),0)"
+        " FROM tashqi_berilgan b WHERE b.id=? AND b.ochirilgan=0", berilgan_id)
+
+
+def tashqi_qaytim_qosh(db, berilgan_id: int, sana: str, summa: int,
+                       izoh: str | None = None) -> int:
+    """Berilgan qarz qaytib keldi (to'liq yoki qisman) — bergan odamga."""
+    summa = int(summa)
+    b = db.q1("SELECT kimga FROM tashqi_berilgan WHERE id=? AND ochirilgan=0",
+              berilgan_id)
+    if not b:
+        raise ValueError("Qarz topilmadi")
+    if summa <= 0:
+        raise ValueError("Summa musbat bo'lishi kerak")
+    qoldiq = tashqi_berish_qoldiq(db, berilgan_id)
+    if summa > qoldiq:
+        raise ValueError(
+            f"Qarzning qoldig'i {money.fmt(qoldiq)} — undan ko'p "
+            f"qaytib olib bo'lmaydi")
+    with db.amal(f"Berilgan qarz qaytdi: {b['kimga']} {money.fmt(summa)}"):
+        return db.apply("tashqi_qaytim", "INSERT", {
+            "berilgan_id": berilgan_id, "sana": sana, "summa": summa,
+            "izoh": izoh or None})
+
+
+def tashqi_berish_yop(db, berilgan_id: int, sana: str,
+                      izoh: str | None = None) -> int:
+    """Butun qoldiq qaytib keldi — qarz yopiladi."""
+    if not db.q1("SELECT 1 FROM tashqi_berilgan WHERE id=? AND ochirilgan=0",
+                 berilgan_id):
+        raise ValueError("Qarz topilmadi")
+    qoldiq = tashqi_berish_qoldiq(db, berilgan_id)
+    if qoldiq <= 0:
+        raise ValueError("Bu qarz allaqachon yopilgan")
+    return tashqi_qaytim_qosh(db, berilgan_id, sana, qoldiq,
+                              izoh or "Qarz yopildi")
+
+
+def tashqi_berish_ochir(db, berilgan_id: int) -> None:
+    """Berilgan qarz va uning HAMMA qaytimi — bitta undo qadami."""
+    b = db.q1("SELECT kimga FROM tashqi_berilgan WHERE id=?", berilgan_id)
+    with db.amal(f"Berilgan qarz o'chirildi: {b['kimga'] if b else '?'}"):
+        for t in db.q("SELECT id FROM tashqi_qaytim"
+                      " WHERE berilgan_id=? AND ochirilgan=0", berilgan_id):
+            db.apply("tashqi_qaytim", "DELETE", qator_id=t["id"])
+        db.apply("tashqi_berilgan", "DELETE", qator_id=berilgan_id)
+
+
+def tashqi_qaytim_ochir(db, qaytim_id: int) -> None:
+    with db.amal("Berilgan qarz qaytimi o'chirildi"):
+        db.apply("tashqi_qaytim", "DELETE", qator_id=qaytim_id)
+
+
 # ────────────────────────────────────────────────────────── hisob-kitob
 
 def hisob_kitob_qosh(db, sana: str, kim_toladi: int, kimga: int, summa: int,

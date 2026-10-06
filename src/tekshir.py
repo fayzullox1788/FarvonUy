@@ -4006,6 +4006,80 @@ finally:
     _s.DEMO = False
 
 
+# ═══════════════════════════════════════════ tashqariga berilgan qarz
+
+print("\n── Tashqariga berilgan qarz ──")
+dBq = dbm.Db(_TMP / "bBq.db", zaxirasiz=True)
+bF = entries.odam_qosh(dBq, "Fayzulloxon")
+bO = entries.odam_qosh(dBq, "Otabek")
+entries.kirim_qosh(dBq, "2026-10-01", bF, 1_000_000)
+
+
+def _bb(oid):
+    return ledger.balans(dBq, oid)
+
+
+_bn, _ba, _bs = _bb(bF)["naqd"], _bb(bF)["adolat"], _bb(bF)["sof"]
+_bq = entries.tashqi_berish_qosh(dBq, "2026-10-02", bF, "  Aziz aka ",
+                                 300_000, "telefon uchun")
+teng("berilgan naqddan chiqadi", _bn - 300_000, _bb(bF)["naqd"])
+teng("adolat ham kamayadi (ayniyat saqlanadi)", _ba - 300_000,
+     _bb(bF)["adolat"])
+teng("berish: sof ga tegmaydi", _bs, _bb(bF)["sof"])
+teng("berish: qoldiq (tashqi_haq) ko'rinadi", 300_000, _bb(bF)["tashqi_haq"])
+teng("berish: boshqa odamga tegmaydi", 0, _bb(bO)["naqd"])
+teng("kimga tozalab yoziladi", "Aziz aka",
+     dBq.skalyar("SELECT kimga FROM tashqi_berilgan WHERE id=?", _bq))
+tekshir("audit toza (qarz berilgandan keyin)", ledger.audit(dBq).toza,
+        "; ".join(ledger.audit(dBq).muammolar))
+tekshir("berish: juft qarzlarda chiqmaydi", ledger.juft_qarzlar(dBq) == [])
+tekshir("berish: summa 0 yiqiladi",
+        _yiqiladimi(lambda: entries.tashqi_berish_qosh(
+            dBq, "2026-10-02", bF, "X", 0)))
+tekshir("berish: kimga bo'sh yiqiladi",
+        _yiqiladimi(lambda: entries.tashqi_berish_qosh(
+            dBq, "2026-10-02", bF, "  ", 1)))
+
+entries.tashqi_qaytim_qosh(dBq, _bq, "2026-10-04", 100_000)
+teng("qisman qaytdi — naqdga qaytadi", _bn - 200_000, _bb(bF)["naqd"])
+teng("qisman qaytdi — qoldiq", 200_000, entries.tashqi_berish_qoldiq(dBq, _bq))
+tekshir("ortig'i bilan qaytib olib bo'lmaydi",
+        _yiqiladimi(lambda: entries.tashqi_qaytim_qosh(
+            dBq, _bq, "2026-10-05", 200_001)))
+teng("ro'yxat: berilgan/qaytgan/qoldiq", [(300_000, 100_000, 200_000)],
+     [(r["summa"], r["qaytgan"], r["qoldiq"])
+      for r in ledger.tashqi_berilganlar(dBq)])
+teng("kimdan qancha olish kerak",
+     [{"kimga": "Aziz aka", "qoldiq": 200_000, "soni": 1}],
+     ledger.tashqi_kimdan_olish(dBq))
+teng("berish: oldingi ismlar taklif qilinadi", ["Aziz aka"],
+     ledger.tashqi_kimgalar(dBq))
+tekshir("audit toza (qisman qaytgach)", ledger.audit(dBq).toza,
+        "; ".join(ledger.audit(dBq).muammolar))
+
+entries.tashqi_berish_yop(dBq, _bq, "2026-10-06")
+teng("to'liq qaytdi — naqd joyiga qaytdi", _bn, _bb(bF)["naqd"])
+teng("to'liq qaytdi — tashqi_haq 0", 0, _bb(bF)["tashqi_haq"])
+teng("yopilgani ochiqlar ro'yxatida yo'q", [],
+     ledger.tashqi_berilganlar(dBq, faqat_ochiq=True))
+tekshir("yopilganini qayta yopib bo'lmaydi",
+        _yiqiladimi(lambda: entries.tashqi_berish_yop(dBq, _bq, "2026-10-06")))
+
+# O'chirish: qarz + qaytimlari bitta undo qadami.
+_bq2 = entries.tashqi_berish_qosh(dBq, "2026-10-06", bF, "Vali", 50_000)
+entries.tashqi_qaytim_qosh(dBq, _bq2, "2026-10-06", 20_000)
+entries.tashqi_berish_ochir(dBq, _bq2)
+teng("o'chirilgan qarz naqdga ta'sir qilmaydi", _bn, _bb(bF)["naqd"])
+teng("o'chirilgan qarzning qaytimi ham o'chdi", 0, dBq.skalyar(
+    "SELECT count(*) FROM tashqi_qaytim WHERE berilgan_id=? AND ochirilgan=0",
+    _bq2))
+dBq.undo()
+teng("undo: qarz va qaytimi qaytdi", _bn - 30_000, _bb(bF)["naqd"])
+tekshir("audit toza (undo dan keyin)", ledger.audit(dBq).toza,
+        "; ".join(ledger.audit(dBq).muammolar))
+dBq.yop()
+
+
 # ═════════════════════════════════════════════════════════ yakun
 
 dG.yop(); dS.yop(); dR.yop(); dK.yop(); dO.yop(); d.yop(); d2.yop(); d3.yop(); dU.yop(); d8.yop(); d9.yop(); dA.yop(); dB.yop(); dC.yop(); dD.yop(); dT.yop(); dT2.yop()

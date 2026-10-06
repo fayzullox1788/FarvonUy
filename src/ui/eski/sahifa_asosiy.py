@@ -13,7 +13,7 @@ from core import entries, ledger, plan, recurring, settle
 from core import rasxod_kirit as rk
 from ui.eski import theme
 from ui.eski.dialogs import (JuftTafsilot, KirimDialog, QarzDialog,
-                        RasxodDialog, RasxodTafsilot, TashqiQarzOyna,
+                        RasxodDialog, RasxodTafsilot, TashqiBerishOyna, TashqiQarzOyna,
                         mahsulotlarni_toldir, TolovDialog, tasdiq,
                         xato_koraset)
 from ui.eski.widgets import (HamyonTanla, Holat, Jadval, Karta, KategoriyaTanla, OdamTanla,
@@ -676,10 +676,14 @@ class QarzSahifa(Sahifa):
         tolov = tugma("+ Erkin to'lov")
         tashqi = tugma("Tashqaridan qarz")
         self.tashqi_tugma = tashqi
+        berish = tugma("Tashqariga qarz")
+        self.berish_tugma = berish
         yangi.clicked.connect(self._yangi)
         tolov.clicked.connect(lambda: self._tolov())
         tashqi.clicked.connect(self._tashqi_oyna)
-        self.tana.addWidget(qator(sarlavha("Qarz"), None, tashqi, tolov, yangi))
+        berish.clicked.connect(self._berish_oyna)
+        self.tana.addWidget(qator(sarlavha("Qarz"), None, berish, tashqi,
+                                  tolov, yangi))
 
         self.xabar = Xabar()
         self.tana.addWidget(self.xabar)
@@ -747,6 +751,15 @@ class QarzSahifa(Sahifa):
         tqa.clicked.connect(self._tashqi_oyna)
         tq.qosh(qator(self.tashqi_xulosa, None, tqa))
         self.tana.addWidget(tq)
+
+        # ── tashqariga berilgan qarzlar ──────────────────────────────
+        # Alohida oynada (`TashqiBerishOyna`). `sof` ga tegmaydi.
+        tb = Karta("Tashqariga berilgan qarzlar")
+        self.berish_xulosa = izoh("")
+        tba = tugma("Ochish")
+        tba.clicked.connect(self._berish_oyna)
+        tb.qosh(qator(self.berish_xulosa, None, tba))
+        self.tana.addWidget(tb)
 
         # ── to'lovlar ────────────────────────────────────────────────
         h = Karta("To'lovlar tarixi")
@@ -881,10 +894,26 @@ class QarzSahifa(Sahifa):
         self.tashqi_tugma.setText(
             f"Tashqaridan qarz · {money.fmt(jami)}" if jami else "Tashqaridan qarz")
 
+        kimdan = ledger.tashqi_kimdan_olish(self.db)
+        jami = sum(x["qoldiq"] for x in kimdan)
+        self.berish_xulosa.setText(
+            f"{sum(x['soni'] for x in kimdan)} ta ochiq · qaytib olinishi kerak "
+            f"{money.fmt_som(jami)} ("
+            + ", ".join(x["kimga"] for x in kimdan) + ")"
+            if kimdan else "Tashqariga berilgan qarz yo'q.")
+        self.berish_tugma.setText(
+            f"Tashqariga qarz · {money.fmt(jami)}" if jami else "Tashqariga qarz")
+
     # ── tashqi qarz ──────────────────────────────────────────────────
 
     def _tashqi_oyna(self):
         d = TashqiQarzOyna(self.db, self)
+        d.exec()
+        if d.ozgardi:
+            self.oyna.yangila()
+
+    def _berish_oyna(self):
+        d = TashqiBerishOyna(self.db, self)
         d.exec()
         if d.ozgardi:
             self.oyna.yangila()

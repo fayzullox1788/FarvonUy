@@ -13,6 +13,7 @@ const TOMON = 1; // Worker = toq
 
 // Yopiq oyda o'zgartirib bo'lmaydigan jadvallar (db.py `_qulfni_tekshir`).
 const QULFLI = new Set(["kirim", "rasxod", "qarz", "hisob_kitob", "tashqi_qarz",
+  "tashqi_berilgan", "tashqi_qaytim",
   "tashqi_tolov", "tashqi_ulush", "karta_otkazma"]);
 
 export class Xato extends Error {}
