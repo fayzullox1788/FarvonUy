@@ -709,7 +709,7 @@ export async function bersin(db, vazifa_id, yangi_odam_id) {
 
 // ─────────────────────────────────────────────────────────────── tahrir
 
-const TAHRIR_MAYDON = ["nom", "odam_id", "sana", "vaqt", "davomiylik", "izoh"];
+const TAHRIR_MAYDON = ["nom", "odam_id", "sana", "vaqt", "davomiylik", "izoh", "xona", "oqituvchi"];
 
 // vazifa.py:640 — Python **maydonlar → obyekt {nom, odam_id, sana, vaqt, davomiylik, izoh} (bori)
 export async function tahrir(db, vazifa_id, maydonlar = {}) {
@@ -724,7 +724,7 @@ export async function tahrir(db, vazifa_id, maydonlar = {}) {
   if ("sana" in yangi) yangi.sana = iso;
   if ("vaqt" in yangi) yangi.vaqt = vaqt_;
   if ("davomiylik" in yangi) yangi.davomiylik = davomiylik;
-  if ("izoh" in yangi) yangi.izoh = String(yangi.izoh ?? "").trim() || null;
+  for (const k of ["izoh", "xona", "oqituvchi"]) if (k in yangi) yangi[k] = String(yangi[k] ?? "").trim() || null;
   await db.apply("vazifa", "UPDATE", yangi, vazifa_id, `Vazifa tahrirlandi: ${b.nom}`);
 }
 

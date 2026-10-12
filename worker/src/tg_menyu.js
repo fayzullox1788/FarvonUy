@@ -8,6 +8,7 @@ import * as tg from "./tg.js";
 import * as vaqt from "./vaqt.js";
 import * as ledger from "./ledger.js";
 import { kun, shaxsiy_nomlari } from "./vazifa.js";
+import { joy_satrlari } from "./dars.js";
 import * as tg_rasxod from "./tg_rasxod.js";
 
 export const MOLIYA = "💰 Moliya";
@@ -158,6 +159,7 @@ export function _vazifa_matn(royxat, sarlavha, bosh) {
     const belgi = v.holat === BAJARILDI ? "✅" : v.holat === QAZO ? "🕌" : "⏳";
     const vq = v.vaqt ? `${v.vaqt}  ` : "";
     s.push(`${belgi} ${_e(vq)}${_e(v.nom)}`);
+    for (const j of joy_satrlari(v)) s.push(`      ${_e(j)}`);
     if (v.izoh) s.push(`      ${_e(v.izoh)}`);
   }
   const ochiq = royxat.filter((v) => !_yopiqmi(v)).length;

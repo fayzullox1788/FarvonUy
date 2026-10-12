@@ -110,7 +110,7 @@ async function qatorKorinish(db, v, k, takrorKesh) {
   const tt = k.turNom.get(v.nom);
   return {
     id: v.id, nom: v.nom, odam_id: v.odam_id, sana: v.sana, vaqt: v.vaqt, davomiylik: v.davomiylik,
-    izoh: v.izoh, holat: v.holat, menyu: v.menyu ?? null,
+    izoh: v.izoh, xona: v.xona ?? null, oqituvchi: v.oqituvchi ?? null, holat: v.holat, menyu: v.menyu ?? null,
     toifa: toifaAniqla(v, k.shaxsiy, k.uy),
     tur, tur_id: tt ? tt.id : null, shaxsiy: k.shaxsiy.has(v.nom),
     takror, ruxsat: ruxsat(tur, Boolean(takror)),

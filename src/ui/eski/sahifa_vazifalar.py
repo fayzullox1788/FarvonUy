@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDialog,
                                QHBoxLayout, QLabel, QLineEdit, QScrollArea,
                                QSpinBox, QTimeEdit, QVBoxLayout, QWidget)
 
+from core import dars
 from core import reports
 from core import menyu as mn
 from core import xabar
@@ -110,6 +111,17 @@ class VazifaDialog(QDialog):
         forma.addRow("Vaqt:", self.vaqt)
         forma.addRow("Davomiyligi:", self.davomiylik)
         forma.addRow("Izoh:", self.izoh)
+        # Dars (EduPage'dan): qaysi xonada va kim o'tadi. Faqat dars
+        # qatorida chiqadi — oddiy uy ishida bu maydonlar ma'nosiz.
+        self.darsmi = bool(vazifa_id) and dars.darsmi(
+            vz.bitta(db, vazifa_id) or {})
+        self.xona = QLineEdit()
+        self.xona.setPlaceholderText("Ixtiyoriy")
+        self.oqituvchi = QLineEdit()
+        self.oqituvchi.setPlaceholderText("Ixtiyoriy")
+        if self.darsmi:
+            forma.addRow("Xona:", self.xona)
+            forma.addRow("O'qituvchi:", self.oqituvchi)
         # Takroriy kun (namoz): vaqt o'zgarsa — qoida va shu kundan
         # keyingi BARCHA kunlar («Asr endi 16:30»). O'chirilsa faqat shu kun.
         self.qoida = (vz.takror_egasi(db, vz.bitta(db, vazifa_id))
@@ -297,6 +309,8 @@ class VazifaDialog(QDialog):
             self.vaqtsiz.setChecked(True)
         self.davomiylik.setValue(v["davomiylik"])
         self.izoh.setText(v["izoh"] or "")
+        self.xona.setText(v["xona"] or "")
+        self.oqituvchi.setText(v["oqituvchi"] or "")
 
     def _saqla(self):
         maydonlar = dict(
@@ -307,6 +321,9 @@ class VazifaDialog(QDialog):
             else self.vaqt.time().toString("HH:mm"),
             davomiylik=self.davomiylik.value(),
             izoh=self.izoh.text())
+        dars_maydon = (dict(xona=self.xona.text(),
+                            oqituvchi=self.oqituvchi.text())
+                       if self.darsmi else {})
         try:
             if self.vazifa_id:
                 eski = vz.bitta(self.db, self.vazifa_id)
@@ -315,7 +332,8 @@ class VazifaDialog(QDialog):
                     vz.takror_vaqt_qoy(self.db, self.qoida["id"],
                                        maydonlar.pop("vaqt"),
                                        maydonlar["sana"])
-                vz.tahrir(self.db, self.vazifa_id, **maydonlar)
+                vz.tahrir(self.db, self.vazifa_id, **maydonlar,
+                          **dars_maydon)
             elif self.navbatli and self.navbat.isChecked():
                 vz.navbat_biriktir(
                     self.db, self.tur["id"], maydonlar["odam_id"],
@@ -381,6 +399,10 @@ class VazifaTafsilot(QDialog):
         # bittasi ikkinchisini bosib ketmasligi kerak.
         if v["menyu"]:
             satrlar.append(("Menyu", f"🍲 {v['menyu']}"))
+        if v["xona"]:
+            satrlar.append(("Xona", v["xona"]))
+        if v["oqituvchi"]:
+            satrlar.append(("O'qituvchi", v["oqituvchi"]))
         if v["izoh"]:
             satrlar.append(("Izoh", v["izoh"]))
         # Takroriy qoidadan chiqqan kun. Buni ko'rsatish SHART:
@@ -592,6 +614,11 @@ class _Blok(QFrame):
         taom = (qator_["menyu"] if "menyu" in qator_.keys() else None)
         if taom:
             pas_matn = f"{pas_matn} · 🍲 {taom}".strip(" ·")
+        # Dars: qaysi xonada — blokning o'zida; o'qituvchi maslahatda.
+        joy = dars.joy_satrlari(qator_)
+        xona = qator_["xona"] if "xona" in qator_.keys() else None
+        if xona:
+            pas_matn = f"{pas_matn} · 🚪 {xona}".strip(" ·")
         # Ixcham qatorda vaqt YOZILMAYDI: u to'rdagi joyidan ko'rinib
         # turibdi. Eng muhimi kim ekani — u birinchi turadi.
         self._ixcham = f"{belgi}{qator_['odam']} · {qator_['nom']}"
@@ -641,6 +668,8 @@ class _Blok(QFrame):
                     f"{qator_['sana']} {qator_['vaqt'] or ''}\n{holat}")
         if taom:
             maslahat += f"\nMenyu: {taom}"
+        for j in joy:
+            maslahat += f"\n{j}"
         self.setToolTip(maslahat)
 
     def ixcham(self, ha: bool):
@@ -1598,7 +1627,10 @@ class ShaxsiyVazifaSahifa(QWidget):
                 holat = "Kutilmoqda"
             satrlar.append([
                 f"{vz.KUNLAR[kun.weekday()]}, {kun.strftime('%d.%m')}",
-                r["vaqt"] or "—", r["nom"], holat])
+                r["vaqt"] or "—",
+                " · ".join([r["nom"], *(x for x in (r["xona"],
+                                                    r["oqituvchi"]) if x)]),
+                holat])
             idlar.append(r["id"])
         self.jadval.tuldir(satrlar, idlar)
 

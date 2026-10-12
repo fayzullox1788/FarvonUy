@@ -35,7 +35,15 @@ export function darsmi(v) {
   return !!(m && String(m).startsWith("dars:"));
 }
 
-/** dars.py:65 — Python `ValueError`. */
+/** dars.py:62 — xona va o'qituvchi, yorliqlari bilan (bot, menyu, Mini App). */
+export function joy_satrlari(v) {
+  const n = [];
+  if (v && v.xona) n.push(`🚪 Xona: ${v.xona}`);
+  if (v && v.oqituvchi) n.push(`👤 O'qituvchi: ${v.oqituvchi}`);
+  return n;
+}
+
+/** dars.py:80 — Python `ValueError`. */
 export class DarsXato extends Error {}
 
 // Python `str(x)` (None → "None").
@@ -202,7 +210,8 @@ export function darslar(malumot, sinf, boshi) {
         sana,
         vaqt: p.starttime,
         davomiylik,
-        izoh: [ustoz, xona].filter(Boolean).join(" · ") || null,
+        xona: xona || null,
+        oqituvchi: ustoz || null,
       });
     });
   }
@@ -256,7 +265,7 @@ export async function sinxronla(db, qatorlar, odam_id, dan, gacha, { a = null } 
 
   for (const [kalit, r] of kerak) {
     const yangi = { nom: r.nom, sana: r.sana, vaqt: r.vaqt, davomiylik: r.davomiylik,
-      izoh: r.izoh, odam_id };
+      izoh: null, xona: r.xona, oqituvchi: r.oqituvchi, odam_id };
     const eski = bor.get(kalit);
     if (eski == null) {
       await amal.apply("vazifa", "INSERT", { ...yangi, holat: OCHIQ, manba: kalit });

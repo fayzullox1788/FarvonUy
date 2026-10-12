@@ -21,6 +21,7 @@ Token manbada emas — `sozlama` jadvalida, foydalanuvchi bazasida.
 """
 from __future__ import annotations
 
+import html
 import http.client
 import json
 import urllib.error
@@ -474,6 +475,7 @@ def dars_ogoh_matn(db, v) -> str:
     nom, tg = _odam_nom_telegram(db, v["odam_id"])
     qatorlar = [f"⏰ {_teg(nom, tg)}, bugun soat {v['vaqt']} da darsingiz bor:",
                 f"📚 {v['nom']}"]
+    qatorlar += [html.escape(j, quote=False) for j in dars.joy_satrlari(v)]
     if v["izoh"]:
         qatorlar.append(f"📍 {v['izoh']}")
     return "\n".join(qatorlar)
@@ -487,6 +489,7 @@ def eslatma_matn(db, v) -> str:
         # darsga BORISH edi, shuning uchun davomat so'raladi.
         return "\n".join([
             f"{tag}, {v['nom']} darsi tugadi.",
+            *(html.escape(j, quote=False) for j in dars.joy_satrlari(v)),
             "Davomat: darsda bo'ldingizmi?",
             f"«{DARS_ALBATTA_TUGMA}» yoki «{YOQ_TUGMA}» tugmasini bosing.",
         ])
@@ -520,6 +523,8 @@ def shaxsiy_matn(db, sana, odam_id) -> str | None:
         belgi = _holat_belgi(t, "⏳")
         qator = f"{belgi} {t['vaqt'] or ''}  {t['nom']}".strip()
         qatorlar.append(qator)
+        qatorlar += [f"      {html.escape(j, quote=False)}"
+                     for j in dars.joy_satrlari(t)]
         # Izoh — «qayerda va kim bilan». Dars uchun bu asosiy ma'lumot
         # (o'qituvchi · xona): nomning o'zi «qaysi xonaga borishim
         # kerak?» degan savolga javob bermaydi.

@@ -132,6 +132,12 @@ class Db:
         # Takror qoidasining kategoriyasi — undan chiqqan har kunga
         # `vazifa.toifa` bo'lib ko'chadi (namoz/uy/...). NULL — nomidan.
         ("vazifa_takror", "toifa", "TEXT"),
+        # Dars qayerda va kim o'tadi (EduPage'dan, `core/dars.py`).
+        # Alohida ustun, `izoh` EMAS: izohni foydalanuvchi yozadi,
+        # buni sinxron yozadi — bittasi ikkinchisini bosib ketmasin.
+        # D1 da: `tools/dars_xona_yoq.sh` (desktop sinxronidan OLDIN).
+        ("vazifa", "xona", "TEXT"),
+        ("vazifa", "oqituvchi", "TEXT"),
     ]
 
     def _migratsiya(self) -> None:

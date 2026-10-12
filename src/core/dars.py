@@ -59,6 +59,24 @@ def darsmi(v) -> bool:
     return bool(m and str(m).startswith("dars:"))
 
 
+def joy_satrlari(v) -> list[str]:
+    """Darsning xonasi va o'qituvchisi — yorliqlari bilan.
+
+    Bot xabarlari, menyu va desktop shu bitta funksiyadan oladi
+    (JS egizagi `worker/src/dars.js`). Xona birinchi: «qaysi xonaga
+    borishim kerak?» — eng ko'p so'raladigan savol. Ikkalasi ham
+    alohida ustun (`vazifa.xona`, `vazifa.oqituvchi`), `izoh` EMAS:
+    izohni foydalanuvchi yozadi, buni sinxron yozadi.
+    """
+    kalitlar = v.keys() if hasattr(v, "keys") else v
+    natija = []
+    if "xona" in kalitlar and v["xona"]:
+        natija.append(f"🚪 Xona: {v['xona']}")
+    if "oqituvchi" in kalitlar and v["oqituvchi"]:
+        natija.append(f"👤 O'qituvchi: {v['oqituvchi']}")
+    return natija
+
+
 class DarsXato(ValueError):
     """`core/` ning qolgani ham `ValueError` tashlaydi — UI bitta joyda
     tutadi, ya'ni dars xatosi uchun alohida `except` yozilmaydi."""
@@ -209,7 +227,8 @@ def darslar(malumot: dict, sinf: str, boshi: date) -> list[dict]:
                 "sana": sana,
                 "vaqt": p["starttime"],
                 "davomiylik": davomiylik,
-                "izoh": " · ".join(x for x in (ustoz, xona) if x) or None,
+                "xona": xona or None,
+                "oqituvchi": ustoz or None,
             })
     natija.sort(key=lambda r: (r["sana"], r["vaqt"], r["nom"]))
     return natija
@@ -262,7 +281,12 @@ def sinxronla(db, qatorlar: list[dict], odam_id: int,
         for kalit, r in kerak.items():
             yangi = {"nom": r["nom"], "sana": r["sana"].isoformat(),
                      "vaqt": r["vaqt"], "davomiylik": r["davomiylik"],
-                     "izoh": r["izoh"], "odam_id": odam_id}
+                     # Izoh bo'shatiladi: avval o'qituvchi · xona shu yerga
+                     # yozilardi, endi ular alohida ustunda — ikki marta
+                     # ko'rinmasin.
+                     "izoh": None,
+                     "xona": r["xona"], "oqituvchi": r["oqituvchi"],
+                     "odam_id": odam_id}
             eski = bor.get(kalit)
             if eski is None:
                 db.apply("vazifa", "INSERT",

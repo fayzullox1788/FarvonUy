@@ -638,12 +638,13 @@ def qosh(db, nom: str, odam_id: int, sana, vaqt: str | None = None,
 
 
 def tahrir(db, vazifa_id: int, **maydonlar) -> None:
-    """nom / odam_id / sana / vaqt / davomiylik / izoh."""
+    """nom / odam_id / sana / vaqt / davomiylik / izoh / xona / oqituvchi."""
     v = bitta(db, vazifa_id)
     if not v:
         raise ValueError("Vazifa topilmadi")
     yangi = {k: maydonlar[k] for k in
-             ("nom", "odam_id", "sana", "vaqt", "davomiylik", "izoh")
+             ("nom", "odam_id", "sana", "vaqt", "davomiylik", "izoh",
+              "xona", "oqituvchi")
              if k in maydonlar}
     if not yangi:
         return
@@ -659,8 +660,9 @@ def tahrir(db, vazifa_id: int, **maydonlar) -> None:
         yangi["vaqt"] = vaqt
     if "davomiylik" in yangi:
         yangi["davomiylik"] = davomiylik
-    if "izoh" in yangi:
-        yangi["izoh"] = (yangi["izoh"] or "").strip() or None
+    for k in ("izoh", "xona", "oqituvchi"):
+        if k in yangi:
+            yangi[k] = (yangi[k] or "").strip() or None
     with db.amal(f"Vazifa tahrirlandi: {birlashgan['nom']}"):
         db.apply("vazifa", "UPDATE", yangi, vazifa_id)
 

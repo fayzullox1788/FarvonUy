@@ -1723,8 +1723,16 @@ teng("kun bitmaskadan to'g'ri chiqadi", _date(2026, 9, 7), _d[0]["sana"])
 teng("ikkinchisi chorshanba", _date(2026, 9, 9), _d[1]["sana"])
 teng("davomiylik paradan hisoblanadi", 80, _d[0]["davomiylik"])
 teng("kalit sana va paradan quriladi", "dars:2026-09-07:5", _d[0]["manba"])
-teng("izohda o'qituvchi va xona",
-     "Abdumannopova Ma'mura · GREEN HALL", _d[0]["izoh"])
+teng("xona alohida maydonda", "GREEN HALL", _d[0]["xona"])
+teng("o'qituvchi alohida maydonda", "Abdumannopova Ma'mura",
+     _d[0]["oqituvchi"])
+teng("xona va o'qituvchi yorliq bilan",
+     ["🚪 Xona: GREEN HALL", "👤 O'qituvchi: Abdumannopova Ma'mura"],
+     dars.joy_satrlari(_d[0]))
+teng("xonasiz darsda faqat o'qituvchi",
+     ["👤 O'qituvchi: Abdumannopova Ma'mura"],
+     dars.joy_satrlari(dars.darslar(
+         _tt([dict(_MON5, classroomids=[])]), "SE-25", _BOSHI)[0]))
 tekshir("apostrofdan keyin katta harf qo'yilmaydi",
         dars._nomlash("ABDUMANNOPOVA MA'MURA") == "Abdumannopova Ma'mura")
 tekshir("noma'lum guruh jimgina bo'sh qaytarmaydi",
@@ -1761,14 +1769,19 @@ _d3 = dars.darslar(_tt([_MON5B]), "SE-25", _BOSHI)
 _n3 = dars.sinxronla(dD, _d3, oD, _BOSHI, _GACHA)
 teng("xona o'zgargani yangilandi", 1, _n3["yangilandi"])
 teng("jadvaldan chiqqan dars o'chirildi", 1, _n3["ochirildi"])
-teng("yangi xona izohga tushdi", "Abdumannopova Ma'mura · 404AB",
+teng("yangi xona ustunga tushdi", "404AB", vz.bitta(dD, _dv["id"])["xona"])
+teng("o'qituvchi ustunda", "Abdumannopova Ma'mura",
+     vz.bitta(dD, _dv["id"])["oqituvchi"])
+teng("dars izohi bo'sh — ikki marta ko'rinmaydi", None,
      vz.bitta(dD, _dv["id"])["izoh"])
 tekshir("qo'lda yozilgan vazifa joyida", vz.bitta(dD, _qol) is not None)
 teng("kalendarda dars + qo'lda yozilgani", 2, len(vz.hafta(dD, _BOSHI, oD)))
 
 _shx = xb.shaxsiy_matn(dD, _BOSHI, oD)
 tekshir("shaxsiy ro'yxatda dars bor", "Databases (lec)" in _shx)
-tekshir("shaxsiy ro'yxatda xona ham bor", "404AB" in _shx)
+tekshir("shaxsiy ro'yxatda xona ham bor", "🚪 Xona: 404AB" in _shx)
+tekshir("shaxsiy ro'yxatda o'qituvchi ham bor",
+        "👤 O'qituvchi: Abdumannopova Ma'mura" in _shx)
 tekshir("dars guruh xabariga tushmaydi",
         "Databases" not in (xb.kunlik_matn(dD, _BOSHI) or ""))
 
@@ -1811,7 +1824,9 @@ tekshir("dars boshlangach ogohlantirish yubormaydi",
         not _dars_xabar(16, 0, "dars"))
 _og = _dars_xabar(11, 0, "dars")[0]
 teng("ogohlantirish SHAXSIY chatga ketadi", 555, _og["chat"])
-tekshir("ogohlantirishda xona bor", "404AB" in _og["matn"])
+tekshir("ogohlantirishda xona bor", "🚪 Xona: 404AB" in _og["matn"])
+tekshir("ogohlantirishda o'qituvchi bor",
+        "O'qituvchi: Abdumannopova Ma'mura" in _og["matn"])
 tekshir("ogohlantirishda tugma yo'q", _og["klaviatura"] is None)
 
 # Dars 17:10 da tugaydi — davomat 10 daqiqadan keyin so'raladi.
@@ -1819,6 +1834,7 @@ tekshir("dars tugagan zahoti so'ralmaydi", not _dars_xabar(17, 12, "eslatma"))
 _dv2 = _dars_xabar(17, 25, "eslatma")
 tekshir("10 daqiqadan keyin so'raladi", _dv2)
 tekshir("savol davomat haqida", "Davomat" in _dv2[0]["matn"])
+tekshir("davomat savolida xona bor", "🚪 Xona: 404AB" in _dv2[0]["matn"])
 teng("tugma «Qatnashdim»", xb.DARS_ALBATTA_TUGMA,
      _dv2[0]["klaviatura"][0][0][0])
 teng("tugma ma'lumoti o'zgarmagan", f"bajar:{_dars['id']}",
@@ -3286,6 +3302,12 @@ try:
     vz.qosh(dX2, "Kitob o'qish", xF2, _kun, "21:00")
     _dv = vz.qosh(dX2, "Algoritmlar", xF2, _kun, "09:00", izoh="Karimov · B-204")
     dX2.apply("vazifa", "UPDATE", {"manba": "dars:2026-09-25:1"}, _dv)
+    vz.tahrir(dX2, _dv, xona="  A-101 ", oqituvchi="Karimov A.")
+    teng("tahrir: xona qirqib yoziladi", "A-101", vz.bitta(dX2, _dv)["xona"])
+    tekshir("menyuda xona yorlig'i bilan",
+            "🚪 Xona: A-101" in tm.darslar(dX2, xF2, _kun))
+    tekshir("menyuda o'qituvchi yorlig'i bilan",
+            "👤 O'qituvchi: Karimov A." in tm.darslar(dX2, xF2, _kun))
     vz.qosh(dX2, "Idish yuvish", xO2, _kun, "20:00")
     teng("uy vazifasi — faqat uyniki", ["Idish yuvish"],
          [v["nom"] for v in tm.bugungi(dX2, xF2, "uy", _kun)])

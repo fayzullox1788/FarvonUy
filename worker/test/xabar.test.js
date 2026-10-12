@@ -34,7 +34,8 @@ st = vz.streak_qosh(db, F, kitob, 7, "2026-09-28")
 kitob_o = vz.biriktir(db, kitob, O, "2026-10-04", "07:00")
 mat = vz.tur_qosh(db, "Matematika", 80, shaxsiy=True)
 dars_v = db.apply("vazifa", "INSERT", {"nom": "Matematika", "odam_id": A, "sana": "2026-10-04", "vaqt": "14:00",
-    "davomiylik": 80, "holat": "ochiq", "izoh": "Karimov · 101", "manba": "dars:2026-10-04:1"})
+    "davomiylik": 80, "holat": "ochiq", "izoh": "Karimov · 101", "xona": "101 <B>", "oqituvchi": "Karimov A.",
+    "manba": "dars:2026-10-04:1"})
 vz.takror_qosh(db, "Bomdod namozi", A, "05:30", 20, bugun="2026-10-04")
 peshin = vz.qosh(db, "Peshin namozi", A, "2026-10-04", "12:30", 20)
 shom = vz.qosh(db, "Shom namozi", A, "2026-10-04", "05:00", 10)
@@ -187,6 +188,9 @@ chiq({
     chat: await m([ID.F, ID.O, 9999], (o) => xb.odam_chati(db, o)),
   };
   assert.deepEqual(js(jr), pr);
+  // Dars: xona va o'qituvchi yorliq bilan, HTML qochirilgan.
+  assert.ok(jr.dars.includes("🚪 Xona: 101 &lt;B&gt;"));
+  assert.ok(jr.dars.includes("👤 O'qituvchi: Karimov A."));
 });
 
 test("kechiktirish_variantlari: sozlama qiymatlari", async () => {

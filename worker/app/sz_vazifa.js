@@ -373,7 +373,7 @@
         ${x.takror ? `<button class="szv-qizil" data-amal="ochirQoida">${IK.takror}Takrorni to‘xtatish</button>` : ""}
       </div>` : "";
     return `${oynaBosh(sarl)}
-      ${holat}${r ? qoida(r.izoh) : ""}${!yangi && x.takror ? `<div class="szv-takror">${IK.takror}<span>${e(x.takror.tavsif)}</span></div>` : ""}
+      ${holat}${r ? qoida(r.izoh) : ""}${!yangi && (x.xona || x.oqituvchi) ? `<p class="szv-kichik">${[x.xona && `Xona: <b>${e(x.xona)}</b>`, x.oqituvchi && `O‘qituvchi: <b>${e(x.oqituvchi)}</b>`].filter(Boolean).join(" · ")}</p>` : ""}${!yangi && x.takror ? `<div class="szv-takror">${IK.takror}<span>${e(x.takror.tavsif)}</span></div>` : ""}
       ${turlarHtml}
       <label class="sz-yorliq" for="szvNom">Nomi${qulf(m.nom)}</label>
       <input class="sz-kirit" id="szvNom" maxlength="120" autocomplete="off" placeholder="Masalan: Kir yuvish" value="${e(v.nom)}"${dis(m.nom)}>

@@ -399,6 +399,7 @@ export async function dars_ogoh_matn(db, v, ctx = null) {
   ctx = await _k(db, ctx);
   const [nom, tgn] = _odam_nom_telegram(ctx, v.odam_id);
   const q = [`⏰ ${_teg(nom, tgn)}, bugun soat ${v.vaqt} da darsingiz bor:`, `📚 ${v.nom}`];
+  for (const j of dars.joy_satrlari(v)) q.push(tg.e(j));
   if (v.izoh) q.push(`📍 ${v.izoh}`);
   return q.join("\n");
 }
@@ -411,6 +412,7 @@ export async function eslatma_matn(db, v, ctx = null) {
   if (darsmi(v)) {
     return [
       `${tag}, ${v.nom} darsi tugadi.`,
+      ...dars.joy_satrlari(v).map((j) => tg.e(j)),
       "Davomat: darsda bo'ldingizmi?",
       `«${DARS_ALBATTA_TUGMA}» yoki «${YOQ_TUGMA}» tugmasini bosing.`,
     ].join("\n");
@@ -438,6 +440,7 @@ export async function shaxsiy_matn(db, sana, odam_id, ctx = null) {
   const q = ["🔒 Shaxsiy ro'yxatingiz:"];
   for (const t of tasks) {
     q.push(`${_holat_belgi(t, "⏳")} ${t.vaqt || ""}  ${t.nom}`.trim());
+    for (const j of dars.joy_satrlari(t)) q.push(`      ${tg.e(j)}`);
     if (t.izoh) q.push(`      ${t.izoh}`);
   }
   return q.join("\n");

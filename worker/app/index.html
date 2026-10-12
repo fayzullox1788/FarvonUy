@@ -135,6 +135,7 @@
     line-height: 1.3; overflow: hidden;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   }
+  .ichi .joy { font-size: 12.5px; color: var(--kulrang); margin-top: 2px; line-height: 1.3; }
   .tayyor .ichi .nom { color: #8a93a2; text-decoration: line-through; text-decoration-color: #9aa3b0; }
   .belgi {
     display: inline-block; margin-top: 5px; padding: 2px 7px; border-radius: 5px;
@@ -531,7 +532,7 @@ function royxatniChiz() {
       <button class="doira" data-amal="belgila" aria-label="Bajarildi">${t
         ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>` : ""}</button>
       <div class="vaqt"><b>${v.vaqt || "—"}</b>${k ? `<small>${kechMatn(k)}</small>` : ""}</div>
-      <div class="ichi"><div class="nom">${e(v.nom)}</div><span class="belgi b-${toifa}">${TURLAR[toifa].nom}</span></div>
+      <div class="ichi"><div class="nom">${e(v.nom)}</div>${joyMatn(v) ? `<div class="joy">${e(joyMatn(v))}</div>` : ""}<span class="belgi b-${toifa}">${TURLAR[toifa].nom}</span></div>
       <button class="kebab" data-amal="menyu" aria-label="Amallar"><svg width="4" height="16" viewBox="0 0 4 16" fill="currentColor"><circle cx="2" cy="2" r="1.7"/><circle cx="2" cy="8" r="1.7"/><circle cx="2" cy="14" r="1.7"/></svg></button>
     </div>`;
   }).join("");
@@ -571,9 +572,19 @@ async function holat(id, amal, qosh = {}) {
   catch (err) { vazifalar = eski; royxatniChiz(); xabar(err.message); return false; }
 }
 
+// Dars: qaysi xonada va kim o'tadi (D1 vazifa.xona / vazifa.oqituvchi).
+function joyMatn(v) {
+  return [v.xona && `🚪 ${v.xona}`, v.oqituvchi && `👤 ${v.oqituvchi}`].filter(Boolean).join(" · ");
+}
+function joyIzoh(v) {
+  const q = [v.xona && `Xona: <b>${e(v.xona)}</b>`, v.oqituvchi && `O‘qituvchi: <b>${e(v.oqituvchi)}</b>`].filter(Boolean);
+  return q.length ? `<p class="izoh">${q.join(" · ")}</p>` : "";
+}
+
 function amallarOyna(v) {
   const k = kechikish(v), t = tayyormi(v);
   oynaOch(`<h3>${e(v.nom)}</h3>
+    ${joyIzoh(v)}
     ${k ? `<p class="izoh">Boshlanganiga ${kechMatn(k).slice(1)} bo‘ldi. Hozirgi holati qanday?</p>` : ""}
     ${t ? "" : `<button class="amal" data-h="boshladim"><i>▶️</i>Boshladim</button>`}
     <button class="amal" data-h="${t ? "ochiq" : "bajarildi"}"><i>✅</i>${t ? "Bajarilmagan deb belgilash" : "Bajarildi"}</button>

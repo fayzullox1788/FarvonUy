@@ -51,7 +51,7 @@ d = dars.darslar(m, ${JSON.stringify(sinf)}, date.fromisoformat("${BOSHI}"))
 print(json.dumps([dict(r, sana=r["sana"].isoformat()) for r in d], ensure_ascii=False))
 `;
 
-test("darslar: Python bilan bir xil (izoh, davomiylik, tartib, boshqa guruh)", () => {
+test("darslar: Python bilan bir xil (xona, o'qituvchi, davomiylik, tartib, boshqa guruh)", () => {
   const { papka } = yangiBaza();
   for (const kartalar of [[MON5, WED4, BOSHQA], [MON5B], [CAL, NOL, MON5, WED4, PHY]]) {
     const m = tt(kartalar, { qoshimchaDars: true });
@@ -61,7 +61,11 @@ test("darslar: Python bilan bir xil (izoh, davomiylik, tartib, boshqa guruh)", (
   const d = dars.darslar(tt([MON5, WED4, BOSHQA]), "SE-25", BOSHI);
   assert.equal(d.length, 2);
   assert.equal(d[0].manba, "dars:2026-09-07:5");
-  assert.equal(d[0].izoh, "Abdumannopova Ma'mura · GREEN HALL");
+  assert.equal(d[0].xona, "GREEN HALL");
+  assert.equal(d[0].oqituvchi, "Abdumannopova Ma'mura");
+  assert.equal(d[0].izoh, undefined);
+  assert.deepEqual(dars.joy_satrlari(d[0]), ["🚪 Xona: GREEN HALL", "👤 O'qituvchi: Abdumannopova Ma'mura"]);
+  assert.deepEqual(dars.joy_satrlari({ xona: null, oqituvchi: "X" }), ["👤 O'qituvchi: X"]);
   assert.equal(d[1].sana, "2026-09-09");
   assert.throws(() => dars.darslar(tt([MON5]), "YO'Q-99", BOSHI), dars.DarsXato);
 });
@@ -101,7 +105,7 @@ print(json.dumps(n))
 `;
 
 async function holat(db) {
-  const v = await db.q("SELECT nom,odam_id,sana,vaqt,davomiylik,holat,bajarilgan,izoh,manba,ochirilgan " +
+  const v = await db.q("SELECT nom,odam_id,sana,vaqt,davomiylik,holat,bajarilgan,izoh,xona,oqituvchi,manba,ochirilgan " +
     "FROM vazifa ORDER BY sana, vaqt, nom, manba");
   const t = await db.q("SELECT nom,davomiylik,tartib,navbat,haftalik,shaxsiy,ochirilgan FROM vazifa_turi ORDER BY nom");
   return { v, t };

@@ -24,6 +24,7 @@ import json
 from datetime import date
 
 import money
+from core import dars
 from core import ledger
 from core import vazifa as vz
 
@@ -190,6 +191,7 @@ def _vazifa_matn(royxat: list, sarlavha: str, bosh: str) -> str:
                  else "🕌" if v["holat"] == vz.QAZO else "⏳")
         vaqt = f"{v['vaqt']}  " if v["vaqt"] else ""
         s.append(f"{belgi} {_e(vaqt)}{_e(v['nom'])}")
+        s += [f"      {_e(j)}" for j in dars.joy_satrlari(v)]
         if v["izoh"]:
             s.append(f"      {_e(v['izoh'])}")
     ochiq = sum(1 for v in royxat if not vz.yopiqmi(v))

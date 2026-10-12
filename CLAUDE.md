@@ -842,6 +842,16 @@ AYNAN bir xil qoida. Umumiy varaqning sanog'i ham o'sha bayroq bilan
 chaqiriladi: qatorlar yashirinib, sanoq eskisicha qolsa «7 ta vazifa»
 deb yozib, uchtasini ko'rsatardi.
 
+**Xona va o'qituvchi — `vazifa.xona`, `vazifa.oqituvchi`** (2026-10-12).
+Avval `izoh` ga «o'qituvchi · xona» bo'lib yozilardi; endi sinxron ularni
+alohida ustunga yozadi va dars qatorining `izoh` ini bo'shatadi. Ko'rsatish
+matni BITTA joydan — `dars.joy_satrlari()` («🚪 Xona: …», «👤 O'qituvchi: …»,
+JS egizagi `worker/src/dars.js`): bot ogohlantirishi, davomat savoli,
+shaxsiy ro'yxat, «Darslar» menyusi. Desktop: kalendar bloki (🚪 xona),
+ro'yxat, tafsilot, VazifaDialog (faqat dars qatorida). Mini App: karta va
+amallar oynasi, Sozlamalar → Vazifalar. D1 — `tools/dars_xona_yoq.sh`
+(bajarilgan 2026-10-12).
+
 `darslar()` kun raqamini `days` jadvalining tartibidan oladi, nomdan
 emas. `hafta_boshi()` esa `datefrom` ni dushanbaga suradi: TTPU'da u
 yakshanbaga tushadi, ya'ni jadval o'sha kundan emas, ERTASIDAN

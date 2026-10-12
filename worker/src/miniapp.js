@@ -116,6 +116,8 @@ async function vazifalar(db, odam, sana) {
       davomiylik: v.davomiylik,
       holat: v.holat,
       izoh: v.izoh,
+      xona: v.xona ?? null,
+      oqituvchi: v.oqituvchi ?? null,
       kechiktirildi: v.kechiktirildi,
       toifa: toifaAniqla(v, shaxsiy, uy),
       takror: takrorOl(v),
