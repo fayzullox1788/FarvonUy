@@ -91,6 +91,13 @@ test("amallar: bajarildi / ochiq / kechiktir / bekor; boshqaning vazifasi 403", 
   await b.sor(`/app/api/vazifa/${dokon}`, { tana: { amal: "ochiq" } });
   assert.equal((await b.db.q1("SELECT holat FROM vazifa WHERE id=?", dokon)).holat, "ochiq");
 
+  // «Bajarmadim» — namoz emas: yopiladi, keyin qayta ochiladi
+  await b.sor(`/app/api/vazifa/${dokon}`, { tana: { amal: "bajarmadi" } });
+  assert.equal((await b.db.q1("SELECT holat FROM vazifa WHERE id=?", dokon)).holat, "bajarilmadi");
+  [s] = await jsonOl(await b.sor(`/app/api/vazifa/${dokon}`, { tana: { amal: "qazo" } }));
+  assert.equal(s, 400); // namoz emas
+  await b.sor(`/app/api/vazifa/${dokon}`, { tana: { amal: "ochiq" } });
+
   await b.sor(`/app/api/vazifa/${dokon}`, { tana: { amal: "kechiktir", daqiqa: 30 } });
   assert.equal((await b.db.q1("SELECT kechiktirildi FROM vazifa WHERE id=?", dokon)).kechiktirildi, "2026-10-04 17:50:00");
 
@@ -104,7 +111,7 @@ test("amallar: bajarildi / ochiq / kechiktir / bekor; boshqaning vazifasi 403", 
   assert.equal((await b.sor(`/app/api/vazifa/${dokon}`, { tana: { amal: "nimadir" } })).status, 404); // o'chirilgan
   // Har amal jurnalga tushadi (desktop sinxroni shundan oladi) — toq id
   const j = await b.db.q("SELECT id FROM ozgarishlar WHERE jadval='vazifa' AND qator_id=?", dokon);
-  assert.equal(j.filter((r) => r.id % 2 === 1).length, 4);
+  assert.equal(j.filter((r) => r.id % 2 === 1).length, 6);
 });
 
 test("yangi vazifa: toifa saqlanadi, xato matni qaytadi", async () => {

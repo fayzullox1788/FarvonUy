@@ -15,6 +15,9 @@ BAJARILDI = "bajarildi"
 # Namoz o'z vaqtida o'qilmadi. Bajarilmagan, lekin «ochiq» ham emas:
 # eslatma endi so'ramaydi, o'rniga alohida «qazosini o'qish» ishi turadi.
 QAZO = "qazo"
+# Namoz bo'lmagan ish qilinmadi («Bajarmadim»). Yopiq holat: eslatma
+# endi so'ramaydi, qazodan farqi — o'rniga hech qanday ish yozilmaydi.
+BAJARILMADI = "bajarilmadi"
 
 KUNLAR = ["Dushanba", "Seshanba", "Chorshanba", "Payshanba",
           "Juma", "Shanba", "Yakshanba"]
@@ -693,8 +696,27 @@ def bajar(db, vazifa_id: int, bajarildi: bool = True) -> None:
 
 
 def yopiqmi(v) -> bool:
-    """Endi eslatish shart emasmi — bajarilgan yoki qazo bo'lgan."""
-    return v["holat"] in (BAJARILDI, QAZO)
+    """Endi eslatish shart emasmi — bajarilgan, qazo yoki bajarilmagan."""
+    return v["holat"] in (BAJARILDI, QAZO, BAJARILMADI)
+
+
+def bajarmadim(db, vazifa_id: int) -> None:
+    """«Bajarmadim»: namoz bo'lmagan ochiq ishni BAJARILMADI qiladi.
+
+    Namozda buning o'rniga `qazo_qil()` — u qazo ishini ham yozadi.
+    Bu yerda hech qanday yangi ish yozilmaydi. Qayta ochish — `bajar()`.
+    """
+    v = bitta(db, vazifa_id)
+    if not v:
+        raise ValueError("Vazifa topilmadi")
+    if namozmi(v):
+        raise ValueError(f"«{v['nom']}» namoz — «Qazo bo'ldi» ni bosing")
+    if v["holat"] != OCHIQ:
+        raise ValueError("Faqat hali ochiq vazifa «bajarilmadi» bo'ladi")
+    with db.amal(f"Bajarilmadi: {v['nom']}"):
+        db.apply("vazifa", "UPDATE", {
+            "holat": BAJARILMADI, "bajarilgan": None,
+            "kechiktirildi": None}, vazifa_id)
 
 
 # ─────────────────────────────────────────────────────────────── qazo
@@ -936,9 +958,10 @@ def sanoq(db, dan, gacha, odam_id: int | None = None,
                     if r["holat"] == OCHIQ and _sana(r["sana"]) < bugun)
     bajarildi = sum(1 for r in qatorlar if r["holat"] == BAJARILDI)
     qazo = sum(1 for r in qatorlar if r["holat"] == QAZO)
+    bajarilmadi = sum(1 for r in qatorlar if r["holat"] == BAJARILMADI)
     return {"jami": len(qatorlar), "bajarildi": bajarildi,
             "ochiq": len(qatorlar) - bajarildi, "kechikkan": kechikkan,
-            "qazo": qazo}
+            "qazo": qazo, "bajarilmadi": bajarilmadi}
 
 
 # ═════════════════════════════ takroriy vazifa

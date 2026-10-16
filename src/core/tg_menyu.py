@@ -190,7 +190,8 @@ def _vazifa_matn(royxat: list, sarlavha: str, bosh: str) -> str:
     s = [f"<b>{sarlavha}</b>", ""]
     for v in royxat:
         belgi = ("✅" if v["holat"] == vz.BAJARILDI
-                 else "🕌" if v["holat"] == vz.QAZO else "⏳")
+                 else "🕌" if v["holat"] == vz.QAZO
+                 else "❌" if v["holat"] == vz.BAJARILMADI else "⏳")
         vaqt = f"{v['vaqt']}  " if v["vaqt"] else ""
         s.append(f"{belgi} {_e(vaqt)}{_e(v['nom'])}")
         s += [f"      {_e(j)}" for j in dars.joy_satrlari(v)]

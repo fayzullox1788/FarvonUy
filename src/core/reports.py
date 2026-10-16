@@ -442,9 +442,11 @@ def vazifa_html(db, dan: str, oxiri: str, odam_id=None,
             q.append("<div class='bosh'>—</div>")
         for r in bugungi:
             bajarildi = r["holat"] == vz.BAJARILDI
-            kechikkan = not bajarildi and vz._sana(r["sana"]) < bugun
+            kechikkan = r["holat"] == vz.OCHIQ and vz._sana(r["sana"]) < bugun
             sinf = "bajarildi" if bajarildi else ("kechikkan" if kechikkan else "")
-            belgi = "✓ " if bajarildi else ("⏳ " if kechikkan else "")
+            belgi = ("✓ " if bajarildi else "🕌 " if r["holat"] == vz.QAZO
+                     else "❌ " if r["holat"] == vz.BAJARILMADI
+                     else ("⏳ " if kechikkan else ""))
             q.append(
                 f"<div class='ish {sinf}'>"
                 f"<div class='vaqt'>{html.escape(r['vaqt'] or 'kun bo‘yi')}</div>"
@@ -492,6 +494,7 @@ def vazifa_excel(db, dan: str, oxiri: str, odam_id=None,
         bajarildi = r["holat"] == vz.BAJARILDI
         holat = ("Bajarildi" if bajarildi
                  else "Qazo" if r["holat"] == vz.QAZO
+                 else "Bajarilmadi" if r["holat"] == vz.BAJARILMADI
                  else ("Kechikkan" if kun < bugun else "Kutilmoqda"))
         qiymatlar = [vz.KUNLAR[kun.weekday()], kun.strftime("%d.%m.%Y"),
                      r["vaqt"] or "kun bo'yi", r["nom"], r["odam"], holat,

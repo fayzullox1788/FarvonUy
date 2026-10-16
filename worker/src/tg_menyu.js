@@ -35,7 +35,8 @@ export const BOSHLASH = new Set(["/start", "/menu", "/menyu", "menyu"]);
 // vazifa.py:14,17,693 — holatlar (vazifa.js ga bog'lanmaslik uchun shu yerda).
 const BAJARILDI = "bajarildi";
 const QAZO = "qazo";
-const _yopiqmi = (v) => v.holat === BAJARILDI || v.holat === QAZO;
+const BAJARILMADI = "bajarilmadi";
+const _yopiqmi = (v) => v.holat === BAJARILDI || v.holat === QAZO || v.holat === BAJARILMADI;
 
 // tg_menyu.py:47
 function _e(x) { return tg.e(x == null ? "None" : x); }
@@ -157,7 +158,7 @@ export function _vazifa_matn(royxat, sarlavha, bosh) {
   if (!royxat.length) return `<b>${sarlavha}</b>\n\n${bosh}`;
   const s = [`<b>${sarlavha}</b>`, ""];
   for (const v of royxat) {
-    const belgi = v.holat === BAJARILDI ? "✅" : v.holat === QAZO ? "🕌" : "⏳";
+    const belgi = v.holat === BAJARILDI ? "✅" : v.holat === QAZO ? "🕌" : v.holat === BAJARILMADI ? "❌" : "⏳";
     const vq = v.vaqt ? `${v.vaqt}  ` : "";
     s.push(`${belgi} ${_e(vq)}${_e(v.nom)}`);
     for (const j of joy_satrlari(v)) s.push(`      ${_e(j)}`);

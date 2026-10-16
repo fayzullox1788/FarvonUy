@@ -56,6 +56,8 @@ DARS_ALBATTA_TUGMA = "Qatnashdim ✅"
 YOQ_TUGMA = "Hali yo'q ⏳"
 # Namoz o'qilmay qoldi → qazo ishi yoziladi (`vz.qazo_qil`).
 QAZO_TUGMA = "Qazo bo'ldi 🕌"
+# Namoz bo'lmagan ish qilinmadi → `vz.bajarmadim` (yangi ish yozilmaydi).
+BAJARMADIM_TUGMA = "Bajarmadim ❌"
 MENYU_TUGMA = "Menyuyimizda nimalar bor 🍲"
 MENYU_SOROV = "Bugun nima pishirasiz? 🍲"
 
@@ -370,7 +372,22 @@ def _holat_belgi(v, ochiq_belgi: str) -> str:
         return "✅"
     if v["holat"] == vz.QAZO:
         return "🕌 qazo —"
+    if v["holat"] == vz.BAJARILMADI:
+        return "❌ bajarilmadi —"
     return ochiq_belgi
+
+
+def _yoq_tugma(v) -> tuple:
+    """«Bajarildi» yonidagi ikkinchi tugma: namozga «Qazo bo'ldi»,
+    qolgan hamma ishga «Bajarmadim»."""
+    if vz.namozmi(v):
+        return (QAZO_TUGMA, f"qazo:{v['id']}")
+    return (BAJARMADIM_TUGMA, f"bajarmadi:{v['id']}")
+
+
+def _qisqa_nom(nom, n: int = 24) -> str:
+    nom = str(nom or "")
+    return nom if len(nom) <= n else nom[:n - 1] + "…"
 
 
 def _bitta_blok(db, v, tag: str) -> str:
@@ -559,9 +576,10 @@ def shaxsiy_klaviatura(db, sana, odam_id):
     qatorlar = []
     for t in ochiq:
         yozuv = DARS_ALBATTA_TUGMA if dars.darsmi(t) else ALBATTA_TUGMA
-        if t["vaqt"]:
-            yozuv = f"{yozuv} · {t['vaqt']}"
-        qatorlar.append([(yozuv, f"bajar:{t['id']}")])
+        # Vaqtsiz ishda (namoz endi vaqtsiz) — NOMI: aks holda beshta
+        # bir xil «Albatta! ✅» qaysi namoz ekani bilinmasdi.
+        yozuv = f"{yozuv} · {t['vaqt'] or _qisqa_nom(t['nom'])}"
+        qatorlar.append([(yozuv, f"bajar:{t['id']}"), _yoq_tugma(t)])
     return qatorlar
 
 
@@ -671,9 +689,8 @@ def kutilayotgan(db, hozir: datetime | None = None) -> list[dict]:
             "chat": chat, "vazifa_id": v["id"],
             "klaviatura": [[(DARS_ALBATTA_TUGMA if dars.darsmi(v)
                              else ALBATTA_TUGMA, f"bajar:{v['id']}"),
-                            (YOQ_TUGMA, f"haliyoq:{v['id']}")]]
-                          + ([[(QAZO_TUGMA, f"qazo:{v['id']}")]]
-                             if vz.namozmi(v) else []),
+                            (YOQ_TUGMA, f"haliyoq:{v['id']}")],
+                           [_yoq_tugma(v)]],
         })
 
     # ── dars ogohlantirishi: boshlanishidan `OGOH_DAQIQA` oldin
@@ -966,6 +983,18 @@ def tugmani_ishla(db, sorov: dict, token: str, guruh: str) -> None:
         _sorov(token, "editMessageText", chat_id=chat_id, message_id=message_id,
               text=f"🕌 {v['nom']} qazo bo'ldi. "
                    f"«{vz.qazo_nomi(v['nom'])}» ro'yxatingizga qo'shildi.",
+              parse_mode="HTML")
+
+    elif amal == "bajarmadi" and len(qismlar) == 2:
+        vid = int(qismlar[1])
+        v = vz.bitta(db, vid)
+        if not v or not _egasimi(db, v["odam_id"], username):
+            return
+        if vz.namozmi(v) or v["holat"] != vz.OCHIQ:
+            return
+        vz.bajarmadim(db, vid)
+        _sorov(token, "editMessageText", chat_id=chat_id, message_id=message_id,
+              text=f"❌ {v['nom']} — bajarilmadi deb belgilandi.",
               parse_mode="HTML")
 
     elif amal == "haliyoq" and len(qismlar) == 2:

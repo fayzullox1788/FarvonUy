@@ -338,7 +338,7 @@
     const turlarHtml = m.nom && d.turlar.length ? `<div class="sz-yorliq">Qanday vazifa</div>
       <div class="szv-turchip">${d.turlar.filter((t) => !t.dars).map((t) => `<button class="sz-chip${tanlanganTur && tanlanganTur.id === t.id ? " faol" : ""}" data-turtanla="${t.id}">${e(t.nom)}</button>`).join("")}</div>` : "";
     const sarl = yangi ? "Yangi vazifa" : x.tur === "dars" ? "Dars" : "Vazifa";
-    const holat = !yangi && x.holat !== "ochiq" ? `<div class="szv-holat">${IK.ok}${x.holat === "qazo" ? "Qazo bo‘ldi" : "Bajarildi"}</div>` : "";
+    const holat = !yangi && x.holat !== "ochiq" ? `<div class="szv-holat">${IK.ok}${x.holat === "qazo" ? "Qazo bo‘ldi" : x.holat === "bajarilmadi" ? "Bajarilmadi" : "Bajarildi"}</div>` : "";
     const takrorHtml = yangi && !v.navbat ? `
       <label class="szv-almash"><input type="checkbox" id="szvTakror"${v.takror ? " checked" : ""}><span><b>Takrorlansin</b><small>Bitta qoida — kalendar ${UFQ} kunga oldindan o‘zi to‘ladi</small></span></label>
       ${v.takror ? `<div class="szv-seg">${NAQSH.map(([k, n]) => `<button class="${v.naqsh === k ? "faol" : ""}" data-naqsh="${k}">${n}</button>`).join("")}</div>

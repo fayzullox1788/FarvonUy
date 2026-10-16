@@ -275,6 +275,14 @@ test("tugma qazo: — namoz qazo, qazo ishi yoziladi", async () => {
   await tugmaPar(`qazo:${ID.peshin}`, "otabek_33"); // begona
 });
 
+test("tugma bajarmadi: — namoz bo'lmagan ish yopiladi, yangi ish yozilmaydi", async () => {
+  const { jp } = await tugmaPar(`bajarmadi:${ID.musor}`, "otabek_33");
+  assert.equal(qatorlar(jp, "SELECT holat FROM vazifa WHERE id=?", [], ID.musor)[0].holat, "bajarilmadi");
+  await tugmaPar(`bajarmadi:${ID.peshin}`, "NothingTrue1"); // namoz — e'tiborsiz (qazo bor)
+  await tugmaPar(`bajarmadi:${ID.gaz}`, "nothingtrue1");    // allaqachon bajarilgan
+  await tugmaPar(`bajarmadi:${ID.musor}`, "fsultonoov");    // begona
+});
+
 test("tugma haliyoq: / kech: — kechiktirish", async () => {
   await tugmaPar(`haliyoq:${ID.musor}`, "otabek_33");
   await tugmaPar(`haliyoq:${ID.musor}`, "otabek_33", "2026-10-04 09:40:00", `db.sozlama_qoy(xb.K_KECHIKTIRISH, "15,45,120")`);

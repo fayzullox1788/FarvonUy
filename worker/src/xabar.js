@@ -39,6 +39,7 @@ export const ALBATTA_TUGMA = "Albatta! ✅";
 export const DARS_ALBATTA_TUGMA = "Qatnashdim ✅";
 export const YOQ_TUGMA = "Hali yo'q ⏳";
 export const QAZO_TUGMA = "Qazo bo'ldi 🕌";
+export const BAJARMADIM_TUGMA = "Bajarmadim ❌";   // namoz emas → vz.bajarmadim
 export const MENYU_TUGMA = "Menyuyimizda nimalar bor 🍲";
 export const MENYU_SOROV = "Bugun nima pishirasiz? 🍲";
 
@@ -322,7 +323,19 @@ export async function _taom_klaviatura(db, vazifa_id) {
 function _holat_belgi(v, ochiq) {
   if (v.holat === vz.BAJARILDI) return "✅";
   if (v.holat === vz.QAZO) return "🕌 qazo —";
+  if (v.holat === vz.BAJARILMADI) return "❌ bajarilmadi —";
   return ochiq;
+}
+
+// xabar.py — _yoq_tugma: namozga «Qazo bo'ldi», qolgan hamma ishga «Bajarmadim».
+export function _yoq_tugma(v) {
+  return vz.namozmi(v) ? [QAZO_TUGMA, `qazo:${v.id}`] : [BAJARMADIM_TUGMA, `bajarmadi:${v.id}`];
+}
+
+// xabar.py — _qisqa_nom (Python len = kod nuqtalar soni).
+export function _qisqa_nom(nom, n = 24) {
+  const c = Array.from(String(nom ?? ""));
+  return c.length <= n ? c.join("") : c.slice(0, n - 1).join("") + "…";
 }
 
 // xabar.py:375
@@ -466,9 +479,9 @@ export async function shaxsiy_klaviatura(db, sana, odam_id, ctx = null) {
   const ochiq = (await _kun(db, ctx, sana, odam_id)).filter((t) => ctx.shaxsiy.has(t.nom) && !vz.yopiqmi(t));
   if (!ochiq.length) return null;
   return ochiq.map((t) => {
-    let yozuv = darsmi(t) ? DARS_ALBATTA_TUGMA : ALBATTA_TUGMA;
-    if (t.vaqt) yozuv = `${yozuv} · ${t.vaqt}`;
-    return [[yozuv, `bajar:${t.id}`]];
+    // Vaqtsiz ishda (namoz endi vaqtsiz) — NOMI, aks holda bir xil tugmalar.
+    const yozuv = `${darsmi(t) ? DARS_ALBATTA_TUGMA : ALBATTA_TUGMA} · ${t.vaqt || _qisqa_nom(t.nom)}`;
+    return [[yozuv, `bajar:${t.id}`], _yoq_tugma(t)];
   });
 }
 
@@ -587,8 +600,7 @@ export async function kutilayotgan(db, hozir = null) {
     natija.push({
       turi: "eslatma", kalit, matn: await eslatma_matn(db, v, ctx), chat, vazifa_id: v.id,
       klaviatura: [[[darsmi(v) ? DARS_ALBATTA_TUGMA : ALBATTA_TUGMA, `bajar:${v.id}`],
-        [YOQ_TUGMA, `haliyoq:${v.id}`]]]
-        .concat(vz.namozmi(v) ? [[[QAZO_TUGMA, `qazo:${v.id}`]]] : []),
+        [YOQ_TUGMA, `haliyoq:${v.id}`]], [_yoq_tugma(v)]],
     });
   }
 
@@ -724,6 +736,13 @@ export async function tugmani_ishla(db, sorov, token, guruh = null) {
       text: `🕌 ${v.nom} qazo bo'ldi. «${vz.qazo_nomi(v.nom)}» ro'yxatingizga qo'shildi.`,
       parse_mode: "HTML",
     });
+  } else if (amal === "bajarmadi" && q.length === 2) {
+    const vid = vz._int(q[1]);
+    const v = await vz.bitta(db, vid);
+    if (!v || !(await _egasimi(db, v.odam_id, username))) return;
+    if (vz.namozmi(v) || v.holat !== vz.OCHIQ) return;
+    await vz.bajarmadim(db, vid);
+    await tahrir({ text: `❌ ${v.nom} — bajarilmadi deb belgilandi.`, parse_mode: "HTML" });
   } else if (amal === "haliyoq" && q.length === 2) {
     const vid = vz._int(q[1]);
     const v = await vz.bitta(db, vid);

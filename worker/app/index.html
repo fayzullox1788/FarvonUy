@@ -121,6 +121,7 @@
   .doira:active { transform: scale(.88); }
   .kech .doira { border-color: var(--qizil); }
   .qator.tayyor .doira { background: var(--yashil); border-color: var(--yashil); }
+  .qator.tayyor.yoq .doira { background: var(--qizil); border-color: var(--qizil); }
   .vaqt {
     align-self: stretch; display: flex; flex-direction: column; justify-content: center;
     padding-left: 4px; border-right: 1px solid var(--chiziq);
@@ -518,7 +519,7 @@ function royxatniChiz() {
     .filter((v) => filtr === "barchasi" || v.toifa === filtr)
     .sort((a, b) => (tayyormi(a) - tayyormi(b)) || (daqiqa(a.vaqt) - daqiqa(b.vaqt)));
   $("soni").textContent = `${korinadi.length} ta vazifa`;
-  const namozTugma = filtr === "namoz" && !NAMUNA ? `<button class="namoz-tugma" data-amal="namozlar">🕌 Namoz vaqtlarini o‘zgartirish</button>` : "";
+  const namozTugma = "";   // namozlar endi vaqtsiz — «Namoz vaqtlari» tugmasi olib tashlandi
   if (!korinadi.length) {
     $("royxat").innerHTML = namozTugma + `<div class="bosh-holat">Bu yerda hozircha vazifa yo‘q</div>`;
     return;
@@ -526,11 +527,13 @@ function royxatniChiz() {
   $("royxat").innerHTML = namozTugma + korinadi.map((v) => {
     const k = kechikish(v);
     const t = tayyormi(v);
-    const cls = t ? " tayyor" : k ? " kech" : "";
+    const yoq = v.holat === "qazo" || v.holat === "bajarilmadi";
+    const cls = t ? " tayyor" + (yoq ? " yoq" : "") : k ? " kech" : "";
     const toifa = v.toifa in TURLAR ? v.toifa : "boshqa";
     return `<div class="qator${cls}" data-id="${v.id}">
-      <button class="doira" data-amal="belgila" aria-label="Bajarildi">${t
-        ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>` : ""}</button>
+      <button class="doira" data-amal="belgila" aria-label="Bajarildi">${t && yoq
+        ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>`
+        : t ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>` : ""}</button>
       <div class="vaqt"><b>${v.vaqt || "—"}</b>${k ? `<small>${kechMatn(k)}</small>` : ""}</div>
       <div class="ichi"><div class="nom">${e(v.nom)}</div>${joyMatn(v) ? `<div class="joy">${e(joyMatn(v))}</div>` : ""}<span class="belgi b-${toifa}">${TURLAR[toifa].nom}</span></div>
       <button class="kebab" data-amal="menyu" aria-label="Amallar"><svg width="4" height="16" viewBox="0 0 4 16" fill="currentColor"><circle cx="2" cy="2" r="1.7"/><circle cx="2" cy="8" r="1.7"/><circle cx="2" cy="14" r="1.7"/></svg></button>
@@ -565,6 +568,8 @@ async function holat(id, amal, qosh = {}) {
   const eski = vazifalar.map((x) => ({ ...x }));
   if (amal === "bajarildi") v.holat = "bajarildi";
   if (amal === "ochiq") v.holat = "ochiq";
+  if (amal === "qazo") v.holat = "qazo";
+  if (amal === "bajarmadi") v.holat = "bajarilmadi";
   if (amal === "bekor") vazifalar = vazifalar.filter((x) => x.id !== id);
   royxatniChiz();
   if (NAMUNA) return true;
@@ -587,10 +592,12 @@ function amallarOyna(v) {
     ${joyIzoh(v)}
     ${k ? `<p class="izoh">Boshlanganiga ${kechMatn(k).slice(1)} bo‘ldi. Hozirgi holati qanday?</p>` : ""}
     ${t ? "" : `<button class="amal" data-h="boshladim"><i>▶️</i>Boshladim</button>`}
-    <button class="amal" data-h="${t ? "ochiq" : "bajarildi"}"><i>✅</i>${t ? "Bajarilmagan deb belgilash" : "Bajarildi"}</button>
+    <button class="amal" data-h="${t ? "ochiq" : "bajarildi"}"><i>✅</i>${t ? "Qayta ochish" : "Bajarildi"}</button>
+    ${t ? "" : (v.namoz ?? v.toifa === "namoz")
+      ? `<button class="amal" data-h="qazo"><i>🕌</i>Qazo bo‘ldi</button>`
+      : `<button class="amal" data-h="bajarmadi"><i>❌</i>Bajarmadim</button>`}
     ${t ? "" : `<button class="amal" data-h="kechiktir"><i>⏳</i>Kechiktirish</button>`}
     ${t ? "" : `<button class="amal" data-h="vaqt"><i>🕐</i>Vaqtini o‘zgartirish</button>`}
-    ${v.toifa === "namoz" ? `<button class="amal" data-h="namozlar"><i>🕌</i>Barcha namoz vaqtlari</button>` : ""}
     <button class="amal xavf" data-h="bekor"><i>✕</i>Bekor qilish</button>`);
   $("oyna").onclick = async (ev) => {
     const b = ev.target.closest(".amal"); if (!b) return;
@@ -600,7 +607,11 @@ function amallarOyna(v) {
     if (h === "namozlar") return namozlarOyna();
     oynaYop(); tebran();
     if (h === "boshladim") return xabar("Omad! 💪");
-    if (await holat(v.id, h)) xabar({ bajarildi: "Bajarildi ✅", ochiq: "Qayta ochildi", bekor: "Bekor qilindi" }[h]);
+    if (await holat(v.id, h)) {
+      xabar({ bajarildi: "Bajarildi ✅", ochiq: "Qayta ochildi", bekor: "Bekor qilindi",
+        qazo: "Qazo bo‘ldi — qazosini o‘qish ishi qo‘shildi", bajarmadi: "Bajarilmadi deb belgilandi" }[h]);
+      if ((h === "qazo" || h === "ochiq") && !NAMUNA) await yukla();   // qazo ishi qo'shiladi/o'chadi
+    }
   };
 }
 function kechiktirOyna(v) {

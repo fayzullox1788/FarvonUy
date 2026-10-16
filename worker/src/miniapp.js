@@ -4,7 +4,7 @@
 //   GET  /app/api/vazifalar?sana=   — ochgan odamning shu kungi vazifalari
 //   POST /app/api/vazifa            — yangi vazifa {nom, sana, vaqt, davomiylik, toifa, takror?}
 //                                     takror=true → «har kuni» qoidasi (takror_qosh)
-//   POST /app/api/vazifa/<id>       — {amal: bajarildi|ochiq|kechiktir|bekor|vaqt, daqiqa?,
+//   POST /app/api/vazifa/<id>       — {amal: bajarildi|ochiq|qazo|bajarmadi|kechiktir|bekor|vaqt, daqiqa?,
 //                                      vaqt?, hammasi?} — vaqt+hammasi: qoidaga, keyingi kunlarga ham
 //   GET  /app/api/namozlar          — o'z namoz qoidalari [{id, nom, vaqt}]
 //   POST /app/api/namozlar          — {vaqtlar: {<takror id>: "HH:MM"}} → bugundan keyingi barcha kunlar
@@ -120,6 +120,7 @@ async function vazifalar(db, odam, sana) {
       oqituvchi: v.oqituvchi ?? null,
       kechiktirildi: v.kechiktirildi,
       toifa: toifaAniqla(v, shaxsiy, uy),
+      namoz: vz.namozmi(v),   // «Qazo bo'ldi» yoki «Bajarmadim» (qazo ishining o'zi namoz emas)
       takror: takrorOl(v),
     })),
   };
@@ -236,6 +237,8 @@ export async function ishla(req, env, db) {
     switch (b.amal) {
       case "bajarildi": await vz.bajar(db, v.id, true); break;
       case "ochiq": await vz.bajar(db, v.id, false); break;
+      case "qazo": await vz.qazo_qil(db, v.id); break;          // namoz → qazo ishi yoziladi
+      case "bajarmadi": await vz.bajarmadim(db, v.id); break;   // qolgan ish → yopiladi
       case "kechiktir": await vz.kechiktir(db, v.id, b.daqiqa || 10); break;
       case "bekor": await vz.ochir(db, v.id); break;
       case "vaqt": {

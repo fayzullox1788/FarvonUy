@@ -674,6 +674,21 @@ undo. Namoz qayta ochilsa hali o'qilmagan qazo ishi ham o'chadi.
 Namoz NOMIDAN taniladi (`vz.namozmi()`, `NAMOZ_SOZLAR`) — takror
 qoidalarida tur ustuni yo'q; qazo ishining o'zi namoz hisoblanmaydi.
 
+### «Bajarmadim» — `vz.bajarmadim()` (2026-10-16)
+
+To'rtinchi holat `vazifa.holat='bajarilmadi'` (`vz.BAJARILMADI`) — namoz
+BO'LMAGAN ish qilinmadi. `yopiqmi()` True (eslatma to'xtaydi), qazodan
+farqi: hech qanday yangi ish yozilmaydi. Qayta ochish — `bajar()`.
+Botda «Bajarildi» yonidagi ikkinchi tugma `xabar._yoq_tugma()`: namozga
+`qazo:<id>`, qolganiga `bajarmadi:<id>` (eslatma ostida va shaxsiy
+ro'yxat tugmalarida). Mini App ⋮ va desktop tafsilot oynasida ham bor.
+
+**Namozlar 2026-10-16 dan VAQTSIZ** (foydalanuvchi so'rovi): 5 qoida va
+ochiq kunlari `takror_vaqt_qoy(..., None)` bilan tozalandi. Vaqtsiz ish
+eslatma olmaydi — namoz faqat kunlik shaxsiy ro'yxatda tugmalari bilan
+chiqadi (tugmada vaqt o'rniga NOMI). Mini App'dagi «Namoz vaqtlari»
+tugmalari yashirildi (`/app/api/namozlar` joyida).
+
 ### Shaxsiy va umumiy ish
 
 `vazifa_turi.shaxsiy=1` — bu ish GURUHGA CHIQMAYDI. Bot uni faqat

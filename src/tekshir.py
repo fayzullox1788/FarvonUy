@@ -1521,7 +1521,8 @@ _soat10 = _datetime.combine(_kbugun, _datetime.min.time()).replace(hour=10)
 _esl = [x for x in xb.kutilayotgan(dK, _soat10) if x["turi"] == "eslatma"]
 teng("vaqti tugagach eslatma chiqadi", 1, len(_esl))
 _tugmalar = [t[0] for qat in _esl[0]["klaviatura"] for t in qat]
-teng("ikkita javob tugmasi", 2, len(_tugmalar))
+teng("uchta javob tugmasi", 3, len(_tugmalar))
+tekshir("«Bajarmadim» bor (namoz emas)", any("Bajarmadim" in t for t in _tugmalar))
 tekshir("«Albatta!» bor", any("Albatta" in t for t in _tugmalar))
 tekshir("«Hali yo'q» bor", any("Hali yo'q" in t for t in _tugmalar))
 
@@ -2059,6 +2060,22 @@ tekshir("undo: qazo ishi yo'q", vz.bitta(dT, _qid0) is None)
 vz.bajar(dT, _asr1["id"], False)
 teng("qayta ochildi", vz.OCHIQ, vz.bitta(dT, _asr1["id"])["holat"])
 tekshir("ochiq qazo ishi ham ketdi", vz.bitta(dT, _qid) is None)
+
+# «Bajarmadim» — namoz bo'lmagan ish: yopiladi, yangi ish yozilmaydi.
+_bm = vz.qosh(dT, "Sport", tF, _TB, "18:00", 30)
+_bm_soni = dT.q1("SELECT COUNT(*) n FROM vazifa WHERE ochirilgan=0")["n"]
+tekshir("namozni «bajarmadim» qilib bo'lmaydi (qazo bor)",
+        _yiqiladimi(lambda: vz.bajarmadim(dT, _asr1["id"])))
+vz.bajarmadim(dT, _bm)
+teng("bajarmadim holati", vz.BAJARILMADI, vz.bitta(dT, _bm)["holat"])
+tekshir("bajarilmagan ish yopiq — eslatma so'ramaydi",
+        vz.yopiqmi(vz.bitta(dT, _bm)))
+teng("bajarmadim yangi ish yozmaydi", _bm_soni,
+     dT.q1("SELECT COUNT(*) n FROM vazifa WHERE ochirilgan=0")["n"])
+tekshir("yopiq ishni qayta «bajarmadim» qilib bo'lmaydi",
+        _yiqiladimi(lambda: vz.bajarmadim(dT, _bm)))
+dT.undo()
+teng("undo: ish yana ochiq", vz.OCHIQ, vz.bitta(dT, _bm)["holat"])
 
 
 # ═══════════════════════════════════════════ analitika: doira bo'laklari

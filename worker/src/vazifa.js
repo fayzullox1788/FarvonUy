@@ -10,6 +10,8 @@ import * as vaqt from "./vaqt.js";
 export const OCHIQ = "ochiq";
 export const BAJARILDI = "bajarildi";
 export const QAZO = "qazo";
+// Namoz bo'lmagan ish qilinmadi («Bajarmadim») — yopiq, o'rniga ish yozilmaydi.
+export const BAJARILMADI = "bajarilmadi";
 
 export const KUNLAR = ["Dushanba", "Seshanba", "Chorshanba", "Payshanba",
   "Juma", "Shanba", "Yakshanba"];
@@ -194,7 +196,18 @@ export async function bajar(db, vazifa_id, bajarildi = true, { a = null } = {}) 
 
 // vazifa.py:693
 export function yopiqmi(v) {
-  return v.holat === BAJARILDI || v.holat === QAZO;
+  return v.holat === BAJARILDI || v.holat === QAZO || v.holat === BAJARILMADI;
+}
+
+// vazifa.py — bajarmadim: namoz bo'lmagan ochiq ish → BAJARILMADI (yangi ish yozilmaydi).
+export async function bajarmadim(db, vazifa_id) {
+  const v = await bitta(db, vazifa_id);
+  if (!v) throw new Error("Vazifa topilmadi");
+  if (namozmi(v)) throw new Error(`«${v.nom}» namoz — «Qazo bo'ldi» ni bosing`);
+  if (v.holat !== OCHIQ) throw new Error("Faqat hali ochiq vazifa «bajarilmadi» bo'ladi");
+  const a = db.amal(`Bajarilmadi: ${v.nom}`);
+  await a.apply("vazifa", "UPDATE", { holat: BAJARILMADI, bajarilgan: null, kechiktirildi: null }, vazifa_id);
+  await a.commit();
 }
 
 // ─────────────────────────────────────────────────────────────── qazo

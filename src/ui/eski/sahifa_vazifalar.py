@@ -389,6 +389,7 @@ class VazifaTafsilot(QDialog):
                      if v["vaqt"] else "aniq vaqtsiz"),
             ("Holati", "Bajarildi" if v["holat"] == vz.BAJARILDI
                        else "Qazo bo'ldi" if v["holat"] == vz.QAZO
+                       else "Bajarmadim" if v["holat"] == vz.BAJARILMADI
                        else "Bajarilmagan"),
         ]
         if v["bajarilgan"]:
@@ -437,6 +438,12 @@ class VazifaTafsilot(QDialog):
                               "«qazosini o'qish» ishi bugunga qo'shiladi.")
             t_qazo.clicked.connect(self._qazo)
             tashqi.addWidget(qator(t_holat, t_qazo, t_tahrir, None, t_bekor))
+        elif v["holat"] == vz.OCHIQ:
+            t_yoq = tugma("Bajarmadim")
+            t_yoq.setToolTip("Bu ish qilinmadi: yopiladi, eslatma endi "
+                             "so'ramaydi. Yangi ish yozilmaydi.")
+            t_yoq.clicked.connect(self._bajarmadim)
+            tashqi.addWidget(qator(t_holat, t_yoq, t_tahrir, None, t_bekor))
         else:
             tashqi.addWidget(qator(t_holat, t_tahrir, None, t_bekor))
 
@@ -537,6 +544,15 @@ class VazifaTafsilot(QDialog):
         self.ozgardi = True
         self.accept()
 
+    def _bajarmadim(self):
+        try:
+            vz.bajarmadim(self.db, self.vazifa_id)
+        except Exception as e:
+            xato_koraset(self, str(e))
+            return
+        self.ozgardi = True
+        self.accept()
+
     def _tahrir(self):
         if VazifaDialog(self.db, self.vazifa_id, parent=self).exec():
             self.ozgardi = True
@@ -605,6 +621,7 @@ class _Blok(QFrame):
         # belgisi qoladi.
         belgi = "" if bajarildi else (
             "🕌 " if qator_["holat"] == vz.QAZO else
+            "❌ " if qator_["holat"] == vz.BAJARILMADI else
             "⏳ " if kechikkan else "")
         self._toliq = belgi + qator_["nom"]
         pas_matn = f"{qator_['vaqt'] or ''} · {qator_['odam']}".strip(" ·")
@@ -663,6 +680,7 @@ class _Blok(QFrame):
 
         holat = "bajarildi" if bajarildi else (
             "qazo bo'ldi" if qator_["holat"] == vz.QAZO else
+            "bajarilmadi" if qator_["holat"] == vz.BAJARILMADI else
             "kechikkan" if kechikkan else "bajarilmagan")
         maslahat = (f"{qator_['nom']}\n{qator_['odam']} · "
                     f"{qator_['sana']} {qator_['vaqt'] or ''}\n{holat}")
