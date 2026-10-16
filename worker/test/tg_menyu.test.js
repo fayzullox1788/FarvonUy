@@ -137,3 +137,10 @@ test("tg_menyu: hamma matnlar, _norm, javob, matn_keldi — Python bilan bir xil
   assert.match(py.odam[String(ids[1])].uy, /🕌/);
   assert.match(py.aylanma, /→/);
 });
+
+test("_darsmi: «Darslar» toifali qo'lda vazifa ham dars menyusiga tushadi", () => {
+  assert.equal(tm._darsmi({ manba: "dars:2026-10-16:4", toifa: null }), true);
+  assert.equal(tm._darsmi({ manba: "takror:10:2026-10-16", toifa: "darslar" }), true);
+  assert.equal(tm._darsmi({ manba: "takror:3:2026-10-16", toifa: null }), false);
+  assert.equal(tm._darsmi({ manba: null, toifa: "shaxsiy" }), false);
+});

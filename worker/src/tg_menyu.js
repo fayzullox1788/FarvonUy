@@ -132,7 +132,8 @@ export async function tashqi(db, odam_id) {
 // `shaxsiy=1` — shuning uchun darsni avval `manba` bo'yicha ajratamiz.
 
 // tg_menyu.py:165
-export function _darsmi(v) { return String(v.manba || "").startsWith("dars:"); }
+// EduPage darsi YOKI qo'lda «Darslar» toifasi berilgan vazifa (dars qilish rejasi).
+export function _darsmi(v) { return String(v.manba || "").startsWith("dars:") || v.toifa === "darslar"; }
 
 // tg_menyu.py:169
 /** bugun — "YYYY-MM-DD" (Python `date`). */

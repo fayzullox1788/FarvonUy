@@ -163,7 +163,9 @@ def tashqi(db, odam_id) -> str:
 # ro'yxatiga ham tushib qolardi.
 
 def _darsmi(v) -> bool:
-    return str(v["manba"] or "").startswith("dars:")
+    """EduPage darsi YOKI qo'lda «Darslar» toifasi berilgan vazifa."""
+    return (str(v["manba"] or "").startswith("dars:")
+            or vz._qator_ol(v, "toifa") == "darslar")
 
 
 def bugungi(db, odam_id, qism: str, bugun=None) -> list:
