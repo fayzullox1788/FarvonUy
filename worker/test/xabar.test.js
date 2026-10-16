@@ -5,6 +5,7 @@ import { usta, nusxa, jsDb, pyIshla, muzlat, yozuvchi, norm, qatorlar, jurnal, j
 import * as xb from "../src/xabar.js";
 import * as vz from "../src/vazifa.js";
 import * as vaqt from "../src/vaqt.js";
+import * as tg from "../src/tg.js";
 
 const SEED = String.raw`
 muzlat("2026-10-04 06:00:00")
@@ -208,14 +209,15 @@ const VZ_SQL = "SELECT nom, odam_id, sana, vaqt, davomiylik, holat, bajarilgan, 
   " ochirilgan, menyu FROM vazifa ORDER BY sana, nom, odam_id, COALESCE(vaqt,''), manba";
 const YT_SQL = "SELECT odam_id, nom, izoh, sana, streak_id, nishon, ochirilgan FROM yutuq ORDER BY odam_id, sana, nishon";
 
-const bosish = (data, kim = "fsultonoov", chat = -1) =>
-  ({ id: "cb1", data, from: { username: kim }, message: { message_id: 777, chat: { id: chat } } });
+const bosish = (data, kim = "fsultonoov", chat = -1, markup = null) =>
+  ({ id: "cb1", data, from: { username: kim },
+    message: { message_id: 777, chat: { id: chat }, ...(markup ? { reply_markup: markup } : {}) } });
 
 /** Bitta tugmani ikkala tomonda bosadi; chaqiruvlar, qatorlar va jurnal teng. */
-async function tugmaPar(data, kim, s = "2026-10-04 21:15:00", oldin = "") {
+async function tugmaPar(data, kim, s = "2026-10-04 21:15:00", oldin = "", markup = null) {
   const pp = nusxa(U.papka), jp = nusxa(U.papka);
   const oz = maxOz(pp);
-  const cb = bosish(data, kim);
+  const cb = bosish(data, kim, -1, markup);
   const pr = pyIshla(pp, `${oldin}\nmuzlat("${s}")\nxb.tugmani_ishla(db, ${JSON.stringify(cb)}, "sinov", "-1")\nchiq(CALLS)`);
   const db = jsDb(jp);
   if (oldin.includes("K_KECHIKTIRISH")) await db.sozlama_qoy(xb.K_KECHIKTIRISH, "15,45,120");
@@ -281,6 +283,38 @@ test("tugma bajarmadi: — namoz bo'lmagan ish yopiladi, yangi ish yozilmaydi", 
   await tugmaPar(`bajarmadi:${ID.peshin}`, "NothingTrue1"); // namoz — e'tiborsiz (qazo bor)
   await tugmaPar(`bajarmadi:${ID.gaz}`, "nothingtrue1");    // allaqachon bajarilgan
   await tugmaPar(`bajarmadi:${ID.musor}`, "fsultonoov");    // begona
+});
+
+// Kunlik shaxsiy ro'yxat (haliyoq: tugmasi yo'q) — xabar JOYIDA qayta chiziladi.
+const royxat = (...idlar) => ({ inline_keyboard: idlar.map((id) =>
+  [{ text: "Albatta! ✅", callback_data: `bajar:${id}` }, { text: "Bajarmadim ❌", callback_data: `bajarmadi:${id}` }]) });
+
+test("ro'yxat xabari: bajar/qazo/bajarmadi — ro'yxat qayta chiziladi, boshqalar tugmasi qoladi", async () => {
+  const a = await tugmaPar(`bajar:${ID.kit_bugun}`, "fsultonoov", "2026-10-04 21:15:00", "", royxat(ID.kit_bugun));
+  assert.equal(a.calls.length, 1);
+  assert.equal(a.calls[0][0], "editMessageText");
+  assert.match(a.calls[0][1].text, /Shaxsiy ro'yxatingiz/);
+  const b = await tugmaPar(`bajarmadi:${ID.kitob_o}`, "otabek_33", "2026-10-04 21:15:00", "", royxat(ID.kitob_o));
+  assert.match(b.calls[0][1].text, /❌ bajarilmadi/);
+  const c = await tugmaPar(`qazo:${ID.peshin}`, "NothingTrue1", "2026-10-04 13:00:00", "", royxat(ID.peshin, ID.dars));
+  const kb = JSON.parse(c.calls[0][1].reply_markup).inline_keyboard.flat().map((t) => t.callback_data);
+  assert.ok(kb.includes(`bajar:${ID.dars}`), "boshqa ishning tugmasi qoldi");
+  assert.ok(!kb.includes(`qazo:${ID.peshin}`), "bosilgan ishning tugmasi ketdi");
+});
+
+test("ro'yxat xabari: qayta chizib bo'lmasa — toast, xabar tegilmaydi", async () => {
+  const db = jsDb(nusxa(U.papka));
+  const calls = [];
+  tg.transportQoy(async (metod, m) => {
+    calls.push([metod, { ...m }]);
+    if (metod === "editMessageText") throw new Error("message can't be edited");
+    return true;
+  });
+  muzlat("2026-10-04 21:15:00");
+  await xb.tugmani_ishla(db, bosish(`bajarmadi:${ID.kitob_o}`, "otabek_33", -1, royxat(ID.kitob_o)), "sinov", "-1");
+  assert.deepEqual(calls.map((c) => c[0]), ["editMessageText", "answerCallbackQuery"]);
+  assert.equal(calls[1][1].text, "❌ Bajarilmadi");
+  assert.equal((await db.q1("SELECT holat FROM vazifa WHERE id=?", ID.kitob_o)).holat, "bajarilmadi");
 });
 
 test("tugma haliyoq: / kech: — kechiktirish", async () => {

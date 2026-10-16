@@ -683,6 +683,34 @@ export async function _egasimi(db, odam_id, username) {
   return !!username && r.telegram.toLowerCase() === String(username).toLowerCase();
 }
 
+// xabar.py — _royxat_xabarimi: kunlik shaxsiy RO'YXAT (ko'p ishli) — eslatmada doim
+// `haliyoq:` bor, ro'yxatda yo'q (callback_data o'zgarmaydi — eski xabarlar).
+export function _royxat_xabarimi(xabar) {
+  const kb = (xabar.reply_markup || {}).inline_keyboard || [];
+  const data = kb.flat().map((t) => String(t.callback_data ?? ""));
+  return data.some((d) => d.startsWith("bajar:")) && !data.some((d) => d.startsWith("haliyoq:"));
+}
+
+const _ROYXAT_TOAST = { bajar: "✅ Bajarildi", qazo: "🕌 Qazo bo'ldi", bajarmadi: "❌ Bajarilmadi" };
+
+// xabar.py — _royxatni_yangila: ro'yxat JOYIDA qayta chiziladi; bo'lmasa — toast.
+async function _royxatni_yangila(db, token, sorov, v, amal) {
+  const xabar = sorov.message || {};
+  const matn = await shaxsiy_matn(db, v.sana, v.odam_id);
+  if (matn != null) {
+    try {
+      await tg.sorov(token, "editMessageText", {
+        chat_id: (xabar.chat || {}).id, message_id: xabar.message_id, text: matn, parse_mode: "HTML",
+        reply_markup: tg.klaviaturaJson((await shaxsiy_klaviatura(db, v.sana, v.odam_id)) || []),
+      });
+      return;
+    } catch { /* pastda toast */ }
+  }
+  try {
+    await tg.sorov(token, "answerCallbackQuery", { callback_query_id: sorov.id, text: _ROYXAT_TOAST[amal] || "Belgilandi" });
+  } catch { /* muhim emas */ }
+}
+
 // xabar.py:907
 export async function tugmani_ishla(db, sorov, token, guruh = null) {
   const data = sorov.data || "";
@@ -723,6 +751,7 @@ export async function tugmani_ishla(db, sorov, token, guruh = null) {
     if (!v || !(await _egasimi(db, v.odam_id, username))) return;
     await vz.bajar(db, vid, true);
     v = await vz.bitta(db, vid);
+    if (_royxat_xabarimi(xabar)) return _royxatni_yangila(db, token, sorov, v, amal);
     const ctx = await _kontekst(db);
     const [nom, tgn] = _odam_nom_telegram(ctx, v.odam_id);
     await tahrir({ text: await _bitta_blok(db, v, _teg(nom, tgn), ctx), parse_mode: "HTML" });
@@ -732,6 +761,7 @@ export async function tugmani_ishla(db, sorov, token, guruh = null) {
     if (!v || !(await _egasimi(db, v.odam_id, username))) return;
     if (!vz.namozmi(v) || v.holat !== vz.OCHIQ) return;
     await vz.qazo_qil(db, vid);
+    if (_royxat_xabarimi(xabar)) return _royxatni_yangila(db, token, sorov, await vz.bitta(db, vid), amal);
     await tahrir({
       text: `🕌 ${v.nom} qazo bo'ldi. «${vz.qazo_nomi(v.nom)}» ro'yxatingizga qo'shildi.`,
       parse_mode: "HTML",
@@ -742,6 +772,7 @@ export async function tugmani_ishla(db, sorov, token, guruh = null) {
     if (!v || !(await _egasimi(db, v.odam_id, username))) return;
     if (vz.namozmi(v) || v.holat !== vz.OCHIQ) return;
     await vz.bajarmadim(db, vid);
+    if (_royxat_xabarimi(xabar)) return _royxatni_yangila(db, token, sorov, await vz.bitta(db, vid), amal);
     await tahrir({ text: `❌ ${v.nom} — bajarilmadi deb belgilandi.`, parse_mode: "HTML" });
   } else if (amal === "haliyoq" && q.length === 2) {
     const vid = vz._int(q[1]);

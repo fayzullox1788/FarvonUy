@@ -926,6 +926,43 @@ def _egasimi(db, odam_id: int, username: str) -> bool:
     return bool(username) and r["telegram"].lower() == username.lower()
 
 
+def _royxat_xabarimi(xabar) -> bool:
+    """Bosilgan xabar — kunlik shaxsiy RO'YXATmi (ko'p ishli), bitta
+    ishning eslatmasi emasmi. Eslatmada doim `haliyoq:` tugmasi bor,
+    ro'yxatda esa yo'q — callback_data o'zgartirilmaydi (eski xabarlar)."""
+    kb = (xabar.get("reply_markup") or {}).get("inline_keyboard") or []
+    data = [str(t.get("callback_data") or "") for q in kb for t in q]
+    return (any(d.startswith("bajar:") for d in data)
+            and not any(d.startswith("haliyoq:") for d in data))
+
+
+_ROYXAT_TOAST = {"bajar": "✅ Bajarildi", "qazo": "🕌 Qazo bo'ldi",
+                 "bajarmadi": "❌ Bajarilmadi"}
+
+
+def _royxatni_yangila(db, token, sorov, v, amal) -> None:
+    """Ro'yxat xabarini JOYIDA qayta chizadi: bosilgan ish yangi holati
+    bilan (tugmasiz), qolganlari tugmalari bilan. Qura olmasa — xabar
+    tegilmaydi, faqat qisqa bildirishnoma (toast)."""
+    xabar = sorov.get("message") or {}
+    matn = shaxsiy_matn(db, v["sana"], v["odam_id"])
+    if matn is not None:
+        try:
+            _sorov(token, "editMessageText",
+                   chat_id=(xabar.get("chat") or {}).get("id"),
+                   message_id=xabar.get("message_id"), text=matn,
+                   parse_mode="HTML", reply_markup=_klaviatura_json(
+                       shaxsiy_klaviatura(db, v["sana"], v["odam_id"]) or []))
+            return
+        except Exception:
+            pass
+    try:
+        _sorov(token, "answerCallbackQuery", callback_query_id=sorov.get("id"),
+               text=_ROYXAT_TOAST.get(amal, "Belgilandi"))
+    except Exception:
+        pass
+
+
 def tugmani_ishla(db, sorov: dict, token: str, guruh: str) -> None:
     """Guruhda bosilgan bitta tugmani ishlaydi (callback_query)."""
     data = sorov.get("data") or ""
@@ -968,6 +1005,9 @@ def tugmani_ishla(db, sorov: dict, token: str, guruh: str) -> None:
             return
         vz.bajar(db, vid, True)
         v = vz.bitta(db, vid)
+        if _royxat_xabarimi(xabar):
+            _royxatni_yangila(db, token, sorov, v, amal)
+            return
         nom, tg = _odam_nom_telegram(db, v["odam_id"])
         _sorov(token, "editMessageText", chat_id=chat_id, message_id=message_id,
               text=_bitta_blok(db, v, _teg(nom, tg)), parse_mode="HTML")
@@ -980,6 +1020,9 @@ def tugmani_ishla(db, sorov: dict, token: str, guruh: str) -> None:
         if not vz.namozmi(v) or v["holat"] != vz.OCHIQ:
             return
         vz.qazo_qil(db, vid)
+        if _royxat_xabarimi(xabar):
+            _royxatni_yangila(db, token, sorov, vz.bitta(db, vid), amal)
+            return
         _sorov(token, "editMessageText", chat_id=chat_id, message_id=message_id,
               text=f"🕌 {v['nom']} qazo bo'ldi. "
                    f"«{vz.qazo_nomi(v['nom'])}» ro'yxatingizga qo'shildi.",
@@ -993,6 +1036,9 @@ def tugmani_ishla(db, sorov: dict, token: str, guruh: str) -> None:
         if vz.namozmi(v) or v["holat"] != vz.OCHIQ:
             return
         vz.bajarmadim(db, vid)
+        if _royxat_xabarimi(xabar):
+            _royxatni_yangila(db, token, sorov, vz.bitta(db, vid), amal)
+            return
         _sorov(token, "editMessageText", chat_id=chat_id, message_id=message_id,
               text=f"❌ {v['nom']} — bajarilmadi deb belgilandi.",
               parse_mode="HTML")
