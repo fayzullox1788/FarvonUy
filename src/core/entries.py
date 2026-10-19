@@ -531,12 +531,17 @@ def _odam_nom(db, odam_id: int) -> str:
     return r["nom"] if r else "?"
 
 
-def odam_ochir(db, odam_id: int) -> None:
+def odam_ochir(db, odam_id: int, qarz_bilan: bool = False) -> None:
     """Odamni ro'yxatdan olib tashlaydi (nofaol qiladi).
 
     Yozuvlari HECH QAYERGA yo'qolmaydi — o'tgan rasxodlar, ulushlar va
     qarzlar joyida qoladi, aks holda kitob teng bo'lmay qolardi. Odam
     faqat yangi rasxodlarda ko'rinmaydi.
+
+    `qarz_bilan=True` — ochiq qarzi (ichki `sof` yoki tashqi ulushi) bo'lsa
+    ham olinadi (2026-10-19, egasi so'ragan: Otabek). Qarzlar joyida
+    qoladi va qarz ko'rsatiladigan joylarda (`juft_qarzlar`,
+    `odam_qarzlari`, audit) ko'rinib turadi.
     """
     o = db.q1("SELECT nom FROM odam WHERE id=?", odam_id)
     if not o:
@@ -545,14 +550,14 @@ def odam_ochir(db, odam_id: int) -> None:
         raise ValueError("Oxirgi odamni o'chirib bo'lmaydi")
 
     b = db.q1("SELECT sof FROM v_balans WHERE id=?", odam_id)
-    if b and b["sof"] != 0:
+    if b and b["sof"] != 0 and not qarz_bilan:
         yon = "qarzdor" if b["sof"] < 0 else "unga qarzdorlar"
         raise ValueError(
             f"{o['nom']} hali {money.fmt(abs(b['sof']))} so'mga {yon}.\n\n"
             f"Avval hisob-kitob qiling — qarz ochiq turganda odamni "
             f"ro'yxatdan olib tashlash hisobni chalkashtiradi.")
     b = db.q1("SELECT tashqi_qoldiq FROM v_balans WHERE id=?", odam_id)
-    if b and b["tashqi_qoldiq"]:
+    if b and b["tashqi_qoldiq"] and not qarz_bilan:
         raise ValueError(
             f"{o['nom']} tashqaridan olgan {money.fmt(b['tashqi_qoldiq'])} "
             f"so'm qarzni hali qaytarmagan.")

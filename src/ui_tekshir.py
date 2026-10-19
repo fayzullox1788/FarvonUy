@@ -686,6 +686,39 @@ def main() -> int:
 
     bosqich("dialog «Juftlik qarzi tafsiloti»", _juft_tafsilot)
 
+    # ── ro'yxatdan olingan (nofaol) odamning eski qarzi: to'lov, tashqi
+    #    ulush va eski rasxod tahriri uni jimgina tushirib qoldirmasin
+    def _nofaol_qarz():
+        from core import entries
+        from ui.eski.dialogs import _Qatnashchilar
+        u = d.q1("SELECT u.rasxod_id, u.odam_id FROM ulush u JOIN rasxod r"
+                 " ON r.id=u.rasxod_id WHERE r.ochirilgan=0 AND r.umumiymi=1"
+                 " AND u.odam_id<>r.kim_toladi LIMIT 1")
+        if not u:
+            return
+        oid = u["odam_id"]
+        boshqa = d.skalyar("SELECT id FROM odam WHERE faol=1 AND id<>?", oid)
+        entries.odam_ochir(d, oid, qarz_bilan=True)
+        try:
+            t = TolovDialog(d, oid, boshqa, 1000, parent=oyna)
+            _tasdiq(t.kimdan.odam_id() == oid,
+                    "To'lov: nofaol qarzdor tanlanmadi")
+            q = _Qatnashchilar(d, "2026-01-01", lambda: 1000, [oid, boshqa])
+            _tasdiq(oid in q.belgilar and q.belgilar[oid].isChecked(),
+                    "tashqi ulush: nofaol odam tushib qoldi")
+            q2 = _Qatnashchilar(d, "2026-01-01", lambda: 1000)
+            _tasdiq(oid not in q2.belgilar,
+                    "yangi bo'lishda nofaol odam chiqdi")
+            rd = RasxodDialog(d, u["rasxod_id"], parent=oyna)
+            _tasdiq(oid in rd.qatnashchi and rd.qatnashchi[oid].isChecked(),
+                    "rasxod tahririda nofaol odam ulushi tushib qoldi")
+            _tasdiq(oid not in RasxodDialog(d, parent=oyna).qatnashchi,
+                    "yangi rasxodda nofaol odam chiqdi")
+        finally:
+            d.undo()
+
+    bosqich("nofaol odamning eski qarzi ko'rinadi", _nofaol_qarz)
+
     # ── tashqi qarz: dialog orqali yoziladi, Qarz varag'ida chiqadi
     def _tashqi_qarz():
         from core import ledger as lg

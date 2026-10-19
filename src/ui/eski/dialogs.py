@@ -470,7 +470,15 @@ class RasxodDialog(QDialog):
             self.setka.addWidget(e, r, 0, 1, 3)
             r += 1
 
-        for o in self.db.q("SELECT id, nom FROM odam WHERE faol=1 ORDER BY tartib, id"):
+        # Tahrirlanayotgan rasxodda ulushi bor nofaol odam ham chiqadi —
+        # aks holda saqlashda uning ulushi (va qarzi) jimgina tushardi.
+        eski = sorted(r["odam_id"] for r in self.db.q(
+            "SELECT DISTINCT odam_id FROM ulush WHERE rasxod_id=?",
+            self.rasxod_id)) if self.rasxod_id else []
+        for o in self.db.q(
+                "SELECT id, nom FROM odam WHERE faol=1"
+                f" OR id IN ({','.join('?' * len(eski)) or 'NULL'})"
+                " ORDER BY tartib, id", *eski):
             oid = o["id"]
             cb = QCheckBox(o["nom"])
             cb.setChecked(oid in uyda)
@@ -874,8 +882,13 @@ class _Qatnashchilar(QWidget):
         self.belgilar: dict[int, QCheckBox] = {}
         self.qiymat: dict[int, QLineEdit] = {}
         self.ulush: dict[int, QLabel] = {}
+        # Nofaol odam faqat oldindan tanlangan bo'lsa (eski qarzdagi ulushi)
+        # — aks holda tahrirlash/qaytarishda uning ulushi jimgina tushardi.
+        oldin = sorted(int(i) for i in (tanlangan or []))
         for r, o in enumerate(db.q(
-                "SELECT id, nom FROM odam WHERE faol=1 ORDER BY tartib, id")):
+                "SELECT id, nom FROM odam WHERE faol=1"
+                f" OR id IN ({','.join('?' * len(oldin)) or 'NULL'})"
+                " ORDER BY tartib, id", *oldin)):
             cb = QCheckBox(o["nom"])
             cb.setChecked(o["id"] in uyda)
             cb.toggled.connect(self.yangila)

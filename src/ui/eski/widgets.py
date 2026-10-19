@@ -734,6 +734,14 @@ class OdamTanla(QComboBox):
 
     def tanla(self, odam_id):
         i = self.findData(odam_id)
+        if i < 0 and odam_id is not None:
+            # Ro'yxatdan olingan (nofaol) odam — faqat aniq tanlanganda
+            # qo'shiladi (masalan, uning eski qarzini to'lash), aks holda
+            # combo jimgina birinchi odamda qolardi.
+            r = self.db.q1("SELECT nom FROM odam WHERE id=?", odam_id)
+            if r:
+                self.addItem(r["nom"], odam_id)
+                i = self.count() - 1
         if i >= 0:
             self.setCurrentIndex(i)
 

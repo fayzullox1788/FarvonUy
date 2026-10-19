@@ -421,6 +421,29 @@ try:
     tekshir("qarzdor odamni o'chirib bo'lmaydi", False)
 except ValueError:
     tekshir("qarzdor odamni o'chirib bo'lmaydi", True)
+
+# qarz_bilan=True: ochiq qarzi joyida qoladi va ko'rinib turadi, faqat
+# yangi rasxod/navbatdan chiqadi (2026-10-19, Otabek).
+from core import splitting, vazifa as vz  # noqa: E402
+_sof6 = {r["id"]: r["sof"] for r in ledger.balanslar(d6, hammasi=True)}
+_juft6 = [(j.qarzdor_id, j.kreditor_id, j.summa) for j in ledger.juft_qarzlar(d6)]
+_oq6 = ledger.odam_qarzlari(d6, O6)["jami"]
+entries.odam_ochir(d6, O6, qarz_bilan=True)
+tekshir("qarz_bilan: qarzdor odam ro'yxatdan olindi",
+        O6 not in [r["id"] for r in ledger.balanslar(d6)])
+teng("qarz_bilan: hech kimning sof i o'zgarmadi", _sof6,
+     {r["id"]: r["sof"] for r in ledger.balanslar(d6, hammasi=True)})
+teng("qarz_bilan: kim kimga qarzdor o'zgarmadi", _juft6,
+     [(j.qarzdor_id, j.kreditor_id, j.summa) for j in ledger.juft_qarzlar(d6)])
+teng("qarz_bilan: Qarzim o'zgarmadi", _oq6, ledger.odam_qarzlari(d6, O6)["jami"])
+tekshir("qarz_bilan: yangi rasxodda qatnashmaydi",
+        O6 not in splitting.qatnashchilar(d6, "2099-01-01"))
+tekshir("qarz_bilan: navbatda yo'q",
+        O6 not in [r["id"] for r in vz.navbat_odamlari(d6)])
+tekshir("qarz_bilan: kitob teng", ledger.audit(d6)["toza"])
+d6.undo()
+tekshir("qarz_bilan: undo qaytardi",
+        O6 in [r["id"] for r in ledger.balanslar(d6)])
 d6.yop()
 
 
