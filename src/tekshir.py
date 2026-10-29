@@ -4068,6 +4068,88 @@ finally:
     _s.DEMO = False
 
 
+# ═══════════════════════════════════════════ kirim nimaga ishlatildi (FIFO)
+
+print("\n── Kirim: nimaga ishlatildi (FIFO) ──")
+dKs = dbm.Db(_TMP / "bKs.db", zaxirasiz=True)
+kF = entries.odam_qosh(dKs, "Fayzulloxon")
+kO = entries.odam_qosh(dKs, "Otabek")
+kA = entries.odam_qosh(dKs, "Abbosxon")
+_k1 = entries.kirim_qosh(dKs, "2026-10-01", kF, 100_000, "Avans")
+_k2 = entries.kirim_qosh(dKs, "2026-10-05", kF, 200_000, "Oylik")
+_k3 = entries.kirim_qosh(dKs, "2026-10-20", kF, 50_000, "Akmal aka")
+entries.kirim_qosh(dKs, "2026-10-01", kO, 90_000)
+entries.rasxod_qosh(dKs, "2026-10-02", "Non", 30_000, kF, umumiymi=False)
+entries.rasxod_qosh(dKs, "2026-10-03", "Bozorlik", 90_000, kF)   # umumiy
+entries.rasxod_qosh(dKs, "2026-10-04", "Poyabzal", 40_000, kF,
+                    kim_uchun=kO)
+entries.qarz_qosh(dKs, "2026-10-06", kF, kA, 20_000, "taksi")
+entries.hisob_kitob_qosh(dKs, "2026-10-07", kF, kO, 10_000)
+_tq_sh = entries.tashqi_qarz_qosh(dKs, "2026-10-01", kF, "Aziz", 30_000)
+entries.tashqi_tolov_qosh(dKs, _tq_sh, "2026-10-08", 15_000)
+_tq_um = entries.tashqi_qarz_qosh(dKs, "2026-10-01", kO, "Uzum", 30_000,
+                                  umumiy=True, qatnashchilar=[kF, kO, kA])
+entries.tashqi_tolov_qosh(dKs, _tq_um, "2026-10-09", 30_000)
+entries.tashqi_berish_qosh(dKs, "2026-10-10", kF, "Vali", 25_000)
+entries.rasxod_qosh(dKs, "2026-10-11", "Otabekniki", 5_000, kO,
+                    umumiymi=False)                   # boshqa odam — kirmaydi
+
+_kb = ledger.balans(dKs, kF)
+_chiq = ledger.odam_chiqimlari(dKs, kF)
+teng("chiqimlar = v_balans naqd'dan ayiriladiganlar",
+     _kb["shaxsiy"] + _kb["umumiy_tolagan"] + _kb["qarz_bergan"]
+     + _kb["hk_tolagan"] + _kb["tashqi_qaytargan"] + _kb["tashqi_berilgan"],
+     sum(x["summa"] for x in _chiq))
+_tush = ledger.odam_tushumlari(dKs, kF)
+teng("tushumlar = naqd + chiqimlar (v_balans bilan bir xil)",
+     _kb["naqd"] + sum(x["summa"] for x in _chiq),
+     sum(x["summa"] for x in _tush))
+_kt = ledger.kirim_taqsimoti(dKs, kF)
+_kirimlar = {r["id"]: r["summa"] for r in dKs.q(
+    "SELECT id, summa FROM kirim WHERE ochirilgan=0 AND odam_id=?", kF)}
+tekshir("har kirimdan ishlatilgani ≤ kirim",
+        all(sum(x["summa"] for x in _kt[k]) <= s for k, s in _kirimlar.items()))
+teng("kirimlar qoldig'i = naqd (boshqa tushum to'liq sarflangan)",
+     _kb["naqd"], sum(ledger.kirim_sarfi(dKs, k)["qoldi"] for k in _kirimlar))
+# 1-kirim (100k): Non 30k + Bozorlik 70k (qisman, asli 90k)
+teng("eng eski kirim birinchi yopiladi", [("Non", 30_000, 30_000),
+                                          ("Bozorlik", 70_000, 90_000)],
+     [(x["nom"], x["summa"], x["asl"]) for x in _kt[_k1]])
+# Bozorlikning qolgan 20k + Poyabzal 20k — 10-01 dagi tashqi qarz (30k) va
+# umumiy tashqi qarz ulushi (10k) dan; 2-kirim Poyabzalning qolgan 20k dan.
+_s2 = ledger.kirim_sarfi(dKs, _k2)
+teng("2-kirim: kirimdan boshqa tushum ham navbatda turadi",
+     ("Poyabzal", 20_000, 40_000), (_s2["qatorlar"][0]["nom"],
+                                    _s2["qatorlar"][0]["summa"],
+                                    _s2["qatorlar"][0]["asl"]))
+teng("ishlatildi + qoldi = kirim", (100_000, 100_000),
+     (_s2["ishlatildi"], _s2["qoldi"]))
+teng("3-kirim: chiqim tugagan bo'lsa — hech narsa ishlatilmagan",
+     (0, 50_000), (ledger.kirim_sarfi(dKs, _k3)["ishlatildi"],
+                   ledger.kirim_sarfi(dKs, _k3)["qoldi"]))
+# Faqat kirimi bor odam: jami taqsimlangan = min(jami kirim, jami chiqim)
+kB = entries.odam_qosh(dKs, "Bobur")
+entries.kirim_qosh(dKs, "2026-10-01", kB, 60_000)
+entries.kirim_qosh(dKs, "2026-10-03", kB, 40_000)
+entries.rasxod_qosh(dKs, "2026-10-02", "Kitob", 70_000, kB, umumiymi=False)
+for _hol in ("kirim ko'p", "chiqim ko'p"):
+    if _hol == "chiqim ko'p":
+        entries.rasxod_qosh(dKs, "2026-10-04", "Daftar", 50_000, kB,
+                            umumiymi=False)
+    _bt = ledger.kirim_taqsimoti(dKs, kB)
+    teng(f"jami taqsimlangan = min(kirim, chiqim) — {_hol}",
+         min(100_000, sum(x["summa"] for x in ledger.odam_chiqimlari(dKs, kB))),
+         sum(x["summa"] for v in _bt.values() for x in v))
+teng("turlar", {"Rasxod", "Umumiy rasxod", "Qarz berildi", "To'lov",
+                "Tashqi qarz qaytarildi", "Tashqariga qarz"},
+     {x["turi"] for x in _chiq})
+tekshir("o'chirilgan kirim — None", (entries.kirim_ochir(dKs, _k3),
+                                     ledger.kirim_sarfi(dKs, _k3))[1] is None)
+tekshir("audit toza (kirim sarfi faqat o'qiydi)", ledger.audit(dKs).toza,
+        "; ".join(ledger.audit(dKs).muammolar))
+dKs.yop()
+
+
 # ═══════════════════════════════════════════ tashqariga berilgan qarz
 
 print("\n── Tashqariga berilgan qarz ──")

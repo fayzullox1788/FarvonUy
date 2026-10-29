@@ -799,3 +799,165 @@ def ogohlantirish(db) -> list[str]:
         elif daraja == "kam":
             xabarlar.append(f"{r['nom']}: {money.fmt(r['naqd'])} — kam qoldi")
     return xabarlar
+
+
+# ──────────────────────────────────────────── kirim nimaga ishlatildi
+
+def odam_chiqimlari(db, odam_id: int) -> list[dict]:
+    """Odamning qo'lidan chiqqan HAMMA pul — `v_balans.naqd` dan aynan
+    ayiriladigan qatorlar (sh, ut, qb, ht, tq, ttq, tb), sana tartibida.
+
+    Yig'indisi = shaxsiy + umumiy_tolagan + qarz_bergan + hk_tolagan
+    + tashqi_qaytargan + tashqi_berilgan. Ro'yxatni o'zgartirsangiz
+    `v_balans` bilan birga o'zgartiring — aks holda tafsilot balansga zid
+    chiqadi.
+    """
+    o = int(odam_id)
+    natija: list[dict] = []
+
+    def qosh(r, turi, nom, izoh, manba):
+        natija.append({"sana": r["sana"], "yaratilgan": r["yaratilgan"] or "",
+                       "turi": turi, "nom": nom, "izoh": izoh,
+                       "summa": int(r["summa"]), "manba": manba,
+                       "manba_id": r["id"]})
+
+    # sh + ut — o'zi to'lagan rasxod (umumiysi butun summasi bilan)
+    for r in db.q(
+            "SELECT r.id, r.sana, r.yaratilgan, r.summa, r.nom, r.umumiymi,"
+            "       t.nom turi_nom, u.nom uchun FROM rasxod r"
+            " LEFT JOIN turi t ON t.id=r.turi_id"
+            " LEFT JOIN odam u ON u.id=r.kim_uchun"
+            " WHERE r.ochirilgan=0 AND r.kim_toladi=?", o):
+        izoh = r["turi_nom"] or "Kategoriyasiz"
+        if r["uchun"]:
+            izoh += f" · {r['uchun']} uchun"
+        qosh(r, "Umumiy rasxod" if r["umumiymi"] and not r["uchun"]
+             else "Rasxod", r["nom"] or "—", izoh, "rasxod")
+    # qb — qo'lma-qo'l qarz berdi
+    for r in db.q("SELECT q.*, o.nom kimga_nom FROM qarz q"
+                  " JOIN odam o ON o.id=q.kimga"
+                  " WHERE q.ochirilgan=0 AND q.kim_berdi=?", o):
+        qosh(r, "Qarz berildi", f"→ {r['kimga_nom']}", r["sabab"] or "",
+             "qarz")
+    # ht — to'lov qildi
+    for r in db.q("SELECT h.*, o.nom kimga_nom FROM hisob_kitob h"
+                  " JOIN odam o ON o.id=h.kimga"
+                  " WHERE h.ochirilgan=0 AND h.kim_toladi=?", o):
+        qosh(r, "To'lov", f"→ {r['kimga_nom']}", r["izoh"] or "",
+             "hisob_kitob")
+    # tq — shaxsiy tashqi qarzni qaytardi
+    for r in db.q("SELECT t.id, t.sana, t.yaratilgan, t.summa, t.izoh,"
+                  "       q.kimdan FROM tashqi_tolov t"
+                  " JOIN tashqi_qarz q ON q.id=t.tashqi_qarz_id"
+                  " WHERE t.ochirilgan=0 AND q.ochirilgan=0 AND q.umumiy=0"
+                  "   AND q.odam_id=?", o):
+        qosh(r, "Tashqi qarz qaytarildi", f"→ {r['kimdan']}",
+             r["izoh"] or "", "tashqi_tolov")
+    # ttq — umumiy tashqi qarz to'lovidagi o'z ulushi
+    for r in db.q("SELECT t.id, t.sana, t.yaratilgan, u.summa, t.izoh,"
+                  "       q.kimdan FROM tashqi_ulush u"
+                  " JOIN tashqi_tolov t ON t.id=u.tolov_id"
+                  " JOIN tashqi_qarz q ON q.id=t.tashqi_qarz_id"
+                  " WHERE u.ochirilgan=0 AND t.ochirilgan=0 AND q.ochirilgan=0"
+                  "   AND q.umumiy=1 AND u.odam_id=?", o):
+        qosh(r, "Tashqi qarz qaytarildi", f"→ {r['kimdan']}",
+             "umumiy qarzdagi ulush" + (f" · {r['izoh']}" if r["izoh"] else ""),
+             "tashqi_tolov")
+    # tb — tashqariga qarz berdi
+    for r in db.q("SELECT * FROM tashqi_berilgan"
+                  " WHERE ochirilgan=0 AND odam_id=?", o):
+        qosh(r, "Tashqariga qarz", f"→ {r['kimga']}", r["sabab"] or "",
+             "tashqi_berilgan")
+
+    natija = [x for x in natija if x["summa"] > 0]
+    natija.sort(key=lambda x: (str(x["sana"])[:10], str(x["yaratilgan"]),
+                               x["manba"], x["manba_id"]))
+    return natija
+
+
+def odam_tushumlari(db, odam_id: int) -> list[dict]:
+    """Odamning qo'liga tushgan HAMMA pul — `v_balans.naqd` ga qo'shiladigan
+    qatorlar: kirim (k) + qarz oldi (qo) + to'lov oldi (ho) + tashqi qarz
+    oldi (ta, umumiysida o'z ulushi tsq) + tashqariga bergani qaytdi (tbq),
+    sana tartibida. Jami = naqd + `odam_chiqimlari()` jami.
+    """
+    o = int(odam_id)
+    sorovlar = (
+        ("kirim", "SELECT id, sana, yaratilgan, summa FROM kirim"
+                  " WHERE ochirilgan=0 AND odam_id=?"),
+        ("qarz", "SELECT id, sana, yaratilgan, summa FROM qarz"
+                 " WHERE ochirilgan=0 AND kimga=?"),
+        ("hisob_kitob", "SELECT id, sana, yaratilgan, summa FROM hisob_kitob"
+                        " WHERE ochirilgan=0 AND kimga=?"),
+        ("tashqi_qarz", "SELECT id, sana, yaratilgan, summa FROM tashqi_qarz"
+                        " WHERE ochirilgan=0 AND umumiy=0 AND odam_id=?"),
+        ("tashqi_qarz", "SELECT q.id, q.sana, q.yaratilgan, u.summa"
+                        " FROM tashqi_ulush u"
+                        " JOIN tashqi_qarz q ON q.id=u.qarz_id"
+                        " WHERE u.tolov_id IS NULL AND u.ochirilgan=0"
+                        "   AND q.ochirilgan=0 AND q.umumiy=1 AND u.odam_id=?"),
+        ("tashqi_qaytim", "SELECT t.id, t.sana, t.yaratilgan, t.summa"
+                          " FROM tashqi_qaytim t"
+                          " JOIN tashqi_berilgan b ON b.id=t.berilgan_id"
+                          " WHERE t.ochirilgan=0 AND b.ochirilgan=0"
+                          "   AND b.odam_id=?"),
+    )
+    natija = [{"manba": manba, "manba_id": int(r["id"]), "sana": r["sana"],
+               "yaratilgan": r["yaratilgan"] or "", "summa": int(r["summa"])}
+              for manba, sql in sorovlar for r in db.q(sql, o)
+              if int(r["summa"]) > 0]
+    natija.sort(key=lambda x: (str(x["sana"])[:10], str(x["yaratilgan"]),
+                               x["manba"], x["manba_id"]))
+    return natija
+
+
+def kirim_taqsimoti(db, odam_id: int) -> dict[int, list[dict]]:
+    """Odamning har kirimi nimaga ishlatilgani: {kirim_id: [bo'laklar]}.
+
+    Pul bir xil (fungible), shuning uchun FIFO: chiqimlar
+    (`odam_chiqimlari`) sana tartibida qo'lga ENG ESKI tushgan puldan
+    boshlab yopadi; u tugasa keyingisiga o'tadi, bitta chiqim ikki
+    tushumga bo'linishi mumkin (`summa` — shu kirimdan olingani, `asl` —
+    chiqimning butun summasi). Navbatda kirimdan tashqari qo'lga tushgan
+    boshqa pul ham turadi (`odam_tushumlari`: qarz/to'lov olgani, tashqi
+    qarz…) — aks holda u to'lagan chiqim kirimga yozilib, kirim «qoldi»
+    lari `naqd` ga zid chiqardi. Natijada faqat kirimlar qaytadi.
+    Boshlang'ich qoldiq / «Balans nolga tushirildi» — oddiy kirim.
+    Faqat o'qiydi — balansga tegmaydi.
+    """
+    tushum = odam_tushumlari(db, odam_id)
+    natija: dict[int, list[dict]] = {
+        x["manba_id"]: [] for x in tushum if x["manba"] == "kirim"}
+    qoldiq = [x["summa"] for x in tushum]
+    i = 0
+    for c in odam_chiqimlari(db, odam_id):
+        kerak = c["summa"]
+        while kerak > 0 and i < len(tushum):
+            olindi = min(kerak, qoldiq[i])
+            if tushum[i]["manba"] == "kirim":
+                natija[tushum[i]["manba_id"]].append(
+                    dict(c, summa=olindi, asl=c["summa"]))
+            kerak -= olindi
+            qoldiq[i] -= olindi
+            if qoldiq[i] == 0:
+                i += 1
+        if i >= len(tushum):
+            break
+    return natija
+
+
+def kirim_sarfi(db, kirim_id: int) -> dict | None:
+    """Bitta kirim — «shu pul nimaga ketdi» oynasi uchun.
+
+    {"kirim": {sana, odam_id, nom, sabab, summa}, "qatorlar": [...],
+    "ishlatildi": int, "qoldi": int} yoki None (kirim topilmadi).
+    """
+    k = db.q1("SELECT k.id, k.sana, k.odam_id, k.summa, k.sabab, o.nom"
+              " FROM kirim k JOIN odam o ON o.id=k.odam_id"
+              " WHERE k.id=? AND k.ochirilgan=0", int(kirim_id))
+    if not k:
+        return None
+    qatorlar = kirim_taqsimoti(db, k["odam_id"]).get(int(k["id"]), [])
+    ishlatildi = sum(x["summa"] for x in qatorlar)
+    return {"kirim": dict(k), "qatorlar": qatorlar, "ishlatildi": ishlatildi,
+            "qoldi": max(int(k["summa"]) - ishlatildi, 0)}

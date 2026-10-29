@@ -11,8 +11,8 @@ from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDialog,
                                QDialogButtonBox, QFileDialog, QFormLayout,
                                QGridLayout, QHBoxLayout, QLabel, QLineEdit,
-                               QMessageBox, QRadioButton, QVBoxLayout,
-                               QWidget)
+                               QMessageBox, QRadioButton, QTableWidgetItem,
+                               QVBoxLayout, QWidget)
 
 import money
 from core import entries, ledger, plan, receipts, splitting
@@ -2487,6 +2487,91 @@ class JuftTafsilot(QDialog):
     def _tolov(self):
         self.tolov_soraldi = True
         self.accept()
+
+
+# ═══════════════════════════════════════════════ kirim nimaga ishlatildi
+
+class KirimSarfi(QDialog):
+    """Kirim qatorining ICHI — shu pul aynan nimaga ishlatilgani.
+
+    `ledger.kirim_sarfi()` (FIFO: chiqimlar eng eski kirimdan boshlab
+    yopadi). Faqat ko'rish; rasxod qatori ikki marta bosilsa uning
+    tafsiloti (`yozuv_tafsilot`), o'zgarsa oyna o'zini yangilaydi.
+    """
+
+    def __init__(self, db, kirim_id: int, parent=None):
+        super().__init__(parent)
+        self.db = db
+        self.kirim_id = kirim_id
+        self.ozgardi = False
+        self.setWindowTitle("Kirim nimaga ishlatildi")
+        self.setMinimumSize(780, 560)
+
+        v = QVBoxLayout(self)
+        v.setSpacing(12)
+        self.bosh = sarlavha("")
+        self.bosh.setWordWrap(True)
+        v.addWidget(self.bosh)
+        self.summa_yorliq = QLabel()
+        self.summa_yorliq.setStyleSheet(
+            f"color:{theme.MATN};background:transparent;"
+            f"font-family:{theme.RAQAM_OILA};"
+            f"font-size:{theme.O_KATTA}px;font-weight:700;")
+        v.addWidget(self.summa_yorliq)
+
+        self.jadval = Jadval(["Sana", "Turi", "Nima uchun",
+                              "Shu kirimdan ishlatilgan"],
+                             pul_ustunlar={3},
+                             bosh_matn="Bu kirimdan hali hech narsa ishlatilmagan")
+        self.jadval.kengliklar(105, 165, 0, 270)
+        tafsilot_ulash(self.jadval, self._tafsilot)
+        v.addWidget(self.jadval, 1)
+
+        self.jami = QLabel()
+        self.jami.setStyleSheet(
+            f"color:{theme.MATN};background:transparent;font-weight:600;")
+        v.addWidget(self.jami)
+        v.addWidget(izoh("Pul eng eski kirimdan boshlab sarflangan deb "
+                         "hisoblanadi."))
+        yop = tugma("Yopish")
+        yop.clicked.connect(self.accept)
+        v.addWidget(qator(None, yop))
+        self._toldir()
+
+    def _toldir(self):
+        m = ledger.kirim_sarfi(self.db, self.kirim_id)
+        self._m = m
+        if m is None:
+            self.bosh.setText("Kirim topilmadi")
+            self.jadval.tuldir([], idlar=[])
+            return
+        k = m["kirim"]
+        self.bosh.setText(f"{_kun(k['sana'])} · {k['nom']} · "
+                          f"{k['sabab'] or '—'}")
+        self.summa_yorliq.setText(money.fmt_som(k["summa"]))
+        qatorlar = []
+        for x in m["qatorlar"]:
+            nom = x["nom"] + (f"  ({x['izoh']})" if x["izoh"] else "")
+            summa = x["summa"]
+            if x["summa"] < x["asl"]:
+                summa = QTableWidgetItem(
+                    f"{money.fmt(x['summa'])}  (qisman · asli "
+                    f"{money.fmt(x['asl'])})")
+                summa.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            qatorlar.append([_kun(x["sana"]), x["turi"], nom, summa])
+        self.jadval.tuldir(qatorlar,
+                           idlar=list(range(1, len(m["qatorlar"]) + 1)))
+        self.jami.setText(f"Ishlatildi: {money.fmt(m['ishlatildi'])} · "
+                          f"Qoldi: {money.fmt(m['qoldi'])} so'm")
+
+    def _tafsilot(self, n: int):
+        x = self._m["qatorlar"][n - 1]
+        qosh = ([("Shu kirimdan", money.fmt_som(x["summa"]))]
+                if x["summa"] < x["asl"] else [])
+        if yozuv_tafsilot(self.db, x["manba"], x["manba_id"], self,
+                          qoshimcha=qosh):
+            self.ozgardi = True
+            self._toldir()
 
 
 class KategoriyaRasxodlari(QDialog):

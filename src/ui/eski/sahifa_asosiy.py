@@ -12,7 +12,7 @@ import money
 from core import entries, ledger, plan, recurring, settle
 from core import rasxod_kirit as rk
 from ui.eski import theme
-from ui.eski.dialogs import (JuftTafsilot, KirimDialog, QarzDialog,
+from ui.eski.dialogs import (JuftTafsilot, KirimDialog, KirimSarfi, QarzDialog,
                         RasxodDialog, RasxodTafsilot, TashqiBerishOyna, TashqiQarzOyna,
                         mahsulotlarni_toldir, TolovDialog, tafsilot_ulash,
                         tasdiq, xato_koraset, yozuv_tafsilot)
@@ -610,7 +610,7 @@ class KirimSahifa(Sahifa):
         self.jadval = Jadval(["Sana", "Kim", "Qayerdan", "Summa"], pul_ustunlar={3})
         self.jadval.kengliklar(105, 150, 0, 140)
         self.jadval.setMinimumHeight(430)
-        self.jadval.doubleClicked.connect(self._tahrir)
+        tafsilot_ulash(self.jadval, self._sarfi)
         self.tana.addWidget(self.jadval)
 
         t1 = tugma("Tahrirlash")
@@ -639,6 +639,13 @@ class KirimSahifa(Sahifa):
 
     def _yangi(self):
         if KirimDialog(self.db, parent=self).exec():
+            self.oyna.yangila()
+
+    def _sarfi(self, kid: int):
+        """Kirim qatori ochilsa — shu pul nimaga ishlatilgani."""
+        d = KirimSarfi(self.db, kid, parent=self)
+        d.exec()
+        if d.ozgardi:
             self.oyna.yangila()
 
     def _tahrir(self):

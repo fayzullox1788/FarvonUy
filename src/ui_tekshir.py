@@ -718,6 +718,36 @@ def main() -> int:
 
     bosqich("Qarz: yozuv tafsilotlari", _yozuv_tafsilotlari)
 
+    # ── Kirim qatori ochilsa — shu pul nimaga ishlatildi (FIFO)
+    def _kirim_sarfi():
+        from core import ledger as lg
+        from ui.eski import dialogs as dl
+        from ui.eski.sahifa_asosiy import KirimSahifa
+        kp = next(s for s in oyna.sahifalar if isinstance(s, KirimSahifa))
+        _tasdiq(kp.jadval.receivers("2doubleClicked(QModelIndex)") > 0,
+                "Kirim: qator tafsiloti ulanmagan")
+        kid = d.skalyar("SELECT id FROM kirim WHERE ochirilgan=0"
+                        " ORDER BY sana, id LIMIT 1")
+        if not kid:
+            return
+        dlg = dl.KirimSarfi(d, kid, parent=oyna)
+        m = lg.kirim_sarfi(d, kid)
+        _tasdiq(dlg.jadval.rowCount() == len(m["qatorlar"]),
+                "kirim sarfi: jadval qatorlari mos emas")
+        _tasdiq("Ishlatildi:" in dlg.jami.text() and "Qoldi:" in dlg.jami.text(),
+                "kirim sarfi: pastki jami yo'q")
+        _tasdiq(m["ishlatildi"] + m["qoldi"] == m["kirim"]["summa"],
+                "kirim sarfi: ishlatildi + qoldi ≠ kirim")
+        for x in m["qatorlar"]:
+            if x["manba"] == "rasxod":
+                dl.RasxodTafsilot(d, x["manba_id"], parent=dlg)
+            else:
+                _tasdiq(dl._yozuv_malumoti(d, x["manba"], x["manba_id"]),
+                        f"kirim sarfi: {x['manba']} tafsiloti topilmadi")
+        dlg.close()
+
+    bosqich("Kirim: nimaga ishlatildi", _kirim_sarfi)
+
     # ── ro'yxatdan olingan (nofaol) odamning eski qarzi: to'lov, tashqi
     #    ulush va eski rasxod tahriri uni jimgina tushirib qoldirmasin
     def _nofaol_qarz():
