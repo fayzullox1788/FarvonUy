@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QSignalBlocker, Qt, Signal
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDialog,
                                QDialogButtonBox, QFileDialog, QFormLayout,
                                QGridLayout, QHBoxLayout, QLabel, QLineEdit,
@@ -1209,6 +1210,8 @@ class TashqiQarzOyna(QDialog):
         self.jadval.kengliklar(100, 140, 130, 0, 110, 110, 110)
         self.jadval.setMinimumHeight(180)
         q.qosh(self.jadval)
+        tafsilot_ulash(self.jadval, lambda i: yozuv_tafsilot(
+            db, "tashqi_qarz", i, self))
         self.hammasi = QCheckBox("Yopilganlari ham ko'rinsin")
         self.hammasi.toggled.connect(self._yangila)
         och = tugma("O'chirish", xavfli=True)
@@ -1229,6 +1232,8 @@ class TashqiQarzOyna(QDialog):
         self.tolov_jadval.kengliklar(100, 130, 140, 0, 130)
         self.tolov_jadval.setMinimumHeight(140)
         t.qosh(self.tolov_jadval)
+        tafsilot_ulash(self.tolov_jadval, lambda i: yozuv_tafsilot(
+            db, "tashqi_tolov", i, self))
         to = tugma("To'lovni o'chirish", xavfli=True)
         to.clicked.connect(self._tolov_ochir)
         t.qosh(qator(None, to))
@@ -1503,6 +1508,8 @@ class TashqiBerishOyna(QDialog):
         self.jadval.kengliklar(100, 140, 130, 0, 110, 110, 110)
         self.jadval.setMinimumHeight(180)
         q.qosh(self.jadval)
+        tafsilot_ulash(self.jadval, lambda i: yozuv_tafsilot(
+            db, "tashqi_berilgan", i, self))
         self.hammasi = QCheckBox("Yopilganlari ham ko'rinsin")
         self.hammasi.toggled.connect(self._yangila)
         och = tugma("O'chirish", xavfli=True)
@@ -1521,6 +1528,8 @@ class TashqiBerishOyna(QDialog):
         self.qaytim_jadval.kengliklar(100, 140, 130, 0, 130)
         self.qaytim_jadval.setMinimumHeight(140)
         t.qosh(self.qaytim_jadval)
+        tafsilot_ulash(self.qaytim_jadval, lambda i: yozuv_tafsilot(
+            db, "tashqi_qaytim", i, self))
         to = tugma("Yozuvni o'chirish", xavfli=True)
         to.clicked.connect(self._qaytim_ochir)
         t.qosh(qator(None, to))
@@ -2182,6 +2191,195 @@ class RasxodTafsilot(QDialog):
         self.accept()
 
 
+# ═══════════════════════════════════════════════ yozuv tafsiloti (umumiy)
+
+def tafsilot_ulash(jadval, ochuvchi) -> None:
+    """Jadval qatorini OCHISH: ikki marta bosish yoki Enter → `ochuvchi(id)`.
+
+    `id` — qatorning `Qt.UserRole` qiymati (`tuldir(..., idlar)`). Faqat
+    ko'rish uchun: hech narsa yozilmaydi, shuning uchun pul yozadigan
+    jadvallarga ham ulanadi (tahrir — tafsilot ichidagi aniq tugmada).
+    Bosilgan qator olinadi, joriy emas — ko'p tanlovli jadvalda ham.
+    """
+    def _och(r: int):
+        it = jadval.item(r, 0) if r >= 0 else None
+        if it is not None and it.data(Qt.UserRole) is not None:
+            ochuvchi(it.data(Qt.UserRole))
+
+    jadval.doubleClicked.connect(lambda i: _och(i.row()))
+    for k in (Qt.Key_Return, Qt.Key_Enter):
+        s = QShortcut(QKeySequence(k), jadval)
+        s.setContext(Qt.WidgetShortcut)
+        s.activated.connect(lambda: _och(jadval.currentRow()))
+    jadval.setToolTip("Tafsilot: ikki marta bosing yoki Enter")
+
+
+class YozuvTafsilot(QDialog):
+    """Bitta yozuv (qarz, to'lov, tashqi qarz…) — faqat o'qish uchun."""
+
+    def __init__(self, nom: str, summa: int, satrlar: list,
+                 kartalar: list | None = None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Tafsilot")
+        self.setMinimumWidth(470)
+        v = QVBoxLayout(self)
+        v.setSpacing(12)
+
+        bosh = sarlavha(nom)
+        bosh.setWordWrap(True)
+        v.addWidget(bosh)
+        s = QLabel(money.fmt_som(summa))
+        s.setStyleSheet(
+            f"color:{theme.MATN};background:transparent;"
+            f"font-family:{theme.RAQAM_OILA};"
+            f"font-size:{theme.O_KATTA}px;font-weight:700;")
+        v.addWidget(s)
+
+        for sarl, qatorlar in [("Ma'lumot", satrlar)] + list(kartalar or []):
+            if not qatorlar:
+                continue
+            karta = Karta(sarl)
+            for k, qiymat in qatorlar:
+                e = QLabel(str(qiymat))
+                e.setWordWrap(True)
+                karta.qosh(qator(yorliq(k + ":"), None, e))
+            v.addWidget(karta)
+
+        yop = tugma("Yopish")
+        yop.clicked.connect(self.accept)
+        v.addWidget(qator(None, yop))
+
+
+def _kun(s) -> str:
+    """ISO sanani dastur ko'rinishiga: 22.08.2026."""
+    s = str(s or "")[:10]
+    return f"{s[8:10]}.{s[5:7]}.{s[:4]}" if len(s) == 10 else s
+
+
+def _yozuv_malumoti(db, manba: str, yid: int):
+    """`YozuvTafsilot` uchun (nom, summa, satrlar, kartalar, yozilgan) yoki
+    None (yozuv topilmadi)."""
+    kartalar = []
+    if manba == "qarz":
+        r = db.q1("SELECT q.*, a.nom a, b.nom b FROM qarz q"
+                  " JOIN odam a ON a.id=q.kim_berdi JOIN odam b ON b.id=q.kimga"
+                  " WHERE q.id=?", yid)
+        if not r:
+            return None
+        nom, summa = r["sabab"] or "Qarz", r["summa"]
+        satrlar = [("Turi", "Qo'lma-qo'l qarz"), ("Sana", _kun(r["sana"])),
+                   ("Kim berdi", r["a"]), ("Kimga", r["b"]),
+                   ("Sabab", r["sabab"] or "—")]
+    elif manba == "hisob_kitob":
+        r = db.q1("SELECT h.*, a.nom a, b.nom b, x.nom rasxod_nom,"
+                  "       x.sana rasxod_sana FROM hisob_kitob h"
+                  " JOIN odam a ON a.id=h.kim_toladi JOIN odam b ON b.id=h.kimga"
+                  " LEFT JOIN ulush u ON u.id=h.ulush_id"
+                  " LEFT JOIN rasxod x ON x.id=u.rasxod_id WHERE h.id=?", yid)
+        if not r:
+            return None
+        nom, summa = r["izoh"] or "To'lov", r["summa"]
+        satrlar = [("Turi", "To'lov (pul berildi)"), ("Sana", _kun(r["sana"])),
+                   ("Kim berdi", r["a"]), ("Kimga", r["b"]),
+                   ("Izoh", r["izoh"] or "—"),
+                   ("Qaysi rasxod uchun",
+                    f"{r['rasxod_nom'] or '—'} ({_kun(r['rasxod_sana'])})"
+                    if r["ulush_id"]
+                    else "Erkin to'lov (aniq rasxodga bog'lanmagan)")]
+    elif manba == "tashqi_qarz":
+        r = next((x for x in ledger.tashqi_qarzlar(db) if x["id"] == yid),
+                 None)
+        if not r:
+            return None
+        nom, summa = f"{r['kimdan']} dan olingan qarz", r["summa"]
+        satrlar = [("Sana", _kun(r["sana"])), ("Kimdan", r["kimdan"]),
+                   ("Kim oldi", r["odam_nom"]),
+                   ("Turi", "Umumiy" if r["umumiy"] else "Shaxsiy"),
+                   ("Sabab", r["sabab"] or "—"),
+                   ("Qaytarish sanasi", _kun(r["qaytarish_sana"])
+                    if r.get("qaytarish_sana") else "—"),
+                   ("Qaytarilgan", money.fmt_som(r["qaytgan"])),
+                   ("Qoldiq", money.fmt_som(r["qoldiq"])
+                    if r["qoldiq"] > 0 else "✔ yopildi")]
+        if r["umumiy"] and r["ulushlar"]:
+            kartalar.append(("Kim qancha ko'taradi", [
+                (n, money.fmt_som(int(s))) for n, s in
+                (x.rsplit(":", 1) for x in r["ulushlar"].split(", "))]))
+        kartalar.append(("Qaytarilgan to'lovlar", [
+            (_kun(t["sana"]), money.fmt_som(t["summa"])
+             + (f"  ({t['izoh']})" if t["izoh"] else ""))
+            for t in db.q("SELECT sana, summa, izoh FROM tashqi_tolov"
+                          " WHERE tashqi_qarz_id=? AND ochirilgan=0"
+                          " ORDER BY sana, id", yid)]))
+    elif manba == "tashqi_tolov":
+        r = db.q1("SELECT t.*, q.kimdan, o.nom FROM tashqi_tolov t"
+                  " JOIN tashqi_qarz q ON q.id=t.tashqi_qarz_id"
+                  " JOIN odam o ON o.id=q.odam_id WHERE t.id=?", yid)
+        if not r:
+            return None
+        nom, summa = f"{r['kimdan']} ga qaytarildi", r["summa"]
+        satrlar = [("Sana", _kun(r["sana"])), ("Kim qaytardi", r["nom"]),
+                   ("Kimga", r["kimdan"]), ("Izoh", r["izoh"] or "—")]
+    elif manba == "tashqi_berilgan":
+        r = next((x for x in ledger.tashqi_berilganlar(db) if x["id"] == yid),
+                 None)
+        if not r:
+            return None
+        nom, summa = f"{r['kimga']} ga berilgan qarz", r["summa"]
+        satrlar = [("Sana", _kun(r["sana"])), ("Kim berdi", r["odam_nom"]),
+                   ("Kimga", r["kimga"]), ("Sabab", r["sabab"] or "—"),
+                   ("Qaytib olindi", money.fmt_som(r["qaytgan"])),
+                   ("Qoldiq", money.fmt_som(r["qoldiq"])
+                    if r["qoldiq"] > 0 else "✔ yopildi")]
+        kartalar.append(("Qaytib olingan to'lovlar", [
+            (_kun(t["sana"]), money.fmt_som(t["summa"])
+             + (f"  ({t['izoh']})" if t["izoh"] else ""))
+            for t in db.q("SELECT sana, summa, izoh FROM tashqi_qaytim"
+                          " WHERE berilgan_id=? AND ochirilgan=0"
+                          " ORDER BY sana, id", yid)]))
+    elif manba == "tashqi_qaytim":
+        r = db.q1("SELECT t.*, b.kimga, o.nom FROM tashqi_qaytim t"
+                  " JOIN tashqi_berilgan b ON b.id=t.berilgan_id"
+                  " JOIN odam o ON o.id=b.odam_id WHERE t.id=?", yid)
+        if not r:
+            return None
+        nom, summa = f"{r['kimga']} dan qaytib olindi", r["summa"]
+        satrlar = [("Sana", _kun(r["sana"])), ("Kimdan", r["kimga"]),
+                   ("Kimga qaytdi", r["nom"]), ("Izoh", r["izoh"] or "—")]
+    else:
+        return None
+    return nom, summa, satrlar, kartalar, str(r["yaratilgan"] or "")[:16]
+
+
+def yozuv_tafsilot(db, manba: str, yid: int, parent=None,
+                   qoshimcha: list | None = None) -> bool:
+    """`manba` jadvalidagi `yid` yozuvining tafsilotini ochadi.
+
+    Rasxod (yoki uning ulushi) — `RasxodTafsilot` (mahsulotlar, ulushlar,
+    tahrir, bekor qilish); qolganlari — faqat o'qish uchun `YozuvTafsilot`.
+    `qoshimcha` — chaqiruvchining satrlari (masalan «Qolgan qismi»).
+    Qaytaradi: nimadir o'zgardimi — chaqiruvchi o'zini yangilaydi.
+    """
+    if manba == "ulush":
+        u = db.q1("SELECT rasxod_id FROM ulush WHERE id=?", yid)
+        if not u:
+            return False
+        manba, yid = "rasxod", u["rasxod_id"]
+    if manba == "rasxod":
+        d = RasxodTafsilot(db, yid, parent=parent)
+        d.exec()
+        return d.ozgardi
+    m = _yozuv_malumoti(db, manba, yid)
+    if m is None:
+        return False
+    nom, summa, satrlar, kartalar, yozilgan = m
+    satrlar += list(qoshimcha or [])
+    if yozilgan:
+        satrlar.append(("Yozilgan", yozilgan))
+    YozuvTafsilot(nom, summa, satrlar, kartalar, parent=parent).exec()
+    return False
+
+
 # ═══════════════════════════════════════════════ juftlik qarzi tafsiloti
 
 class JuftTafsilot(QDialog):
@@ -2198,6 +2396,7 @@ class JuftTafsilot(QDialog):
         self.qarzdor_id = qarzdor_id
         self.kreditor_id = kreditor_id
         self.tolov_soraldi = False
+        self.ozgardi = False
 
         qarzdor = db.q1("SELECT nom FROM odam WHERE id=?", qarzdor_id)
         kreditor = db.q1("SELECT nom FROM odam WHERE id=?", kreditor_id)
@@ -2214,27 +2413,45 @@ class JuftTafsilot(QDialog):
         bosh.setWordWrap(True)
         v.addWidget(bosh)
 
-        tarkib = ledger.juft_tolanmagan(db, qarzdor_id, kreditor_id)
-        jami = sum(x["summa"] for x in tarkib)
-
-        self.jami_yorliq = QLabel(money.fmt_som(jami))
+        self.jami_yorliq = QLabel()
         self.jami_yorliq.setStyleSheet(
             f"color:{theme.MATN};background:transparent;"
             f"font-family:{theme.RAQAM_OILA};"
             f"font-size:{theme.O_KATTA}px;font-weight:700;")
         v.addWidget(self.jami_yorliq)
 
-        v.addWidget(izoh(f"{len(tarkib)} ta to'lanmagan yozuv"))
+        self.soni_izoh = izoh("")
+        v.addWidget(self.soni_izoh)
 
         jadval = Jadval(["Sana", "Turi", "Nima uchun", "Holati", "Summa"],
                         pul_ustunlar={4},
                         bosh_matn="To'lanmagan qarz yo'q")
         self.jadval = jadval
         jadval.kengliklar(105, 125, 0, 165, 130)
-        def kun(s) -> str:
-            """ISO sanani dastur ko'rinishiga: 22.08.2026."""
-            s = str(s or "")[:10]
-            return f"{s[8:10]}.{s[5:7]}.{s[:4]}" if len(s) == 10 else s
+        tafsilot_ulash(jadval, self._tafsilot)
+        v.addWidget(jadval, 1)
+
+        v.addWidget(izoh(
+            "Faqat hali to'lanmagan qarzlar. To'lovlar va teskari "
+            "yo'nalishdagi rasxodlar eng eski qarzdan boshlab ayirilgan — "
+            "«Qisman» qatorda qolgan qismi turibdi. "
+            "Qatorlar yig'indisi yuqoridagi songa teng. "
+            "Tafsilotini ko'rish uchun qatorni ikki marta bosing."))
+
+        t_tolov = tugma("To'lov yozish", asosiy=True)
+        t_tolov.clicked.connect(self._tolov)
+        yop = tugma("Yopish")
+        yop.clicked.connect(self.accept)
+        v.addWidget(qator(t_tolov, None, yop))
+        self._toldir()
+
+    def _toldir(self):
+        tarkib = ledger.juft_tolanmagan(self.db, self.qarzdor_id,
+                                        self.kreditor_id)
+        self._tarkib = tarkib
+        self.jami_yorliq.setText(
+            money.fmt_som(sum(x["summa"] for x in tarkib)))
+        self.soni_izoh.setText(f"{len(tarkib)} ta to'lanmagan yozuv")
 
         qatorlar = []
         for x in tarkib:
@@ -2252,22 +2469,20 @@ class JuftTafsilot(QDialog):
                 nom = berdi if nom == "To'lov" else f"{berdi}  ({nom})"
             if x["izoh"]:
                 nom = f"{nom}  ({x['izoh']})"
-            qatorlar.append([kun(x["sana"]), turi, nom, holat,
+            qatorlar.append([_kun(x["sana"]), turi, nom, holat,
                              x["summa"]])
-        jadval.tuldir(qatorlar)
-        v.addWidget(jadval, 1)
+        # id — tarkibdagi o'rni: bir qatorning manbasi har xil jadval
+        self.jadval.tuldir(qatorlar, idlar=list(range(1, len(tarkib) + 1)))
 
-        v.addWidget(izoh(
-            "Faqat hali to'lanmagan qarzlar. To'lovlar va teskari "
-            "yo'nalishdagi rasxodlar eng eski qarzdan boshlab ayirilgan — "
-            "«Qisman» qatorda qolgan qismi turibdi. "
-            "Qatorlar yig'indisi yuqoridagi songa teng."))
-
-        t_tolov = tugma("To'lov yozish", asosiy=True)
-        t_tolov.clicked.connect(self._tolov)
-        yop = tugma("Yopish")
-        yop.clicked.connect(self.accept)
-        v.addWidget(qator(t_tolov, None, yop))
+    def _tafsilot(self, n: int):
+        """Qator tafsiloti: rasxod — `RasxodTafsilot`, qolgani o'qish uchun."""
+        x = self._tarkib[n - 1]
+        qosh = ([("To'lanmagan qismi", money.fmt_som(x["summa"]))]
+                if x["summa"] < x["asl"] else [])
+        if yozuv_tafsilot(self.db, x["manba"], x["manba_id"], self,
+                          qoshimcha=qosh):
+            self.ozgardi = True
+            self._toldir()
 
     def _tolov(self):
         self.tolov_soraldi = True

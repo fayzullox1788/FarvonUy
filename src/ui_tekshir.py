@@ -686,6 +686,38 @@ def main() -> int:
 
     bosqich("dialog «Juftlik qarzi tafsiloti»", _juft_tafsilot)
 
+    # ── Qarz varag'i: har qator ikki marta bosilganda tafsiloti ochiladi
+    def _yozuv_tafsilotlari():
+        from core import ledger as lg
+        from ui.eski import dialogs as dl
+        for j in lg.juft_qarzlar(d):
+            for x in lg.juft_tolanmagan(d, j.qarzdor_id, j.kreditor_id):
+                _tasdiq(x.get("manba") and x.get("manba_id"),
+                        "juftlik qatorida manba yo'q — tafsilot ochilmaydi")
+                if x["manba"] == "ulush":
+                    rid = d.skalyar("SELECT rasxod_id FROM ulush WHERE id=?",
+                                    x["manba_id"])
+                    dl.RasxodTafsilot(d, rid, parent=oyna)
+                else:
+                    m = dl._yozuv_malumoti(d, x["manba"], x["manba_id"])
+                    _tasdiq(m is not None, f"{x['manba']} tafsiloti topilmadi")
+                    dl.YozuvTafsilot(*m[:4], parent=oyna)
+        for manba in ("qarz", "hisob_kitob", "tashqi_qarz", "tashqi_tolov",
+                      "tashqi_berilgan", "tashqi_qaytim"):
+            yid = d.skalyar(f"SELECT id FROM {manba} WHERE ochirilgan=0"
+                            f" LIMIT 1")
+            if yid:
+                m = dl._yozuv_malumoti(d, manba, yid)
+                _tasdiq(m is not None, f"{manba} tafsiloti topilmadi")
+                dl.YozuvTafsilot(*m[:4], parent=oyna)
+        # jadvallar ulangan: ikki marta bosish signali bor
+        for sinf in (dl.TashqiQarzOyna, dl.TashqiBerishOyna):
+            o = sinf(d, parent=oyna)
+            _tasdiq(o.jadval.receivers("2doubleClicked(QModelIndex)") > 0,
+                    f"{sinf.__name__}: qator tafsiloti ulanmagan")
+
+    bosqich("Qarz: yozuv tafsilotlari", _yozuv_tafsilotlari)
+
     # ── ro'yxatdan olingan (nofaol) odamning eski qarzi: to'lov, tashqi
     #    ulush va eski rasxod tahriri uni jimgina tushirib qoldirmasin
     def _nofaol_qarz():

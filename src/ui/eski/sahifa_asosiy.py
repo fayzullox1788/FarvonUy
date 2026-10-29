@@ -14,8 +14,8 @@ from core import rasxod_kirit as rk
 from ui.eski import theme
 from ui.eski.dialogs import (JuftTafsilot, KirimDialog, QarzDialog,
                         RasxodDialog, RasxodTafsilot, TashqiBerishOyna, TashqiQarzOyna,
-                        mahsulotlarni_toldir, TolovDialog, tasdiq,
-                        xato_koraset)
+                        mahsulotlarni_toldir, TolovDialog, tafsilot_ulash,
+                        tasdiq, xato_koraset, yozuv_tafsilot)
 from ui.eski.widgets import (HamyonTanla, Holat, Jadval, Karta, KategoriyaTanla, OdamTanla,
                         PulEdit, RaqamKarta, SanaEdit, TuriTanla, Xabar, izoh,
                         qator, sarlavha, tugma, yorliq)
@@ -715,6 +715,8 @@ class QarzSahifa(Sahifa):
         self.blok_jadval.kengliklar(34, 105, 0, 140, 130, 130, 125)
         self.blok_jadval.setMinimumHeight(340)
         self.blok_jadval.setSelectionMode(QTableWidget.ExtendedSelection)
+        tafsilot_ulash(self.blok_jadval,
+                       lambda i: self._yozuv_tafsilot("ulush", i))
         self.bloklar.qosh(self.blok_jadval)
 
         yop = tugma("Tanlanganlarni to'landi deb belgilash", asosiy=True)
@@ -726,7 +728,8 @@ class QarzSahifa(Sahifa):
         # Ikki marta bosish bilan to'lov YOZILMAYDI: bu juda oson
         # tasodifan bosiladi va pulni jimgina o'zgartirib yuboradi.
         # Faqat aniq tugma bosilganda yoziladi.
-        self.bloklar.qosh(izoh("Bir nechtasini Ctrl yoki Shift bilan tanlang."))
+        self.bloklar.qosh(izoh("Bir nechtasini Ctrl yoki Shift bilan tanlang. "
+                               "Tafsilot — ikki marta bosing."))
         self.tana.addWidget(self.bloklar)
 
         # ── qo'lda yozilgan qarzlar ──────────────────────────────────
@@ -735,6 +738,8 @@ class QarzSahifa(Sahifa):
                                   pul_ustunlar={4})
         self.qarz_jadval.kengliklar(110, 140, 140, 0, 130)
         self.qarz_jadval.setMinimumHeight(170)
+        tafsilot_ulash(self.qarz_jadval,
+                       lambda i: self._yozuv_tafsilot("qarz", i))
         q.qosh(self.qarz_jadval)
         qo = tugma("O'chirish", xavfli=True)
         qo.clicked.connect(self._qarz_ochir)
@@ -767,6 +772,8 @@ class QarzSahifa(Sahifa):
                                 pul_ustunlar={4})
         self.hk_jadval.kengliklar(110, 140, 140, 0, 130)
         self.hk_jadval.setMinimumHeight(170)
+        tafsilot_ulash(self.hk_jadval,
+                       lambda i: self._yozuv_tafsilot("hisob_kitob", i))
         h.qosh(self.hk_jadval)
         ho = tugma("O'chirish", xavfli=True)
         ho.clicked.connect(self._hk_ochir)
@@ -929,8 +936,15 @@ class QarzSahifa(Sahifa):
         d = JuftTafsilot(self.db, juft.qarzdor_id, juft.kreditor_id,
                          parent=self)
         d.exec()
+        if d.ozgardi:
+            self.oyna.yangila()
         if d.tolov_soraldi:
             self._tolov(juft.qarzdor_id, juft.kreditor_id, juft.summa)
+
+    def _yozuv_tafsilot(self, manba: str, yid: int):
+        """Jadval qatori ikki marta bosilganda — o'sha yozuv tafsiloti."""
+        if yozuv_tafsilot(self.db, manba, yid, self):
+            self.oyna.yangila()
 
     def _tolov(self, kimdan=None, kimga=None, summa=0):
         d = TolovDialog(self.db, kimdan if isinstance(kimdan, int) else None,

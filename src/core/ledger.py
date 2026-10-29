@@ -216,6 +216,9 @@ def juft_tarkibi(db, qarzdor_id: int, kreditor_id: int) -> list[dict]:
 
     Shuning uchun qatorlar yig'indisi aynan juftlik summasiga teng
     bo'ladi — `tekshir.py` shuni tekshiradi.
+
+    `manba` / `manba_id` — qator qaysi yozuvdan (`ulush`, `qarz`,
+    `hisob_kitob`): UI shu bo'yicha yozuv tafsilotini ochadi.
     """
     q, k = int(qarzdor_id), int(kreditor_id)
     natija: list[dict] = []
@@ -235,24 +238,26 @@ def juft_tarkibi(db, qarzdor_id: int, kreditor_id: int) -> list[dict]:
                 "nom": r["nom"] or "—", "izoh": r["turi_nom"] or "",
                 "summa": yon * int(r["summa"]),
                 "tolandi": bool(r["tolandi"]),
-                "tolangan_sana": r["tolangan_sana"], "ulush_id": r["id"]})
+                "tolangan_sana": r["tolangan_sana"], "ulush_id": r["id"],
+                "manba": "ulush", "manba_id": r["id"]})
 
     # ── to'g'ridan-to'g'ri qarzlar
     for yon, (kimga, kim_berdi) in ((1, (q, k)), (-1, (k, q))):
         for r in db.q(
-                "SELECT sana, summa, sabab FROM qarz"
+                "SELECT id, sana, summa, sabab FROM qarz"
                 " WHERE ochirilgan=0 AND kimga=? AND kim_berdi=?"
                 " ORDER BY sana, id", kimga, kim_berdi):
             natija.append({
                 "sana": r["sana"], "turi": "Qarz",
                 "nom": r["sabab"] or "Qarz olindi", "izoh": "",
                 "summa": yon * int(r["summa"]),
-                "tolandi": False, "tolangan_sana": None, "ulush_id": None})
+                "tolandi": False, "tolangan_sana": None, "ulush_id": None,
+                "manba": "qarz", "manba_id": r["id"]})
 
     # ── hisob-kitob (to'lov) — qarzni KAMAYTIRADI
     for yon, (kim_toladi, kimga) in ((-1, (q, k)), (1, (k, q))):
         for r in db.q(
-                "SELECT sana, summa, izoh, ulush_id FROM hisob_kitob"
+                "SELECT id, sana, summa, izoh, ulush_id FROM hisob_kitob"
                 " WHERE ochirilgan=0 AND kim_toladi=? AND kimga=?"
                 " ORDER BY sana, id", kim_toladi, kimga):
             natija.append({
@@ -260,7 +265,8 @@ def juft_tarkibi(db, qarzdor_id: int, kreditor_id: int) -> list[dict]:
                 "nom": r["izoh"] or "To'lov", "izoh": "",
                 "summa": yon * int(r["summa"]),
                 "tolandi": True, "tolangan_sana": r["sana"],
-                "ulush_id": r["ulush_id"]})
+                "ulush_id": r["ulush_id"],
+                "manba": "hisob_kitob", "manba_id": r["id"]})
 
     # Umumiy tashqi qarz juftlik qarziga KIRMAYDI (2026-10-01) — pul ham,
     # qaytarish ham har kimning o'z ulushida (`v_juft_qarz` bilan bir xil).
